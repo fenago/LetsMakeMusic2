@@ -1,0 +1,44 @@
+# React Native TikTok App .gitignore
+# Inherits from root, these are app-specific additions
+
+# Dependencies
+node_modules/
+
+# iOS
+ios/Pods/
+ios/Podfile.lock
+ios/build/
+ios/*.xcuserstate
+ios/**/*.xcuserstate
+ios/**/xcuserdata/
+ios/DerivedData/
+
+# Android
+android/app/build/
+android/.gradle/
+android/build/
+
+# Expo
+.expo/
+
+# Metro
+.metro-health-check*
+
+# Bundle
+*.jsbundle
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Firebase config (should not be in repo)
+google-services.json
+GoogleService-Info.plist
+
+# Keystore (except debug)
+*.keystore
+!debug.keystore
+
+# Yarn
+.yarn/install-state.gz
