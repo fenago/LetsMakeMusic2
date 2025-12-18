@@ -1,0 +1,30 @@
+{
+  "name": "ExpoAdapterFBSDKNext",
+  "version": "13.0.0",
+  "summary": "Facebook SDK support for React Native apps.",
+  "description": "Facebook SDK support for React Native apps.",
+  "license": "MIT",
+  "authors": {
+    "name": "Marcos Bérgamo"
+  },
+  "homepage": "https://github.com/thebergamo/react-native-fbsdk-next/",
+  "platforms": {
+    "ios": "13.0"
+  },
+  "swift_versions": "5.4",
+  "source": {
+    "git": "https://github.com/thebergamo/react-native-fbsdk-next.git",
+    "tag": "v13.0.0"
+  },
+  "static_framework": true,
+  "dependencies": {
+    "ExpoModulesCore": [],
+    "React-Core": [],
+    "FBSDKCoreKit": []
+  },
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES"
+  },
+  "source_files": "ExpoAdapterFBSDKNext/**/*.{h,m,swift}",
+  "swift_version": "5.4"
+}

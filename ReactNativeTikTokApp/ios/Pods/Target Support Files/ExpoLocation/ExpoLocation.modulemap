@@ -1,0 +1,6 @@
+framework module ExpoLocation {
+  umbrella header "ExpoLocation-umbrella.h"
+
+  export *
+  module * { export * }
+}

@@ -1,0 +1,6 @@
+framework module react_native_fbsdk_next {
+  umbrella header "react-native-fbsdk-next-umbrella.h"
+
+  export *
+  module * { export * }
+}

@@ -1,0 +1,55 @@
+import React, { useEffect } from 'react'
+import { LogBox } from 'react-native'
+import { Provider } from 'react-redux'
+import * as SplashScreen from 'expo-splash-screen'
+import { enableScreens } from 'react-native-screens'
+
+// Disable react-native-screens to avoid New Architecture compatibility issues
+enableScreens(false)
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import {
+  DopebaseProvider,
+  extendTheme,
+  TranslationProvider,
+  ActionSheetProvider,
+} from './core/dopebase'
+import configureStore from './redux/store'
+import AppContent from './AppContent'
+import translations from './translations/'
+import { ConfigProvider } from './config'
+import { AuthProvider } from './core/onboarding/hooks/useAuth'
+import { ProfileAuthProvider } from './core/profile/hooks/useProfileAuth'
+import { authManager } from './core/onboarding/api'
+import InstamobileTheme from './theme'
+
+const store = configureStore()
+
+const App = () => {
+  const theme = extendTheme(InstamobileTheme)
+
+  useEffect(() => {
+    SplashScreen.hideAsync()
+    LogBox.ignoreAllLogs(true)
+  }, [])
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Provider store={store}>
+        <TranslationProvider translations={translations}>
+          <DopebaseProvider theme={theme}>
+            <ConfigProvider>
+              <AuthProvider authManager={authManager}>
+                <ProfileAuthProvider authManager={authManager}>
+                  <ActionSheetProvider>
+                    <AppContent />
+                  </ActionSheetProvider>
+                </ProfileAuthProvider>
+              </AuthProvider>
+            </ConfigProvider>
+          </DopebaseProvider>
+        </TranslationProvider>
+      </Provider>
+    </GestureHandlerRootView>
+  )
+}
+
+export default App

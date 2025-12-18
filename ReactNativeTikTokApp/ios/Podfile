@@ -1,0 +1,56 @@
+require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
+
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+prepare_react_native_project!
+
+platform :ios, '15.1'
+install! 'cocoapods', :deterministic_uuids => false
+
+production = ENV["PRODUCTION"] == "1"
+
+require 'json'
+podfile_properties = JSON.parse(File.read('./Podfile.properties.json')) rescue {}
+
+# Use static frameworks for Firebase compatibility
+use_frameworks! :linkage => :static
+
+target 'Instamobile' do
+  use_expo_modules!
+
+  config = use_native_modules!
+
+  flags = get_default_flags()
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :production => production,
+    :hermes_enabled => true,
+    :fabric_enabled => false,
+    :new_arch_enabled => false,
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  post_install do |installer|
+    react_native_post_install(installer)
+
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+        config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
+
+        # Fix for Folly coroutines issue with newer Xcode
+        existing_defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+        existing_defs = [existing_defs] if existing_defs.is_a?(String)
+        unless existing_defs.include?('FOLLY_HAS_COROUTINES=0')
+          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = existing_defs + ['FOLLY_HAS_COROUTINES=0']
+        end
+      end
+    end
+  end
+end
