@@ -49,4 +49,4 @@ with_node \
   --entitlement "/Users/ernestolee/ClaudeProjects/LetsMakeMusic/ReactNativeTikTokApp/ios/Instamobile/Instamobile.entitlements" \
    \
   --platform "apple" \
-  --packages "@react-native-google-signin/google-signin" "expo" "expo-application" "expo-asset" "expo-av" "expo-blur" "expo-camera" "expo-constants" "expo-crypto" "expo-device" "expo-document-picker" "expo-file-system" "expo-font" "expo-image" "expo-image-manipulator" "expo-keep-awake" "expo-localization" "expo-location" "expo-notifications" "expo-tracking-transparency" "expo-video-thumbnails" "expo-web-browser" "react-native-fbsdk-next"
+  --packages "@react-native-google-signin/google-signin" "expo" "expo-application" "expo-asset" "expo-av" "expo-blur" "expo-camera" "expo-constants" "expo-crypto" "expo-device" "expo-document-picker" "expo-file-system" "expo-font" "expo-image" "expo-image-manipulator" "expo-image-picker" "expo-keep-awake" "expo-localization" "expo-location" "expo-notifications" "expo-tracking-transparency" "expo-video-thumbnails" "expo-web-browser" "react-native-fbsdk-next"

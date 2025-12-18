@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { useActionSheet } from '@expo/react-native-action-sheet'
+import * as ImagePicker from 'expo-image-picker'
 
 import { useTheme, useTranslations, StoryItem } from '../../../core/dopebase'
 import dynamicStyles from './styles'

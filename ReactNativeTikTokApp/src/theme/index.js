@@ -63,8 +63,8 @@ const icons = {
 const lightColors = {
   primaryBackground: '#ffffff',
   secondaryBackground: '#ffffff',
-  primaryForeground: '#292929',
-  secondaryForeground: '#8442bd',
+  primaryForeground: '#1F979E', // Vibrant Teal - brand primary
+  secondaryForeground: '#C12D79', // Deep Magenta - brand secondary
   foregroundContrast: 'white',
   primaryText: '#151723',
   secondaryText: '#7e7e7e',
@@ -74,29 +74,33 @@ const lightColors = {
   grey6: '#d6d6d6',
   grey9: '#939393',
   red: '#ea0606',
+  accent: '#9C27B0', // Rich Purple - brand accent
+  brandTeal: '#1F979E',
+  brandMagenta: '#C12D79',
+  brandPurple: '#9C27B0',
 }
 
 const navContainerTheme = {
   dark: {
     colors: {
-      primary: '#3875e8',
+      primary: '#1F979E', // Brand Teal
       background: '#000000',
       card: '#000000',
       text: '#ffffff',
       border: '#f5f5f5',
-      notification: '#ea0606',
+      notification: '#C12D79', // Brand Magenta
     },
     dark: true,
     light: false,
   },
   light: {
     colors: {
-      primary: '#3875e8',
+      primary: '#1F979E', // Brand Teal
       background: '#ffffff',
       card: '#ffffff',
       text: '#000000',
       border: '#d6d6d6',
-      notification: '#ea0606',
+      notification: '#C12D79', // Brand Magenta
     },
     dark: false,
     light: true,
@@ -111,8 +115,8 @@ const InstamobileTheme = {
     dark: {
       primaryBackground: '#121212',
       secondaryBackground: '#000000',
-      primaryForeground: '#aaaaaa',
-      secondaryForeground: '#8442bd',
+      primaryForeground: '#1F979E', // Vibrant Teal - brand primary
+      secondaryForeground: '#C12D79', // Deep Magenta - brand secondary
       foregroundContrast: 'white',
       primaryText: '#dddddd',
       secondaryText: '#f5f5f5',
@@ -122,6 +126,10 @@ const InstamobileTheme = {
       grey6: '#f5f5f5',
       grey9: '#eaeaea',
       red: '#ea0606',
+      accent: '#9C27B0', // Rich Purple - brand accent
+      brandTeal: '#1F979E',
+      brandMagenta: '#C12D79',
+      brandPurple: '#9C27B0',
     },
   },
   spaces: {

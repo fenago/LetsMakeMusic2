@@ -3,13 +3,13 @@ import { View, Text, TouchableOpacity } from 'react-native'
 import { useTheme, useTranslations } from '../../../../dopebase'
 import dynamicStyles from './styles'
 import { useProfileAuth } from '../../../hooks/useProfileAuth'
-import { useProfileConfig } from '../../../hooks/useProfileConfig'
+import { useConfig } from '../../../../../config'
 import { useCurrentUser } from '../../../../onboarding'
 
 function IMProfileSettings(props) {
   const { navigation, onLogout, lastScreenTitle } = props
 
-  const { config } = useProfileConfig()
+  const config = useConfig()
   const authManager = useProfileAuth()
   const { localized } = useTranslations()
   const { theme, appearance } = useTheme()

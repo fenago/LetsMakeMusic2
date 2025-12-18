@@ -21,6 +21,7 @@ import ExpoFileSystem
 import ExpoFont
 import ExpoImage
 import ExpoImageManipulator
+import ExpoImagePicker
 import ExpoKeepAwake
 import ExpoLocalization
 import ExpoLocation
@@ -50,6 +51,7 @@ public class ExpoModulesProvider: ModulesProvider {
       FontUtilsModule.self,
       ImageModule.self,
       ImageManipulatorModule.self,
+      ImagePickerModule.self,
       KeepAwakeModule.self,
       LocalizationModule.self,
       LocationModule.self,

@@ -15,7 +15,15 @@
 
 namespace facebook::react {
 
-using RNSFullWindowOverlayState = StateData;
+using RNSBottomTabsAccessoryContentState = StateData;
+
+using RNSBottomTabsScreenState = StateData;
+
+using RNSScreenStackHostState = StateData;
+
+using RNSSplitViewHostState = StateData;
+
+using RNSStackScreenState = StateData;
 
 using RNSScreenContainerState = StateData;
 

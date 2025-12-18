@@ -50,12 +50,15 @@ const dynamicStyles = (theme, colorScheme) => {
     text: {
       fontSize: 14,
       color: colorSet.primaryText,
+      flex: 1,
     },
     appSettingsTypeContainer: {
       flexDirection: 'row',
       borderBottomWidth: 0,
       justifyContent: 'space-between',
-      paddingHorizontal: 15,
+      alignItems: 'center',
+      paddingLeft: 15,
+      paddingRight: 15,
     },
     appSettingsSaveContainer: {
       marginTop: 4,

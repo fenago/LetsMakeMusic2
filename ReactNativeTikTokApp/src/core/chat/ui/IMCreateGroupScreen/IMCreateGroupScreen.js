@@ -54,15 +54,12 @@ const IMCreateGroupScreen = props => {
 
   useFocusEffect(
     useCallback(() => {
-      BackHandler.addEventListener(
+      const subscription = BackHandler.addEventListener(
         'hardwareBackPress',
         onBackButtonPressAndroid,
       )
       return () => {
-        BackHandler.removeEventListener(
-          'hardwareBackPress',
-          onBackButtonPressAndroid,
-        )
+        subscription.remove()
       }
     }, []),
   )

@@ -22,6 +22,10 @@ const dynamicStyles = (theme, appearance) => {
       flex: 2,
       color: colorSet.secondaryText,
     },
+    searchBarContainer: {
+      paddingTop: 10,
+      paddingHorizontal: 10,
+    },
   })
 }
 

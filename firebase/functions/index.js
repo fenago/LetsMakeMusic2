@@ -29,6 +29,16 @@ exports.addMessageReaction = chat.addMessageReaction
 
 exports.listChannels = chat.listChannels
 
+// social graph (friendships, followers, search)
+const socialGraph = require('./social-graph/social-graph')
+exports.searchUsers = socialGraph.searchUsers
+exports.add = socialGraph.add
+exports.unfriend = socialGraph.unfriend
+exports.unfollow = socialGraph.unfollow
+exports.fetchFriends = socialGraph.fetchFriends
+exports.fetchFriendships = socialGraph.fetchFriendships
+exports.fetchOtherUserFriendships = socialGraph.fetchOtherUserFriendships
+
 // dating - disabled for LetsMake.Music (not needed for this app)
 // const datingRecommendation = require('./dating/recommendationTriggers')
 // const datingSwipes = require('./dating/dating')

@@ -18,16 +18,60 @@
 
 namespace facebook::react {
 
-JSI_EXPORT extern const char RNSFullWindowOverlayComponentName[];
+JSI_EXPORT extern const char RNSBottomTabsAccessoryContentComponentName[];
 
 /*
- * `ShadowNode` for <RNSFullWindowOverlay> component.
+ * `ShadowNode` for <RNSBottomTabsAccessoryContent> component.
  */
-using RNSFullWindowOverlayShadowNode = ConcreteViewShadowNode<
-    RNSFullWindowOverlayComponentName,
-    RNSFullWindowOverlayProps,
-    RNSFullWindowOverlayEventEmitter,
-    RNSFullWindowOverlayState>;
+using RNSBottomTabsAccessoryContentShadowNode = ConcreteViewShadowNode<
+    RNSBottomTabsAccessoryContentComponentName,
+    RNSBottomTabsAccessoryContentProps,
+    RNSBottomTabsAccessoryContentEventEmitter,
+    RNSBottomTabsAccessoryContentState>;
+
+JSI_EXPORT extern const char RNSBottomTabsScreenComponentName[];
+
+/*
+ * `ShadowNode` for <RNSBottomTabsScreen> component.
+ */
+using RNSBottomTabsScreenShadowNode = ConcreteViewShadowNode<
+    RNSBottomTabsScreenComponentName,
+    RNSBottomTabsScreenProps,
+    RNSBottomTabsScreenEventEmitter,
+    RNSBottomTabsScreenState>;
+
+JSI_EXPORT extern const char RNSScreenStackHostComponentName[];
+
+/*
+ * `ShadowNode` for <RNSScreenStackHost> component.
+ */
+using RNSScreenStackHostShadowNode = ConcreteViewShadowNode<
+    RNSScreenStackHostComponentName,
+    RNSScreenStackHostProps,
+    RNSScreenStackHostEventEmitter,
+    RNSScreenStackHostState>;
+
+JSI_EXPORT extern const char RNSSplitViewHostComponentName[];
+
+/*
+ * `ShadowNode` for <RNSSplitViewHost> component.
+ */
+using RNSSplitViewHostShadowNode = ConcreteViewShadowNode<
+    RNSSplitViewHostComponentName,
+    RNSSplitViewHostProps,
+    RNSSplitViewHostEventEmitter,
+    RNSSplitViewHostState>;
+
+JSI_EXPORT extern const char RNSStackScreenComponentName[];
+
+/*
+ * `ShadowNode` for <RNSStackScreen> component.
+ */
+using RNSStackScreenShadowNode = ConcreteViewShadowNode<
+    RNSStackScreenComponentName,
+    RNSStackScreenProps,
+    RNSStackScreenEventEmitter,
+    RNSStackScreenState>;
 
 JSI_EXPORT extern const char RNSScreenContainerComponentName[];
 

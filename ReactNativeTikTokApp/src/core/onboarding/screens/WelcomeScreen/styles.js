@@ -10,18 +10,18 @@ const dynamicStyles = (theme, colorScheme) => {
       backgroundColor: colorSet.primaryBackground,
     },
     logo: {
-      width: 150,
-      height: 150,
+      width: 280,
+      height: 120,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 20,
-      marginTop: -100,
+      marginBottom: 30,
+      marginTop: -80,
     },
     logoImage: {
       width: '100%',
       height: '100%',
       resizeMode: 'contain',
-      tintColor: colorSet.primaryForeground,
+      // No tintColor - display logo in its original brand colors
     },
     title: {
       fontSize: 30,

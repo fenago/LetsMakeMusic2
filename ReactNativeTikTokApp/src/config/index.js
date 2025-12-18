@@ -25,52 +25,58 @@ export const ConfigProvider = ({ children }) => {
     }),
     videoMaxDuration: 15,
     onboardingConfig: {
-      welcomeTitle: localized('Welcome to your app'),
+      welcomeTitle: localized("Let's Make Music"),
       welcomeCaption: localized(
-        'Use this codebase to build your own a Tik Tok clone in minutes.',
+        'Create, share, and discover music with creators around the world.',
       ),
       walkthroughScreens: [
         {
           icon: require('../assets/images/photo.png'),
-          title: localized('Tik Toks'),
+          title: localized('Make Memories'),
           description: localized(
-            'Compose videos with songs in the background just like Tik Tok.',
+            'Turn your photos and videos into original music videos. Create your own soundtrack—be the trend, don\'t follow it.',
           ),
         },
         {
           icon: require('../assets/images/file.png'),
-          title: localized('Watch'),
-          description: localized('Watch Tik Toks from your followers.'),
+          title: localized('Discover'),
+          description: localized(
+            'Explore music videos from creators around the world. Find new sounds and discover your next favorite artist.',
+          ),
         },
         {
           icon: require('../assets/images/like.png'),
-          title: localized('Likes'),
-          description: localized('Like the videos that amuse you!'),
+          title: localized('Vibe Check'),
+          description: localized(
+            'Show love to the tracks that hit different. Your support helps creators get discovered.',
+          ),
         },
         {
           icon: require('../assets/images/chat.png'),
-          title: localized('Chat'),
+          title: localized('Connect'),
           description: localized(
-            'Communicate with your friends via private messages.',
+            'Chat directly with fellow creators and artists. Share ideas, collaborate, and build your music community.',
           ),
         },
         {
           icon: require('../assets/icons/friends-unfilled.png'),
-          title: localized('Group Chats'),
-          description: localized('Have fun with your gang in group chats.'),
+          title: localized('Music Circles'),
+          description: localized(
+            'Create groups with your crew. Collaborate on tracks, share works in progress, and remix together.',
+          ),
         },
         {
           icon: require('../assets/images/instagram.png'),
-          title: localized('Send Photos & Videos'),
+          title: localized('Share Your Moments'),
           description: localized(
-            'Have fun with your connections by sending photos and videos to each other.',
+            'Send photos, videos, and tracks to your connections. Swap creative inspiration and memorable moments.',
           ),
         },
         {
           icon: require('../assets/images/notification.png'),
-          title: localized('Get Notified'),
+          title: localized('Stay Tuned'),
           description: localized(
-            'Receive notifications when you get new messages.',
+            'Get notified when your tracks drop, someone vibes with your music, or your circle shares new creations.',
           ),
         },
       ],
@@ -323,15 +329,8 @@ export const ConfigProvider = ({ children }) => {
           title: localized('CONTACT'),
           fields: [
             {
-              displayName: localized('Address'),
-              type: 'text',
-              editable: false,
-              key: 'push_notifications_enabled',
-              value: '142 Steiner Street, San Francisco, CA, 94115',
-            },
-            {
               displayName: localized('E-mail us'),
-              value: 'florian@instamobile.io',
+              value: 'support@LetsMake.Music',
               type: 'text',
               editable: false,
               key: 'email',
