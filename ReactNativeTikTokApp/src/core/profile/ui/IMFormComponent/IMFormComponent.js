@@ -26,11 +26,10 @@ function IMFormComponent(props) {
       <View
         key={index}
         style={[styles.settingsTypeContainer, styles.appSettingsTypeContainer]}>
-        <Text style={styles.text}>{switchField.displayName}</Text>
+        <Text style={styles.switchText}>{switchField.displayName}</Text>
         <Switch
           value={computeValue(switchField)}
           onValueChange={value => onFormFieldValueChange(switchField, value)}
-          style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
         />
       </View>
     )

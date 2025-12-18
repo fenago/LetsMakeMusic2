@@ -1,6 +1,0 @@
-framework module ExpoImage {
-  umbrella header "ExpoImage-umbrella.h"
-
-  export *
-  module * { export * }
-}

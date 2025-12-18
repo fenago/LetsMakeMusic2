@@ -1,0 +1,71 @@
+# ==========================================
+# React Native TikTok App .gitignore
+# ==========================================
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.yarn/install-state.gz
+
+# iOS
+ios/Pods/
+ios/Podfile.lock
+ios/build/
+ios/*.xcuserstate
+ios/**/*.xcuserstate
+ios/**/xcuserdata/
+ios/DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Android
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+*.apk
+*.aab
+
+# Metro
+.metro-health-check*
+*.jsbundle
+*.jsbundle.map
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Testing
+coverage/
+.nyc_output/
+
+# Build
+build/
+tmp/
+temp/
+
+# Credentials (CRITICAL)
+google-services.json
+GoogleService-Info.plist
+*.keystore
+!debug.keystore
+*.pem
+*.p8
+*.p12

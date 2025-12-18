@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useState, useRef, useEffect } from 'react'
 import { ActivityIndicator, FlatList, View } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, useTranslations } from '../../../../dopebase'
 import { useCurrentUser } from '../../../../onboarding'
 import { useSearchUsers, useSocialGraphMutations } from '../../api'
@@ -76,7 +77,7 @@ function IMUserSearchModal(props) {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.searchBarContainer}>
         <SearchBarAlternate
           onChangeText={onSearchTextChange}
@@ -98,7 +99,7 @@ function IMUserSearchModal(props) {
         data={users}
         renderItem={renderItem}
       />
-    </View>
+    </SafeAreaView>
   )
 }
 

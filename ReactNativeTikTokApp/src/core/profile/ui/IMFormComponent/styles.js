@@ -51,6 +51,10 @@ const dynamicStyles = (theme, colorScheme) => {
       fontSize: 14,
       color: colorSet.primaryText,
     },
+    switchText: {
+      fontSize: 14,
+      color: colorSet.primaryText,
+    },
     appSettingsTypeContainer: {
       flexDirection: 'row',
       borderBottomWidth: 0,

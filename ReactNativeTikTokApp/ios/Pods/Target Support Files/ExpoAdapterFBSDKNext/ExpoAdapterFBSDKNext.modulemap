@@ -1,6 +1,0 @@
-framework module ExpoAdapterFBSDKNext {
-  umbrella header "ExpoAdapterFBSDKNext-umbrella.h"
-
-  export *
-  module * { export * }
-}

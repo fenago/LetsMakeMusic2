@@ -22,7 +22,7 @@ const dynamicStyles = (theme, colorScheme) => {
       padding: 4,
       paddingLeft: 4,
       fontSize: 15,
-      width: 250,
+      flex: 1,
       color: theme.colors[colorScheme].grey9,
       backgroundColor: theme.colors[colorScheme].grey3,
     },
@@ -36,6 +36,8 @@ const dynamicStyles = (theme, colorScheme) => {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
+      paddingTop: 8,
+      paddingHorizontal: 8,
     },
   })
 }

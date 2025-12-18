@@ -1,0 +1,256 @@
+# ==========================================
+# LetsMakeMusic Project .gitignore
+# React Native + Firebase + Expo
+# ==========================================
+
+# ==========================================
+# Node.js / npm / Yarn
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+*.tgz
+package-lock.json
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# ==========================================
+# Environment & Secrets (CRITICAL)
+# ==========================================
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.instaflutter*
+*.pem
+*.p8
+*.p12
+*.key
+*.keystore
+*.jks
+google-services.json
+GoogleService-Info.plist
+firebase-adminsdk*.json
+serviceAccountKey*.json
+secrets/
+credentials/
+
+# ==========================================
+# iOS / Xcode
+# ==========================================
+# Build artifacts
+*.ipa
+*.dSYM.zip
+*.dSYM
+DerivedData/
+build/
+
+# Xcode workspace settings
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# CocoaPods (comment out if you want to track Pods)
+Pods/
+Podfile.lock
+
+# iOS generated files
+*.hmap
+*.modulemap
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Code signing
+*.mobileprovision
+*.provisionprofile
+
+# ==========================================
+# Android / Gradle
+# ==========================================
+# Build artifacts
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+bin/
+gen/
+out/
+
+# Gradle
+.gradle/
+gradle-wrapper.jar
+local.properties
+*.log
+
+# Android Studio
+.idea/
+*.iml
+.cxx/
+captures/
+.externalNativeBuild/
+
+# Keystore files
+*.keystore
+!debug.keystore
+
+# Generated files
+android/app/build/
+android/.gradle/
+android/build/
+android/captures/
+
+# ==========================================
+# React Native
+# ==========================================
+# Metro bundler
+.metro-health-check*
+*.jsbundle
+*.jsbundle.map
+
+# Watchman
+.watchmanconfig
+
+# Buck
+buck-out/
+\.buckd/
+*.keystore
+!debug.keystore
+
+# ==========================================
+# Expo
+# ==========================================
+.expo/
+dist/
+web-build/
+*.expo
+
+# EAS
+.eas/
+
+# ==========================================
+# Firebase
+# ==========================================
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+pubsub-debug.log*
+database-debug.log*
+.runtimeconfig.json
+firebase_export/
+firestore_export/
+
+# ==========================================
+# IDE & Editors
+# ==========================================
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ==========================================
+# OS Generated Files
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+
+# ==========================================
+# Testing & Coverage
+# ==========================================
+coverage/
+.nyc_output/
+*.lcov
+jest-results/
+test-results/
+
+# ==========================================
+# Build & Cache
+# ==========================================
+*.tsbuildinfo
+.cache/
+tmp/
+temp/
+
+# ==========================================
+# Logs
+# ==========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# ==========================================
+# Project Specific
+# ==========================================
+# Downloaded reference apps (not part of main project)
+# music-app-main/
+
+# Temporary research files
+# .claude/Research/*.tmp
+
+# Large media files (if any)
+*.mp4
+*.mov
+*.avi
+*.mkv
+!ReactNativeTikTokApp/src/assets/**/*.mp4
+
+# ==========================================
+# Optional: Uncomment to ignore Yarn state
+# ==========================================
+# .yarn/install-state.gz
