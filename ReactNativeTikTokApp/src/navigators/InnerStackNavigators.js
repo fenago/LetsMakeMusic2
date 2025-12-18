@@ -40,6 +40,7 @@ const InnerChatSearchNavigator = () => {
       <ChatSearch.Screen
         name="UserSearchScreen"
         component={IMUserSearchModal}
+        options={{ headerShown: true }}
       />
     </ChatSearch.Navigator>
   )
@@ -68,6 +69,7 @@ const InnerFriendsSearchNavigator = () => {
       <FriendsSearch.Screen
         name="UserSearchScreen"
         component={IMUserSearchModal}
+        options={{ headerShown: true }}
       />
     </FriendsSearch.Navigator>
   )

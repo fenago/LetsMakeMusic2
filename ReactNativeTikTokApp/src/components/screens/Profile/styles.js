@@ -125,6 +125,12 @@ const dynamicStyles = (theme, appearance) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    versionText: {
+      marginTop: 12,
+      fontSize: 10,
+      color: theme.colors[appearance].secondaryText,
+      opacity: 0.6,
+    },
   })
 }
 

@@ -26,7 +26,7 @@ function IMFormComponent(props) {
       <View
         key={index}
         style={[styles.settingsTypeContainer, styles.appSettingsTypeContainer]}>
-        <Text style={styles.text}>{switchField.displayName}</Text>
+        <Text style={[styles.text, { flex: 1, flexShrink: 1, marginRight: 10 }]}>{switchField.displayName}</Text>
         <Switch
           value={computeValue(switchField)}
           onValueChange={value => onFormFieldValueChange(switchField, value)}

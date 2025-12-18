@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useDispatch } from 'react-redux'
+import { useFocusEffect } from '@react-navigation/native'
 import { useTranslations } from '../../core/dopebase'
 import { Profile } from '../../components'
 import { storageAPI } from '../../core/media'
@@ -42,6 +43,10 @@ const ProfileScreen = props => {
   const { user, friends, moreFriendsAvailable, actionButtonType } =
     profile ?? {}
 
+  // Store pullToRefresh in a ref to avoid dependency issues
+  const pullToRefreshRef = useRef(pullToRefresh)
+  pullToRefreshRef.current = pullToRefresh
+
   useEffect(() => {
     const postsUnsubscribe = subscribeToProfileFeedPosts(
       otherUser?.id ?? currentUser?.id,
@@ -51,6 +56,16 @@ const ProfileScreen = props => {
       postsUnsubscribe && postsUnsubscribe()
     }
   }, [currentUser?.id])
+
+  // Refresh profile when screen comes into focus (e.g., after following someone)
+  // Using a ref to store pullToRefresh to prevent infinite re-renders
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUser?.id && pullToRefreshRef.current) {
+        pullToRefreshRef.current(currentUser?.id)
+      }
+    }, [currentUser?.id])
+  )
 
   const onMainButtonPress = useCallback(() => {
     const actionType = localActionButtonType

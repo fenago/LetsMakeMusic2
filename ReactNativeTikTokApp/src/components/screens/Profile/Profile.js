@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker'
 
 import { useTheme, useTranslations, StoryItem } from '../../../core/dopebase'
 import dynamicStyles from './styles'
+import { VERSION_STRING } from '../../../config/appVersion'
 
 export default function Profile(props) {
   const { localized } = useTranslations()
@@ -170,6 +171,9 @@ export default function Profile(props) {
             <Text style={styles.buttonEditProfileText}>{mainButtonTitle}</Text>
           </TouchableOpacity>
         </View>
+        {!isOtherUser && (
+          <Text style={styles.versionText}>{VERSION_STRING}</Text>
+        )}
       </View>
     )
   }

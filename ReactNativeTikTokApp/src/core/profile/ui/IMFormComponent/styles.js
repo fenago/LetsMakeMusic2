@@ -50,7 +50,6 @@ const dynamicStyles = (theme, colorScheme) => {
     text: {
       fontSize: 14,
       color: colorSet.primaryText,
-      flex: 1,
     },
     appSettingsTypeContainer: {
       flexDirection: 'row',

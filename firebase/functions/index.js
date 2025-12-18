@@ -39,6 +39,10 @@ exports.fetchFriends = socialGraph.fetchFriends
 exports.fetchFriendships = socialGraph.fetchFriendships
 exports.fetchOtherUserFriendships = socialGraph.fetchOtherUserFriendships
 
+// profile
+const profile = require('./profile/profile')
+exports.fetchProfile = profile.fetchProfile
+
 // dating - disabled for LetsMake.Music (not needed for this app)
 // const datingRecommendation = require('./dating/recommendationTriggers')
 // const datingSwipes = require('./dating/dating')
@@ -61,6 +65,13 @@ exports.propagateUserProfileUpdates = triggers.propagateUserProfileUpdates
 
 
 /* INSERT_FIREBASE_FUNCTION */
+
+// seed - LetsMakeMusic test users
+const musicSeed = require('./seed/musicAppSeed')
+exports.seedMusicTestUsers = musicSeed.seedMusicTestUsers
+exports.seedMusicTestUsersHTTP = musicSeed.seedMusicTestUsersHTTP
+exports.makeTestUsersFollowUser = musicSeed.makeTestUsersFollowUser
+exports.makeTestUsersFollowUserHTTP = musicSeed.makeTestUsersFollowUserHTTP
 
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
