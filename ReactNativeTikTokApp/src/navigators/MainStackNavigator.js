@@ -19,8 +19,10 @@ import {
   HomeScreen,
   FeedSearchScreen,
   CameraScreen,
+  CreateScreen,
   NewPostScreen,
   SongPickerScreen,
+  SystemStatusScreen,
 } from '../screens'
 // import { Camera, NewPost, ComposerSongs } from '../components';
 import { InnerFriendsSearchNavigator } from './InnerStackNavigators'
@@ -102,6 +104,14 @@ const MainStackNavigator = () => {
         component={InnerFriendsSearchNavigator}
       />
       <MainStack.Screen
+        name="Create"
+        options={{
+          headerShown: false,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={CreateScreen}
+      />
+      <MainStack.Screen
         name="Camera"
         options={{
           headerShown: false,
@@ -133,6 +143,17 @@ const MainStackNavigator = () => {
       />
       <MainStack.Screen name="Notification" component={IMNotificationScreen} />
       <MainStack.Screen name="ContactUs" component={IMContactUsScreen} />
+      <MainStack.Screen
+        name="SystemStatus"
+        options={{
+          headerTitle: 'System Status',
+          headerStyle: {
+            backgroundColor: '#000',
+          },
+          headerTintColor: '#fff',
+        }}
+        component={SystemStatusScreen}
+      />
     </MainStack.Navigator>
   )
 }

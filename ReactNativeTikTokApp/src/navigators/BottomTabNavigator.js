@@ -5,6 +5,8 @@ import {
   InnerChatSearchNavigator,
   InnerDiscoverNavigator,
   InnerProfileNavigator,
+  InnerLibraryNavigator,
+  InnerCreateNavigator,
 } from './InnerStackNavigators'
 import { CustomBottomTabs } from '../components'
 import { useConfig } from '../config'
@@ -33,7 +35,8 @@ const BottomTabNavigator = () => {
       initialRouteName="Feed">
       <BottomTab.Screen name="Feed" component={InnerFeedNavigator} />
       <BottomTab.Screen name="Discover" component={InnerDiscoverNavigator} />
-      <BottomTab.Screen name="Inbox" component={InnerChatSearchNavigator} />
+      <BottomTab.Screen name="Create" component={InnerCreateNavigator} />
+      <BottomTab.Screen name="Library" component={InnerLibraryNavigator} />
       <BottomTab.Screen name="Profile" component={InnerProfileNavigator} />
     </BottomTab.Navigator>
   )

@@ -73,6 +73,16 @@ exports.seedMusicTestUsersHTTP = musicSeed.seedMusicTestUsersHTTP
 exports.makeTestUsersFollowUser = musicSeed.makeTestUsersFollowUser
 exports.makeTestUsersFollowUserHTTP = musicSeed.makeTestUsersFollowUserHTTP
 
+// song migration - migrate songs from wrong Firebase bucket to correct bucket
+const songMigration = require('./seed/migrateSongsToCorrectBucket')
+exports.migrateSongsToCorrectBucket = songMigration.migrateSongsToCorrectBucket
+exports.migrateSongsToCorrectBucketHTTP = songMigration.migrateSongsToCorrectBucketHTTP
+
+// backfill song authors - populate author data on existing songs from users collection
+const backfillAuthors = require('./seed/backfillSongAuthors')
+exports.backfillSongAuthors = backfillAuthors.backfillSongAuthors
+exports.backfillSongAuthorsHTTP = backfillAuthors.backfillSongAuthorsHTTP
+
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
 //

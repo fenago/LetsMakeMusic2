@@ -288,7 +288,7 @@ const tools = require('firebase-tools')
 const deleteCollection = async collectionPath => {
   // console.log(`xxxx ${process.env.GCP_PROJECT}`)
   await tools.firestore.delete(collectionPath, {
-    project: 'development-69cdc',
+    project: 'letsmakemusic-4e0fe',
     recursive: true,
     yes: true,
     force: true,

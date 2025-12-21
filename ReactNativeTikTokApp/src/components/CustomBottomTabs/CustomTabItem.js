@@ -11,6 +11,7 @@ function TabItem({
   routeName,
   isAddPhoto,
   isTransparentTab,
+  isVideoOverlay, // New prop: true when showing video content
   onAddPress,
 }) {
   const { theme, appearance } = useTheme()
@@ -30,14 +31,21 @@ function TabItem({
     )
   }
 
+  // Determine icon tint color based on state:
+  // 1. Video overlay (transparent bg with video): always white
+  // 2. Focused: brand primary color
+  // 3. Unfocused: neutral secondary color
+  const getIconStyle = () => {
+    if (isVideoOverlay && isTransparentTab) {
+      return styles.videoOverlayTintColor
+    }
+    return focus ? styles.focusTintColor : styles.unFocusTintColor
+  }
+
   return (
     <TouchableOpacity style={styles.buttonContainer} onPress={onTabPress}>
       <Image
-        style={[
-          styles.icon,
-          focus ? styles.focusTintColor : styles.unFocusTintColor,
-          isTransparentTab && { tintColor: '#f5f5f5' },
-        ]}
+        style={[styles.icon, getIconStyle()]}
         source={
           focus ? tabIcons[route.name].focus : tabIcons[route.name].unFocus
         }
@@ -45,8 +53,8 @@ function TabItem({
       <Text
         style={[
           styles.title,
-          isTransparentTab && { color: '#f5f5f5' },
-          // (isTransparentTab || focus) && { color: '#f5f5f5' },
+          focus && styles.titleFocused,
+          isVideoOverlay && isTransparentTab && { color: '#F5F5F5' },
         ]}>
         {routeName}
       </Text>

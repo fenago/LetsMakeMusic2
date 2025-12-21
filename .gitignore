@@ -132,3 +132,4 @@ temp/
 
 # Claude/AI
 .claude/settings.local.json
+.claude/Research/passwords.md

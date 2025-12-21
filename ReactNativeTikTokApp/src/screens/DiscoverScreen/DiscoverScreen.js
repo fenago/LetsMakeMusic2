@@ -4,6 +4,7 @@ import { useTranslations } from '../../core/dopebase'
 import { Discover } from '../../components'
 import { useCurrentUser } from '../../core/onboarding'
 import { useDiscoverPosts } from '../../core/socialgraph/feed'
+import { subscribeToAllSongs } from '../../services/songsService'
 
 const DiscoverScreen = props => {
   const { navigation } = props
@@ -11,6 +12,10 @@ const DiscoverScreen = props => {
 
   const [postsByHashtag, setPostsByHashtag] = useState(null)
   const [isFetching, setIsFetching] = useState(false)
+
+  // State for AI-generated songs from Firebase
+  const [songs, setSongs] = useState([])
+  const [songsLoading, setSongsLoading] = useState(true)
 
   const {
     posts,
@@ -27,6 +32,23 @@ const DiscoverScreen = props => {
       loadMorePosts(currentUser?.id)
     }
   }, [currentUser?.id])
+
+  // Subscribe to all songs from Firebase
+  useEffect(() => {
+    console.log('[DiscoverScreen] Subscribing to all songs...')
+    setSongsLoading(true)
+
+    const unsubscribe = subscribeToAllSongs((fetchedSongs) => {
+      console.log('[DiscoverScreen] Received songs:', fetchedSongs.length)
+      setSongs(fetchedSongs)
+      setSongsLoading(false)
+    }, 50)
+
+    return () => {
+      console.log('[DiscoverScreen] Unsubscribing from songs')
+      if (unsubscribe) unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     if (posts?.length > 0) {
@@ -103,6 +125,8 @@ const DiscoverScreen = props => {
   return (
     <Discover
       feed={postsByHashtag}
+      songs={songs}
+      songsLoading={songsLoading}
       isFetching={isFetching}
       refreshing={refreshing}
       onRefresh={onRefresh}

@@ -12,8 +12,10 @@
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ]
+        "WRITE_EXTERNAL_STORAGE",
+        "com.google.android.gms.permission.AD_ID"
+      ],
+      "package": "com.anonymous.instamobile"
     },
     "ios": {
       "googleServicesFile": "./ios/Instamobile/GoogleService-Info.plist",
@@ -22,7 +24,8 @@
         "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera",
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos",
         "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos"
-      }
+      },
+      "bundleIdentifier": "com.anonymous.instamobile"
     },
     "plugins": [
       "expo-localization",

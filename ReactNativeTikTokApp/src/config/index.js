@@ -90,6 +90,10 @@ export const ConfigProvider = ({ children }) => {
         focus: theme.icons.search,
         unFocus: theme.icons.search,
       },
+      Library: {
+        focus: theme.icons.libraryLandscape,
+        unFocus: theme.icons.libraryLandscape,
+      },
       Inbox: {
         focus: theme.icons.commentFilled,
         unFocus: theme.icons.commentUnfilled,
@@ -219,6 +223,21 @@ export const ConfigProvider = ({ children }) => {
         {
           title: localized('PUBLIC PROFILE'),
           fields: [
+            {
+              displayName: localized('Stage Name'),
+              type: 'text',
+              editable: true,
+              key: 'stageName',
+              placeholder: 'Your artist/stage name',
+            },
+            {
+              displayName: localized('Bio'),
+              type: 'text',
+              editable: true,
+              key: 'bio',
+              placeholder: 'Tell us about yourself',
+              multiline: true,
+            },
             {
               displayName: localized('First Name'),
               type: 'text',

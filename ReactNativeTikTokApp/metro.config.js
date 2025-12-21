@@ -6,6 +6,7 @@
  */
 
 const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
+const path = require('path');
 
 const defaultConfig = getDefaultConfig(__dirname);
 
@@ -30,6 +31,9 @@ const config = {
       acc[name] = require.resolve(name);
       return acc;
     }, {}),
+    // Enable symlinks for lucide-react-native and other packages
+    unstable_enableSymlinks: true,
+    unstable_enablePackageExports: true,
   },
   watchFolders: transpileModules.map(m => `${__dirname}/node_modules/${m}`),
 };

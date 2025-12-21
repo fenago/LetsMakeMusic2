@@ -111,6 +111,8 @@ const ProfileScreen = props => {
 
   const startUpload = useCallback(
     async source => {
+      console.log('[ProfileScreen] startUpload called with source:', source)
+
       dispatch(
         setUserData({
           user: {
@@ -123,12 +125,36 @@ const ProfileScreen = props => {
 
       storageAPI.processAndUploadMediaFileWithProgressTracking(
         source,
-        async snapshot => {
-          const uploadProgress =
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+        async progressOrSnapshot => {
+          // Handle both number (new format) and object with bytesTransferred (old format)
+          let uploadProgress
+          if (typeof progressOrSnapshot === 'number') {
+            uploadProgress = progressOrSnapshot * 100
+          } else if (progressOrSnapshot?.bytesTransferred !== undefined) {
+            uploadProgress =
+              (progressOrSnapshot.bytesTransferred / progressOrSnapshot.totalBytes) * 100
+          } else {
+            uploadProgress = 50
+          }
+          console.log('[ProfileScreen] Upload progress:', uploadProgress)
           setUploadProgress(uploadProgress)
         },
-        async url => {
+        async response => {
+          // Handle both string URL (old format) and object with downloadURL (new format)
+          const url = typeof response === 'string' ? response : response?.downloadURL
+          console.log('[ProfileScreen] Upload success, URL:', url)
+
+          if (!url) {
+            console.error('[ProfileScreen] No URL in upload response:', response)
+            alert(
+              localized(
+                'Oops! An error occured while trying to update your profile picture. Please try again.',
+              ),
+            )
+            setUploadProgress(0)
+            return
+          }
+
           const data = {
             profilePictureURL: url,
           }
@@ -143,13 +169,12 @@ const ProfileScreen = props => {
         },
         error => {
           setUploadProgress(0)
-          console.log(error)
+          console.error('[ProfileScreen] Upload error:', error)
           alert(
             localized(
               'Oops! An error occured while trying to update your profile picture. Please try again.',
             ),
           )
-          console.log(error)
         },
       )
     },
@@ -174,6 +199,34 @@ const ProfileScreen = props => {
       )
     }
   }, [updateUser, currentUser, localized])
+
+  // Select a sample avatar (URL-based, no upload needed)
+  const selectAvatar = useCallback(async (avatarUrl) => {
+    console.log('[ProfileScreen] selectAvatar called with URL:', avatarUrl)
+
+    // Immediately update local state for instant feedback
+    dispatch(
+      setUserData({
+        user: { ...currentUser, profilePictureURL: avatarUrl },
+      }),
+    )
+
+    // Update in Firestore
+    const res = await updateUser(currentUser.id, {
+      profilePictureURL: avatarUrl,
+    })
+
+    if (!res.success) {
+      console.error('[ProfileScreen] Failed to save avatar:', res)
+      alert(
+        localized(
+          'Oops! An error occurred while trying to update your profile picture. Please try again.',
+        ),
+      )
+    } else {
+      console.log('[ProfileScreen] Avatar saved successfully')
+    }
+  }, [dispatch, currentUser, updateUser, localized])
 
   const onEmptyStatePress = () => {
     navigation.navigate('CreatePost')
@@ -243,6 +296,7 @@ const ProfileScreen = props => {
       onFeedItemPress={onFeedItemPress}
       startUpload={startUpload}
       removePhoto={removePhoto}
+      selectAvatar={selectAvatar}
       pullToRefreshConfig={pullToRefreshConfig}
     />
   )

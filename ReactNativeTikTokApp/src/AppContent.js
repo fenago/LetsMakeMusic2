@@ -1,13 +1,31 @@
 import React from 'react'
+import { View, StyleSheet } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
 import RootNavigator from './navigators/RootNavigator'
+import { MediaPlayerProvider } from './contexts/MediaPlayerContext'
+import MiniPlayer from './components/ui/MiniPlayer'
+import FullPlayerBottomSheet from './components/ui/FullPlayer'
 
 const AppContent = () => {
   return (
-    <NavigationContainer>
-      <RootNavigator />
-    </NavigationContainer>
+    <MediaPlayerProvider>
+      <View style={styles.container}>
+        <NavigationContainer>
+          <RootNavigator />
+        </NavigationContainer>
+        {/* Mini player sits above tab bar */}
+        <MiniPlayer tabBarHeight={83} />
+        {/* Full player bottom sheet */}
+        <FullPlayerBottomSheet />
+      </View>
+    </MediaPlayerProvider>
   )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+})
 
 export default AppContent

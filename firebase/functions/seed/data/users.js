@@ -3,29 +3,25 @@ exports.users = [
     email: 'demo1@gmail.com',
     firstName: 'Jessica',
     lastName: 'Doe',
-    profilePictureURL:
-      'https://firebasestorage.googleapis.com:443/v0/b/development-69cdc.appspot.com/o/4B4B1FE7-C90E-4EC7-9237-4441084F4CD0.jpg?alt=media&token=ebe13cf6-de85-4163-a55f-f0c362cc973a',
+    profilePictureURL: 'https://randomuser.me/api/portraits/women/1.jpg',
   },
   {
     email: 'demo2@gmail.com',
     firstName: 'Cristina',
     lastName: 'Kim',
-    profilePictureURL:
-      'https://firebasestorage.googleapis.com:443/v0/b/development-69cdc.appspot.com/o/A611951B-BE2C-424C-AC68-E2A1CCEC003C.jpg?alt=media&token=f1a02a3b-deeb-456c-9497-6882d1768333',
+    profilePictureURL: 'https://randomuser.me/api/portraits/women/2.jpg',
   },
   {
     email: 'demo3@gmail.com',
     firstName: 'Clara',
     lastName: 'Chen',
-    profilePictureURL:
-      'https://firebasestorage.googleapis.com:443/v0/b/development-69cdc.appspot.com/o/3EC729E3-76F2-422C-89AC-EC60806273FA.jpg?alt=media&token=e2e1a139-411b-4c82-93b0-5f748fb14b4b',
+    profilePictureURL: 'https://randomuser.me/api/portraits/women/3.jpg',
   },
   {
     email: 'demo4@gmail.com',
     firstName: 'Sana',
     lastName: 'Brown',
-    profilePictureURL:
-      'https://firebasestorage.googleapis.com:443/v0/b/development-69cdc.appspot.com/o/AA0DF989-F54E-4BD7-B460-3FEFF08DCED2.jpg?alt=media&token=6da437ca-e3e1-44ae-883f-6783e6e721ac',
+    profilePictureURL: 'https://randomuser.me/api/portraits/women/4.jpg',
   },
   {
     email: 'demo5@gmail.com',
@@ -58,8 +54,7 @@ exports.users = [
     email: 'demo9@gmail.com',
     firstName: 'Martha',
     lastName: 'Ruseel',
-    profilePictureURL:
-      'https://firebasestorage.googleapis.com:443/v0/b/development-69cdc.appspot.com/o/1E6242B9-3DF5-4B96-8F2B-FBBE2676DAE3.jpg?alt=media&token=eae3fc9f-7d68-451f-b720-a2ad641a2654',
+    profilePictureURL: 'https://randomuser.me/api/portraits/women/9.jpg',
   },
   {
     email: 'demo10@gmail.com',
@@ -72,8 +67,7 @@ exports.users = [
     email: 'demo11@gmail.com',
     firstName: 'Terry',
     lastName: 'Craig',
-    profilePictureURL:
-      'https://firebasestorage.googleapis.com:443/v0/b/development-69cdc.appspot.com/o/A64904CE-7ABF-4864-81D4-7BC1980DAA54.jpg?alt=media&token=770046f1-29f6-427b-9842-d9e1fc72adec',
+    profilePictureURL: 'https://randomuser.me/api/portraits/men/11.jpg',
   },
   {
     email: 'demo12@gmail.com',

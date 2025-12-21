@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 
 const pushKitEndpoint =
-  'https://us-central1-development-69cdc.cloudfunctions.net/initiateChatCall'
+  'https://us-central1-letsmakemusic-4e0fe.cloudfunctions.net/initiateChatCall'
 const iOSBundleID = 'io.instamobile.chat.rn.ios'
 export default class AVChatCoordinator {
   constructor(apiManager) {

@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, useMemo } from 'react'
 import { Share, StatusBar, View } from 'react-native'
 import { useIsFocused } from '@react-navigation/native'
 import { useTranslations } from '../../core/dopebase'
 import { useDispatch } from 'react-redux'
-import { Feed } from '../../components'
+import { Feed, HomeFeed } from '../../components'
 import styles from './styles'
 import { useUserReportingMutations } from '../../core/user-reporting'
 import CommentsScreen from '../CommentsScreen/CommentsScreen'
@@ -222,30 +222,56 @@ const FeedScreen = props => {
     setFeedType('following')
   }
 
+  // Memoized video feed component to pass to HomeFeed
+  const videoFeedComponent = useMemo(() => (
+    <Feed
+      loading={loading}
+      refreshing={refreshing}
+      pullToRefresh={onRefresh}
+      feed={feed[feedType]}
+      isCustomFeed={false}
+      onCommentPress={onCommentPress}
+      user={currentUser}
+      onFeedUserItemPress={onFeedUserItemPress}
+      onReaction={onReaction}
+      isFetching={isLoadingBottom}
+      onSharePost={onSharePost}
+      onDeletePost={onDeletePost}
+      onUserReport={onUserReport}
+      navigation={navigation}
+      startIndex={0}
+      onTextFieldUserPress={onTextFieldUserPress}
+      onTextFieldHashTagPress={onTextFieldHashTagPress}
+      onFollowingFeedPress={onFollowingFeedPress}
+      onForYouFeedPress={onForYouFeedPress}
+      isForYouFeed={feedType === 'forYou'}
+      isFollowingDisabled={(feed.following ?? []).length < 1}
+    />
+  ), [
+    loading, refreshing, onRefresh, feed, feedType, onCommentPress,
+    currentUser, onFeedUserItemPress, onReaction, isLoadingBottom,
+    onSharePost, onDeletePost, onUserReport, navigation,
+    onTextFieldUserPress, onTextFieldHashTagPress,
+    onFollowingFeedPress, onForYouFeedPress,
+  ])
+
+  // Get user's first name for greeting
+  const userName = currentUser?.firstName || currentUser?.username || 'there'
+
   return (
     <View style={styles.container}>
-      <Feed
-        loading={loading}
+      <HomeFeed
+        videoFeedComponent={videoFeedComponent}
+        userName={userName}
         refreshing={refreshing}
-        pullToRefresh={onRefresh}
-        feed={feed[feedType]}
-        isCustomFeed={false}
-        onCommentPress={onCommentPress}
-        user={currentUser}
-        onFeedUserItemPress={onFeedUserItemPress}
-        onReaction={onReaction}
-        isFetching={isLoadingBottom}
-        onSharePost={onSharePost}
-        onDeletePost={onDeletePost}
-        onUserReport={onUserReport}
-        navigation={navigation}
-        startIndex={0}
-        onTextFieldUserPress={onTextFieldUserPress}
-        onTextFieldHashTagPress={onTextFieldHashTagPress}
-        onFollowingFeedPress={onFollowingFeedPress}
-        onForYouFeedPress={onForYouFeedPress}
-        isForYouFeed={feedType === 'forYou'}
-        isFollowingDisabled={(feed.following ?? []).length < 1}
+        onRefresh={onRefresh}
+        onArtistPress={(artist) => {
+          navigation.push('Profile', { user: artist })
+        }}
+        onPlaylistPress={(playlist) => {
+          // Future: Navigate to playlist detail
+          console.log('Playlist pressed:', playlist)
+        }}
       />
       <CommentsScreen
         item={selectedItem}

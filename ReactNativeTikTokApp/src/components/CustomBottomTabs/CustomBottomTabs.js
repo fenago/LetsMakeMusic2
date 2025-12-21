@@ -1,13 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { SafeAreaView } from 'react-native'
 import { useTheme } from '../../core/dopebase'
 import CustomTabItem from './CustomTabItem'
 import dynamicStyles from './styles'
-
-const photoModalTab = {
-  name: 'Photo',
-  key: 'Photo-6UB4BaeaA8m662ywhstar',
-}
 
 export default function BottomTabs({
   state,
@@ -19,58 +14,47 @@ export default function BottomTabs({
   const { theme, appearance } = useTheme()
   const styles = dynamicStyles(theme, appearance)
 
-  const [isTransparentTab, setIsTransparentTab] = useState(true)
+  // Track if we're showing video content (needs transparent/white icons)
+  // Default to false since HomeFeed now starts with Music tab
+  const [isVideoOverlay, setIsVideoOverlay] = useState(false)
 
-  const customRoutes = [...state.routes]
-  const indexToInsert = Math.floor(customRoutes.length / 2)
-  customRoutes.splice(indexToInsert, 0, photoModalTab)
+  // Use routes directly - Create tab is now a real tab in the navigator
+  const customRoutes = state.routes
 
-  const onAddPress = () => {
-    navigation.navigate('Camera')
-  }
-
-  const onTabItemPress = routeName => {
+  const onTabItemPress = useCallback((routeName) => {
+    // Only set video overlay when navigating to Feed AND showing videos tab
+    // For now, we'll default to non-transparent since we start on Music tab
     if (routeName?.toLowerCase() === 'feed') {
-      setIsTransparentTab(true)
+      setIsVideoOverlay(false) // Start with Music view which needs themed icons
     } else {
-      setIsTransparentTab(false)
+      setIsVideoOverlay(false)
     }
     navigation.navigate(routeName)
-  }
-
-  const getIsFocus = (stateIndex, currentTabIndex) => {
-    if (stateIndex > indexToInsert) {
-      const adjustedStateIndex = stateIndex + 1
-      return adjustedStateIndex === currentTabIndex
-    }
-    return state.index === currentTabIndex
-  }
+  }, [navigation])
 
   const renderTabItem = (route, index) => {
+    // Create tab shows as the special + button (TikTok-style center button)
+    const isCreateTab = route.name?.toLowerCase() === 'create'
+
     return (
       <CustomTabItem
-        key={index + ''}
-        route={customRoutes[index]}
+        key={route.key || index + ''}
+        route={route}
         tabIcons={tabIcons}
-        focus={getIsFocus(state.index, index)}
+        focus={state.index === index}
         routeName={route.name}
         onPress={onTabItemPress}
-        isAddPhoto={route.name?.toLowerCase() === 'photo'}
+        isAddPhoto={isCreateTab}
         colorTitle={colorTitle}
-        isTransparentTab={isTransparentTab}
-        onAddPress={onAddPress}
+        isTransparentTab={false} // Always use solid background for now
+        isVideoOverlay={isVideoOverlay}
+        onAddPress={() => navigation.navigate('Create')}
       />
     )
   }
 
   return (
-    <SafeAreaView
-      style={[
-        styles.tabContainer,
-        isTransparentTab && {
-          backgroundColor: 'transparent',
-        },
-      ]}>
+    <SafeAreaView style={styles.tabContainer}>
       {customRoutes.map(renderTabItem)}
     </SafeAreaView>
   )

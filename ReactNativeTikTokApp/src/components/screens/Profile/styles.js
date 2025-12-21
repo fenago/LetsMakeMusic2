@@ -54,12 +54,27 @@ const dynamicStyles = (theme, appearance) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    userName: {
-      fontSize: 20,
+    stageName: {
+      fontSize: 22,
       fontWeight: 'bold',
       textAlign: 'center',
       color: theme.colors[appearance].primaryText,
       paddingTop: 0,
+    },
+    userName: {
+      fontSize: 14,
+      fontWeight: '500',
+      textAlign: 'center',
+      color: theme.colors[appearance].secondaryText,
+      paddingTop: 4,
+    },
+    userBio: {
+      fontSize: 14,
+      textAlign: 'center',
+      color: theme.colors[appearance].primaryText,
+      paddingTop: 12,
+      paddingHorizontal: 32,
+      lineHeight: 20,
     },
     userFollowersText: {
       width: '30%',

@@ -38,7 +38,7 @@ exports.propagateUserProfileUpdates = functions.firestore
     });
 
 function hasRelevantChanges(before, after) {
-    const relevantFields = ['firstName', 'lastName', 'profilePictureURL', 'email', 'isOnline'];
+    const relevantFields = ['firstName', 'lastName', 'profilePictureURL', 'email', 'isOnline', 'stageName', 'bio'];
     return relevantFields.some(field => before[field] !== after[field]);
 }
 
@@ -49,10 +49,8 @@ const updateAllRelatedData = async (userData) => {
             updateChatConversations(userData, 'messages_historical'),
             updateChatFeeds(userData, 'chat_feed_live'),
             updateChatFeeds(userData, 'chat_feed_historical'),
+            updateSongsAuthor(userData), // Update author data on user's songs
         ];
-
-
-
 
         await Promise.all(tasks);
     } catch (error) {
@@ -200,6 +198,67 @@ const updateAuthoredEntries = async (userData, collectionName) => {
         await Promise.all(batches);
     } catch (error) {
         console.error(`Error in updateAuthoredEntries (${collectionName}):`, error);
+        throw error;
+    }
+};
+
+/**
+ * Update author data on all songs created by this user
+ * This ensures "About the Artist" reflects current profile data
+ */
+const updateSongsAuthor = async (userData) => {
+    try {
+        console.log(`Updating songs author for user ${userData.id}`);
+
+        // Query songs where userId matches
+        const querySnapshot = await firestore
+            .collection('songs')
+            .where('userId', '==', userData.id)
+            .get();
+
+        if (querySnapshot.empty) {
+            console.log(`No songs found for user ${userData.id}`);
+            return;
+        }
+
+        console.log(`Found ${querySnapshot.size} songs to update for user ${userData.id}`);
+
+        // Build the canonical author object
+        const author = {
+            id: userData.id,
+            stageName: userData.stageName || null,
+            bio: userData.bio || null,
+            profilePictureURL: userData.profilePictureURL || null,
+            firstName: userData.firstName || null,
+            lastName: userData.lastName || null,
+        };
+
+        const batch = firestore.batch();
+        let count = 0;
+        const batchLimit = 500;
+        const batches = [];
+
+        querySnapshot.docs.forEach(doc => {
+            batch.update(doc.ref, {
+                author: author,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+
+            if (count === batchLimit) {
+                batches.push(batch.commit());
+                count = 0;
+            }
+        });
+
+        if (count > 0) {
+            batches.push(batch.commit());
+        }
+
+        await Promise.all(batches);
+        console.log(`Successfully updated author on ${querySnapshot.size} songs for user ${userData.id}`);
+    } catch (error) {
+        console.error(`Error in updateSongsAuthor for user ${userData.id}:`, error);
         throw error;
     }
 };

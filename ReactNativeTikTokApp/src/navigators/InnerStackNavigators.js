@@ -7,6 +7,8 @@ import {
   DiscoverScreen,
   ProfileScreen,
   ChatScreen,
+  LibraryScreen,
+  CreateScreen,
 } from '../screens'
 import { IMCreateGroupScreen } from '../core/chat'
 import {
@@ -118,10 +120,34 @@ const InnerProfileNavigator = () => {
   )
 }
 
+const InnerLibrary = createStackNavigator()
+const InnerLibraryNavigator = () => {
+  return (
+    <InnerLibrary.Navigator
+      initialRouteName="Library"
+      screenOptions={{ headerShown: false }}>
+      <InnerLibrary.Screen name="Library" component={LibraryScreen} />
+    </InnerLibrary.Navigator>
+  )
+}
+
+const InnerCreate = createStackNavigator()
+const InnerCreateNavigator = () => {
+  return (
+    <InnerCreate.Navigator
+      initialRouteName="CreateSong"
+      screenOptions={{ headerShown: false }}>
+      <InnerCreate.Screen name="CreateSong" component={CreateScreen} />
+    </InnerCreate.Navigator>
+  )
+}
+
 export {
   InnerFeedNavigator,
   InnerChatSearchNavigator,
   InnerFriendsSearchNavigator,
   InnerDiscoverNavigator,
   InnerProfileNavigator,
+  InnerLibraryNavigator,
+  InnerCreateNavigator,
 }

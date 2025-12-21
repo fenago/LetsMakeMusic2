@@ -1,6 +1,42 @@
 import { Platform, StyleSheet } from 'react-native'
 
+// LetsMake.Music Brand Colors
+const BRAND_COLORS = {
+  primary: {
+    light: '#1F979E', // Vibrant Teal 500
+    dark: '#20B2AA',  // Vibrant Teal 400
+  },
+  secondary: {
+    light: '#C12D79', // Deep Magenta 500
+    dark: '#D81B60',  // Deep Magenta 400
+  },
+  neutral: {
+    text: {
+      light: '#212529',  // Neutral 900 light
+      dark: '#F5F5F5',   // Neutral 900 dark
+    },
+    secondary: {
+      light: '#868E96',  // Neutral 600 light
+      dark: '#A0A0A0',   // Neutral 600 dark
+    },
+    background: {
+      light: '#F8F9FA',  // Neutral 50 light
+      dark: '#121212',   // Neutral 50 dark
+    },
+    surface: {
+      light: '#FFFFFF',
+      dark: '#1E1E1E',   // Neutral 100 dark
+    },
+    border: {
+      light: '#E9ECEF',  // Neutral 200 light
+      dark: '#2C2C2C',   // Neutral 200 dark
+    },
+  },
+}
+
 const dynamicStyles = (theme, appearance) => {
+  const isDark = appearance === 'dark'
+
   return StyleSheet.create({
     tabContainer: {
       position: 'absolute',
@@ -9,9 +45,9 @@ const dynamicStyles = (theme, appearance) => {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderTopWidth: 0.2,
-      borderTopColor: '#aaa',
-      backgroundColor: theme.colors[appearance].primaryBackground,
+      borderTopWidth: 0.5,
+      borderTopColor: isDark ? BRAND_COLORS.neutral.border.dark : BRAND_COLORS.neutral.border.light,
+      backgroundColor: isDark ? BRAND_COLORS.neutral.surface.dark : BRAND_COLORS.neutral.surface.light,
       width: '100%',
       maxWidth: 1024,
       alignSelf: 'center',
@@ -24,8 +60,11 @@ const dynamicStyles = (theme, appearance) => {
     },
     title: {
       fontSize: 10,
-      color: theme.colors[appearance].primaryText,
+      color: isDark ? BRAND_COLORS.neutral.secondary.dark : BRAND_COLORS.neutral.secondary.light,
       paddingTop: 2,
+    },
+    titleFocused: {
+      color: isDark ? BRAND_COLORS.primary.dark : BRAND_COLORS.primary.light,
     },
     addContainer: {
       width: '70%',
@@ -36,9 +75,10 @@ const dynamicStyles = (theme, appearance) => {
       borderLeftWidth: 4,
       borderRightWidth: 4,
       borderRadius: 10,
-      borderLeftColor: '#69C9D0',
-      borderRightColor: '#EE1D52',
-      backgroundColor: '#FFF',
+      // Brand gradient colors for create button
+      borderLeftColor: BRAND_COLORS.primary.light,
+      borderRightColor: BRAND_COLORS.secondary.light,
+      backgroundColor: isDark ? BRAND_COLORS.neutral.surface.dark : '#FFFFFF',
     },
     icon: {
       height: 28,
@@ -47,15 +87,19 @@ const dynamicStyles = (theme, appearance) => {
     addIcon: {
       height: 18,
       width: 18,
-      tintColor: '#010101',
+      tintColor: isDark ? BRAND_COLORS.neutral.text.dark : BRAND_COLORS.neutral.text.light,
     },
+    // Focused state uses brand primary color
     focusTintColor: {
-      tintColor: '#010101',
-      // tintColor: '#f5f5f5',
+      tintColor: isDark ? BRAND_COLORS.primary.dark : BRAND_COLORS.primary.light,
     },
+    // Unfocused state uses neutral secondary color
     unFocusTintColor: {
-      // tintColor: '#fff',
-      tintColor: appearance === 'dark' ? 'lightgrey' : 'grey',
+      tintColor: isDark ? BRAND_COLORS.neutral.secondary.dark : BRAND_COLORS.neutral.secondary.light,
+    },
+    // For video overlay (transparent tab) - white icons
+    videoOverlayTintColor: {
+      tintColor: '#F5F5F5',
     },
   })
 }
