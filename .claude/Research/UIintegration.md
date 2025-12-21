@@ -2092,3 +2092,70 @@ service cloud.firestore {
 4. **Preserve TikTok-style video experience** - The vertical video scroll is core to the app identity.
 
 5. **Add Music sections to Home** - Horizontal scrolls for playlists/artists are BELOW the video feed, not replacing it.
+
+
+---
+
+## Implementation Phases Checklist
+
+> **CRITICAL:** All new functionality is ADDITIVE - not replacing existing features
+
+### Phase 1: Foundation
+- [x] Install `@gorhom/bottom-sheet@^5`
+- [x] Install `react-native-reanimated@~3.18.0`
+- [x] Install `react-native-gesture-handler`
+- [x] Configure `babel.config.js` with reanimated plugin
+- [x] Wrap App with `GestureHandlerRootView`
+- [x] Create base UI components directory structure
+- [x] Verify app builds and runs without regression
+
+### Phase 2: Player Infrastructure
+- [x] Create `MediaPlayerContext` (unified audio/video state)
+- [x] Create `useMediaPlayer` hook
+- [x] Create `MiniPlayer` component (bottom bar for audio)
+- [x] Create `FullPlayerBottomSheet` component
+- [x] Wrap app with `MediaPlayerProvider`
+- [x] Test with mock audio URL (Profile screen has "Test Audio Player" button)
+- [ ] Verify video playback unaffected
+
+### Phase 3: Feed/Home Screen
+- [ ] Create `FeedHeader` with greeting
+- [ ] Create horizontal filter tabs (All, Music, Videos)
+- [ ] Create `TodaysPicks` carousel
+- [ ] Create `YourFavorites` song list
+- [ ] Create `PlaylistsForYou` horizontal scroll
+- [ ] Integrate player with song taps
+- [ ] Verify video feed still works
+
+### Phase 4: Discover/Search
+- [ ] Create unified search (videos, songs, artists, playlists)
+- [ ] Add search history persistence
+- [ ] Create search results tabs
+- [ ] Add "Discover Something New" section
+- [ ] Verify hashtag search still works
+
+### Phase 5: Library Screen (MOSTLY COMPLETE)
+- [x] Create Library screen (replaces Chat tab)
+- [x] Create filter tabs (All, Playlists, Songs, AI Created, Videos)
+- [x] Create song list component with real Firebase songs
+- [x] Create playlist grid component (2-column grid with FadeInDown animation)
+- [x] Create "New Playlist" FAB
+- [ ] Move Chat to Profile settings
+
+### Phase 6: Profile Screen
+- [ ] Add "Your Playlists" section
+- [ ] Add "Songs" count to stats
+- [ ] Add options menu (Downloads, History, Settings, Help)
+- [ ] Add Chat access from Profile
+- [ ] Verify video grid still works
+
+### Phase 7: Add/Create Screen + Suno AI (MOSTLY COMPLETE)
+- [x] Create mode selector (Video/Song)
+- [x] Create song prompt input (Simple + Custom modes)
+- [x] Create style/genre picker
+- [x] Integrate Suno API (with model version selector V3.5-V5)
+- [x] Create song preview player (uses MediaPlayer context)
+- [x] Timestamped lyrics API integration for karaoke sync
+- [x] Save songs to Firebase with lyrics (`songsService.js`)
+- [ ] Verify video recording still works
+
