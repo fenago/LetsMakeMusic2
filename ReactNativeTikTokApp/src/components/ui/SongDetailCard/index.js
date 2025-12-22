@@ -1,4 +1,4 @@
-import React, { memo } from 'react'
+import React, { memo, useState, useCallback } from 'react'
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   StyleSheet,
   useColorScheme,
 } from 'react-native'
+import { Heart, MoreHorizontal } from 'lucide-react-native'
+import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 
 /**
  * SongDetailCard - Song list item for favorites/playlists
@@ -26,46 +28,94 @@ const SongDetailCard = ({
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
+  // Shared like state from context
+  const {
+    isLiked: isLikedFn,
+    toggleLike,
+  } = useMediaPlayer()
+
+  // Like loading state (local)
+  const [isLikeLoading, setIsLikeLoading] = useState(false)
+
+  // Get like status from shared context
+  const isLiked = song?.id ? isLikedFn(song.id) : false
+
+  // Handle like button press - uses shared context
+  const handleLikePress = useCallback(async () => {
+    if (!song?.id || isLikeLoading) {
+      return
+    }
+
+    setIsLikeLoading(true)
+    try {
+      await toggleLike(song)
+      // Note: isLiked will update automatically via Firebase subscription in context
+    } catch (error) {
+      console.error('Error toggling like:', error)
+    } finally {
+      setIsLikeLoading(false)
+    }
+  }, [song, isLikeLoading, toggleLike])
+
   const styles = getStyles(isDark)
 
   const imageUrl = song.imageUrl || song.thumbnailUrl || song.coverUrl
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={() => onPress?.(song, index)}
-      activeOpacity={0.7}
-    >
-      {/* Thumbnail */}
-      <View style={styles.imageContainer}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.image} />
-        ) : (
-          <View style={[styles.image, styles.placeholderImage]}>
-            <Text style={styles.placeholderIcon}>🎵</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Info */}
-      <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>
-          {song.name || song.title || 'Unknown Track'}
-        </Text>
-        <Text style={styles.description} numberOfLines={1}>
-          {song.description || song.artist || 'Unknown Artist'}
-        </Text>
-      </View>
-
-      {/* Menu Button */}
+    <View style={styles.container}>
+      {/* Touchable area for playing song - only image and info */}
       <TouchableOpacity
-        style={styles.menuButton}
-        onPress={() => onMenuPress?.(song, index)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={styles.songTouchable}
+        onPress={() => onPress?.(song, index)}
+        activeOpacity={0.7}
       >
-        <Text style={styles.menuIcon}>⋯</Text>
+        {/* Thumbnail */}
+        <View style={styles.imageContainer}>
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={styles.image} />
+          ) : (
+            <View style={[styles.image, styles.placeholderImage]}>
+              <Text style={styles.placeholderIcon}>🎵</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Info */}
+        <View style={styles.info}>
+          <Text style={styles.name} numberOfLines={1}>
+            {song.name || song.title || 'Unknown Track'}
+          </Text>
+          <Text style={styles.description} numberOfLines={1}>
+            {song.description || song.artist || 'Unknown Artist'}
+          </Text>
+        </View>
       </TouchableOpacity>
-    </TouchableOpacity>
+
+      {/* Action Buttons - OUTSIDE the song touchable */}
+      <View style={styles.actionButtons}>
+        {/* Like Button */}
+        <TouchableOpacity
+          style={styles.likeButton}
+          onPress={handleLikePress}
+          activeOpacity={0.6}
+        >
+          <Heart
+            size={20}
+            color={isLiked ? '#ef4444' : (isDark ? '#737373' : '#a3a3a3')}
+            fill={isLiked ? '#ef4444' : 'transparent'}
+          />
+        </TouchableOpacity>
+
+        {/* Menu Button */}
+        <TouchableOpacity
+          style={styles.menuButton}
+          onPress={() => onMenuPress?.(song, index)}
+          activeOpacity={0.6}
+        >
+          <MoreHorizontal size={20} color={isDark ? '#737373' : '#a3a3a3'} />
+        </TouchableOpacity>
+      </View>
+    </View>
   )
 }
 
@@ -74,6 +124,11 @@ const getStyles = (isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%', // w-full
+  },
+  songTouchable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 16, // gap-x-4
   },
   imageContainer: {
@@ -106,15 +161,22 @@ const getStyles = (isDark) => StyleSheet.create({
     fontSize: 14,
     color: isDark ? '#525252' : '#d4d4d4', // text-typography-300
   },
-  menuButton: {
-    width: 40,
-    height: 40,
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  likeButton: {
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuIcon: {
-    fontSize: 20,
-    color: isDark ? '#737373' : '#a3a3a3', // text-background-500
+  menuButton: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 })
 

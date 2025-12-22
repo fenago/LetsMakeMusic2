@@ -372,8 +372,10 @@ export const toggleSongLike = async (songId, userId, songData = {}) => {
   try {
     const now = ffirestore.FieldValue.serverTimestamp()
     const likeDoc = await songLikesRef(songId).doc(userId).get()
+    // React Native Firebase: exists can be property or method depending on version
+    const docExists = typeof likeDoc.exists === 'function' ? likeDoc.exists() : likeDoc.exists
 
-    if (likeDoc.exists) {
+    if (docExists) {
       // Unlike - remove from both places
       await Promise.all([
         songLikesRef(songId).doc(userId).delete(),
@@ -418,11 +420,15 @@ export const toggleSongLike = async (songId, userId, songData = {}) => {
  * @returns {Promise<boolean>} True if liked
  */
 export const isSongLiked = async (songId, userId) => {
+  console.log('[songsService] isSongLiked called - songId:', songId, 'userId:', userId)
   try {
     const likeDoc = await songLikesRef(songId).doc(userId).get()
-    return likeDoc.exists
+    // React Native Firebase: exists can be property or method depending on version
+    const exists = typeof likeDoc.exists === 'function' ? likeDoc.exists() : likeDoc.exists
+    console.log('[songsService] isSongLiked result - songId:', songId, 'exists:', exists)
+    return exists
   } catch (error) {
-    console.error('Error checking song like:', error)
+    console.error('[songsService] isSongLiked error:', error)
     return false
   }
 }

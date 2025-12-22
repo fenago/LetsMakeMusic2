@@ -21,6 +21,7 @@ export default function BottomTabs({
   // Use routes directly - Create tab is now a real tab in the navigator
   const customRoutes = state.routes
 
+  // All hooks must be called before any conditional returns
   const onTabItemPress = useCallback((routeName) => {
     // Only set video overlay when navigating to Feed AND showing videos tab
     // For now, we'll default to non-transparent since we start on Music tab
@@ -51,6 +52,13 @@ export default function BottomTabs({
         onAddPress={() => navigation.navigate('Create')}
       />
     )
+  }
+
+  // Hide tab bar when on Create screen (full-screen immersive experience)
+  // Must be after all hooks to avoid "rendered fewer hooks" error
+  const currentRoute = state.routes[state.index]
+  if (currentRoute?.name?.toLowerCase() === 'create') {
+    return null
   }
 
   return (

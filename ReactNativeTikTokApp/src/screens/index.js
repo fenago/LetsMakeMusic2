@@ -11,3 +11,19 @@ export { default as NewPostScreen } from './NewPostScreen/NewPostScreen'
 export { default as SongPickerScreen } from './SongPickerScreen/SongPickerScreen'
 export { default as LibraryScreen } from './LibraryScreen/LibraryScreen'
 export { default as SystemStatusScreen } from './SystemStatusScreen/SystemStatusScreen'
+
+// Song Features screens (FullPlayer expandable sections + Create menu)
+export {
+  CreateMusicVideoScreen,
+  ExtendSongScreen,
+  ReinterpretSongScreen,
+  AddVocalsScreen,
+  AddInstrumentsScreen,
+  GetTimestampedLyricsScreen,
+  ChangeSongCoverScreen,
+  AddMediaForVideoScreen,
+  GetAcapellaScreen,
+  StemSongScreen,
+  CreateLyricsScreen,
+  BuildBeatsScreen,
+} from './SongFeatures'

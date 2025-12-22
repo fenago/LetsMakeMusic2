@@ -9,15 +9,15 @@ import FullPlayerBottomSheet from './components/ui/FullPlayer'
 const AppContent = () => {
   return (
     <MediaPlayerProvider>
-      <View style={styles.container}>
-        <NavigationContainer>
+      <NavigationContainer>
+        <View style={styles.container}>
           <RootNavigator />
-        </NavigationContainer>
-        {/* Mini player sits above tab bar */}
-        <MiniPlayer tabBarHeight={83} />
-        {/* Full player bottom sheet */}
-        <FullPlayerBottomSheet />
-      </View>
+          {/* Mini player sits above tab bar */}
+          <MiniPlayer tabBarHeight={83} />
+          {/* Full player bottom sheet */}
+          <FullPlayerBottomSheet />
+        </View>
+      </NavigationContainer>
     </MediaPlayerProvider>
   )
 }

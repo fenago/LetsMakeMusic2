@@ -23,6 +23,19 @@ import {
   NewPostScreen,
   SongPickerScreen,
   SystemStatusScreen,
+  // Song Features screens
+  CreateMusicVideoScreen,
+  ExtendSongScreen,
+  ReinterpretSongScreen,
+  AddVocalsScreen,
+  AddInstrumentsScreen,
+  GetTimestampedLyricsScreen,
+  ChangeSongCoverScreen,
+  AddMediaForVideoScreen,
+  GetAcapellaScreen,
+  StemSongScreen,
+  CreateLyricsScreen,
+  BuildBeatsScreen,
 } from '../screens'
 // import { Camera, NewPost, ComposerSongs } from '../components';
 import { InnerFriendsSearchNavigator } from './InnerStackNavigators'
@@ -153,6 +166,127 @@ const MainStackNavigator = () => {
           headerTintColor: '#fff',
         }}
         component={SystemStatusScreen}
+      />
+      {/* Song Feature Screens */}
+      <MainStack.Screen
+        name="CreateMusicVideo"
+        options={{
+          headerTitle: 'Create Music Video',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={CreateMusicVideoScreen}
+      />
+      <MainStack.Screen
+        name="ExtendSong"
+        options={{
+          headerTitle: 'Extend Song',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={ExtendSongScreen}
+      />
+      <MainStack.Screen
+        name="ReinterpretSong"
+        options={{
+          headerTitle: 'Reinterpret Song',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={ReinterpretSongScreen}
+      />
+      <MainStack.Screen
+        name="AddVocals"
+        options={{
+          headerTitle: 'Add Vocals',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={AddVocalsScreen}
+      />
+      <MainStack.Screen
+        name="AddInstruments"
+        options={{
+          headerTitle: 'Add Instruments',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={AddInstrumentsScreen}
+      />
+      <MainStack.Screen
+        name="GetTimestampedLyrics"
+        options={{
+          headerTitle: 'Get Lyrics',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={GetTimestampedLyricsScreen}
+      />
+      <MainStack.Screen
+        name="ChangeSongCover"
+        options={{
+          headerTitle: 'Change Cover',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={ChangeSongCoverScreen}
+      />
+      <MainStack.Screen
+        name="AddMediaForVideo"
+        options={{
+          headerTitle: 'Add Media',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={AddMediaForVideoScreen}
+      />
+      <MainStack.Screen
+        name="GetAcapella"
+        options={{
+          headerTitle: 'Get Acapella',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={GetAcapellaScreen}
+      />
+      <MainStack.Screen
+        name="StemSong"
+        options={{
+          headerTitle: 'Stem Song',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={StemSongScreen}
+      />
+      <MainStack.Screen
+        name="CreateLyrics"
+        options={{
+          headerTitle: 'Create Lyrics',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={CreateLyricsScreen}
+      />
+      <MainStack.Screen
+        name="BuildBeats"
+        options={{
+          headerTitle: 'Build Beats',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={BuildBeatsScreen}
       />
     </MainStack.Navigator>
   )

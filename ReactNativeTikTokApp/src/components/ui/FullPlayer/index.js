@@ -26,13 +26,24 @@ import {
   Repeat,
   Repeat1,
   ChevronUp,
+  ChevronRight,
   Music,
   User,
   X,
+  Video,
+  Wand2,
+  Image as ImageIcon,
+  AudioWaveform,
+  Mic,
+  Guitar,
+  FileText,
+  Upload,
+  Film,
+  Scissors,
+  Layers,
 } from 'lucide-react-native'
+import { useNavigation } from '@react-navigation/native'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
-import { useAuth } from '../../../core/onboarding/hooks/useAuth'
-import { toggleSongLike, isSongLiked } from '../../../services/songsService'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const ARTWORK_SIZE = SCREEN_WIDTH - 80
@@ -56,15 +67,21 @@ const FullPlayerBottomSheet = () => {
   const isDark = colorScheme === 'dark'
 
   const bottomSheetRef = useRef(null)
-  const [isLiked, setIsLiked] = useState(false)
   const [isLikeLoading, setIsLikeLoading] = useState(false)
   const [isShuffleOn, setIsShuffleOn] = useState(false)
   const [repeatMode, setRepeatMode] = useState('off') // 'off' | 'all' | 'one'
   const [showLyrics, setShowLyrics] = useState(true)
+  const [showQueue, setShowQueue] = useState(true)
+  const [showArtist, setShowArtist] = useState(true)
   const [showLyricsModal, setShowLyricsModal] = useState(false)
   const [lyricsTab, setLyricsTab] = useState('raw') // 'raw' | 'timestamped'
+  // New expandable sections
+  const [showCreateVideo, setShowCreateVideo] = useState(false)
+  const [showMusicGeneration, setShowMusicGeneration] = useState(false)
+  const [showSongCover, setShowSongCover] = useState(false)
+  const [showAudioProcessing, setShowAudioProcessing] = useState(false)
 
-  const { user } = useAuth()
+  const navigation = useNavigation()
 
   const {
     mediaType,
@@ -81,22 +98,13 @@ const FullPlayerBottomSheet = () => {
     formatTime,
     queue,
     queueIndex,
+    // Shared like state from context
+    isLiked: isLikedFn,
+    toggleLike,
   } = useMediaPlayer()
 
-  // Check if current song is liked when media changes
-  useEffect(() => {
-    const checkLikeStatus = async () => {
-      if (currentMedia?.id && user?.id) {
-        try {
-          const liked = await isSongLiked(currentMedia.id, user.id)
-          setIsLiked(liked)
-        } catch (error) {
-          console.error('Error checking like status:', error)
-        }
-      }
-    }
-    checkLikeStatus()
-  }, [currentMedia?.id, user?.id])
+  // Get like status from shared context
+  const isLiked = currentMedia?.id ? isLikedFn(currentMedia.id) : false
 
   // Debug: Log media data when media changes (lyrics + author info)
   useEffect(() => {
@@ -116,24 +124,22 @@ const FullPlayerBottomSheet = () => {
     }
   }, [currentMedia])
 
-  // Handle like button press
+  // Handle like button press - uses shared context
   const handleLikePress = useCallback(async () => {
-    if (!currentMedia?.id || !user?.id || isLikeLoading) return
+    if (!currentMedia?.id || isLikeLoading) {
+      return
+    }
 
     setIsLikeLoading(true)
     try {
-      const nowLiked = await toggleSongLike(currentMedia.id, user.id, {
-        title: currentMedia.title,
-        imageUrl: currentMedia.imageUrl || currentMedia.thumbnailUrl,
-        artist: currentMedia.artist || currentMedia.author?.firstName,
-      })
-      setIsLiked(nowLiked)
+      await toggleLike(currentMedia)
+      // Note: isLiked will update automatically via Firebase subscription in context
     } catch (error) {
       console.error('Error toggling like:', error)
     } finally {
       setIsLikeLoading(false)
     }
-  }, [currentMedia, user?.id, isLikeLoading])
+  }, [currentMedia, isLikeLoading, toggleLike])
 
   // Handle visibility changes
   useEffect(() => {
@@ -167,6 +173,12 @@ const FullPlayerBottomSheet = () => {
       return 'off'
     })
   }, [])
+
+  // Navigate to a feature screen with the current song
+  const navigateToFeature = useCallback((screenName) => {
+    hideFullPlayer()
+    navigation.navigate(screenName, { song: currentMedia })
+  }, [navigation, hideFullPlayer, currentMedia])
 
   // Don't render if no media or wrong type
   if (mediaType !== 'audio' || !currentMedia) {
@@ -237,10 +249,11 @@ const FullPlayerBottomSheet = () => {
               {currentMedia.artist || currentMedia.author?.stageName || currentMedia.subLabel || currentMedia.description || currentMedia.author?.firstName || 'Unknown Artist'}
             </Text>
           </View>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={[styles.favoriteButton, isLikeLoading && styles.likeLoading]}
             onPress={handleLikePress}
             disabled={isLikeLoading}
+            activeOpacity={0.6}
           >
             <Heart
               size={26}
@@ -248,7 +261,7 @@ const FullPlayerBottomSheet = () => {
               fill={isLiked ? '#ef4444' : 'transparent'}
               strokeWidth={2}
             />
-          </TouchableOpacity>
+          </RNTouchableOpacity>
         </Animated.View>
 
         {/* Progress Bar */}
@@ -523,71 +536,295 @@ const FullPlayerBottomSheet = () => {
             entering={FadeInRight.duration(400).delay(600)}
             style={styles.section}
           >
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Next in queue</Text>
-              <Text style={styles.queueCount}>{queue.length - queueIndex - 1} songs</Text>
-            </View>
-            <View style={styles.queueList}>
-              {nextSongs.map((song, index) => (
-                <View key={song.id || index} style={styles.queueItem}>
-                  <View style={styles.queueItemThumbnail}>
-                    {(song.thumbnailUrl || song.imageUrl || song.coverUrl) ? (
-                      <Image source={{ uri: song.thumbnailUrl || song.imageUrl || song.coverUrl }} style={styles.queueThumbnail} />
-                    ) : (
-                      <View style={[styles.queueThumbnail, styles.queuePlaceholder]}>
-                        <Music size={20} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={1.5} />
-                      </View>
-                    )}
+            <TouchableOpacity
+              style={styles.sectionHeader}
+              onPress={() => setShowQueue(!showQueue)}
+            >
+              <View style={styles.sectionHeaderLeft}>
+                <Text style={styles.sectionTitle}>Next in queue</Text>
+                <Text style={styles.queueCount}>{queue.length - queueIndex - 1} songs</Text>
+              </View>
+              {showQueue ? (
+                <ChevronUp size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+              ) : (
+                <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+              )}
+            </TouchableOpacity>
+            {showQueue && (
+              <View style={styles.queueList}>
+                {nextSongs.map((song, index) => (
+                  <View key={song.id || index} style={styles.queueItem}>
+                    <View style={styles.queueItemThumbnail}>
+                      {(song.thumbnailUrl || song.imageUrl || song.coverUrl) ? (
+                        <Image source={{ uri: song.thumbnailUrl || song.imageUrl || song.coverUrl }} style={styles.queueThumbnail} />
+                      ) : (
+                        <View style={[styles.queueThumbnail, styles.queuePlaceholder]}>
+                          <Music size={20} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={1.5} />
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.queueItemInfo}>
+                      <Text style={styles.queueItemTitle} numberOfLines={1}>
+                        {song.title || song.label || song.name || 'Unknown Track'}
+                      </Text>
+                      <Text style={styles.queueItemArtist} numberOfLines={1}>
+                        {song.artist || song.subLabel || song.description || 'Unknown Artist'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={styles.queueItemMenu}>
+                      <MoreHorizontal size={18} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+                    </TouchableOpacity>
                   </View>
-                  <View style={styles.queueItemInfo}>
-                    <Text style={styles.queueItemTitle} numberOfLines={1}>
-                      {song.title || song.label || song.name || 'Unknown Track'}
-                    </Text>
-                    <Text style={styles.queueItemArtist} numberOfLines={1}>
-                      {song.artist || song.subLabel || song.description || 'Unknown Artist'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity style={styles.queueItemMenu}>
-                    <MoreHorizontal size={18} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
+                ))}
+              </View>
+            )}
           </Animated.View>
         )}
 
         {/* About the Artist Section */}
         <Animated.View
           entering={FadeInRight.duration(400).delay(700)}
+          style={styles.section}
+        >
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setShowArtist(!showArtist)}
+          >
+            <Text style={styles.sectionTitle}>About the artist</Text>
+            {showArtist ? (
+              <ChevronUp size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            ) : (
+              <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
+          {showArtist && (
+            <View style={styles.artistSection}>
+              <View style={styles.artistInfo}>
+                {currentMedia.author?.profilePictureURL ? (
+                  <Image source={{ uri: currentMedia.author.profilePictureURL }} style={styles.artistImage} />
+                ) : (
+                  <View style={[styles.artistImage, styles.artistPlaceholder]}>
+                    <User size={24} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={1.5} />
+                  </View>
+                )}
+                <View style={styles.artistDetails}>
+                  <Text style={styles.artistName}>
+                    {currentMedia.author?.stageName || currentMedia.artist || currentMedia.author?.firstName || 'Unknown Artist'}
+                  </Text>
+                  {currentMedia.author?.stageName && currentMedia.author?.firstName && (
+                    <Text style={styles.artistRealName}>
+                      {currentMedia.author.firstName} {currentMedia.author.lastName || ''}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              {currentMedia.author?.bio ? (
+                <Text style={styles.artistBio} numberOfLines={4}>
+                  {currentMedia.author.bio}
+                </Text>
+              ) : null}
+            </View>
+          )}
+        </Animated.View>
+
+        {/* Create Video Section */}
+        <Animated.View
+          entering={FadeInRight.duration(400).delay(750)}
+          style={styles.section}
+        >
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setShowCreateVideo(!showCreateVideo)}
+          >
+            <View style={styles.sectionHeaderLeft}>
+              <Video size={20} color="#3875e8" strokeWidth={2} />
+              <Text style={styles.sectionTitle}>Create Video</Text>
+            </View>
+            {showCreateVideo ? (
+              <ChevronUp size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            ) : (
+              <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
+          {showCreateVideo && (
+            <View style={styles.actionsList}>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('CreateMusicVideo')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Film size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Create built-in music video</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </Animated.View>
+
+        {/* Music Generation Section */}
+        <Animated.View
+          entering={FadeInRight.duration(400).delay(800)}
+          style={styles.section}
+        >
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setShowMusicGeneration(!showMusicGeneration)}
+          >
+            <View style={styles.sectionHeaderLeft}>
+              <Wand2 size={20} color="#a855f7" strokeWidth={2} />
+              <Text style={styles.sectionTitle}>Music Generation</Text>
+            </View>
+            {showMusicGeneration ? (
+              <ChevronUp size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            ) : (
+              <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
+          {showMusicGeneration && (
+            <View style={styles.actionsList}>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('ExtendSong')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Music size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Extend your song</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('ReinterpretSong')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Wand2 size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Reinterpret your song (new style)</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('AddVocals')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Mic size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Add vocals to an instrumental</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('AddInstruments')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Guitar size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Add instruments to an acapella</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('GetTimestampedLyrics')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <FileText size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Get timestamped lyrics</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </Animated.View>
+
+        {/* Change Song Cover Section */}
+        <Animated.View
+          entering={FadeInRight.duration(400).delay(850)}
+          style={styles.section}
+        >
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setShowSongCover(!showSongCover)}
+          >
+            <View style={styles.sectionHeaderLeft}>
+              <ImageIcon size={20} color="#22c55e" strokeWidth={2} />
+              <Text style={styles.sectionTitle}>Change Song Cover</Text>
+            </View>
+            {showSongCover ? (
+              <ChevronUp size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            ) : (
+              <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
+          {showSongCover && (
+            <View style={styles.actionsList}>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('ChangeSongCover')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Upload size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Upload a new image for song cover</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('AddMediaForVideo')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Film size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Add pics and vids for custom video</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </Animated.View>
+
+        {/* Audio Processing Section */}
+        <Animated.View
+          entering={FadeInRight.duration(400).delay(900)}
           style={[styles.section, styles.lastSection]}
         >
-          <Text style={styles.sectionTitle}>About the artist</Text>
-          <View style={styles.artistSection}>
-            <View style={styles.artistInfo}>
-              {currentMedia.author?.profilePictureURL ? (
-                <Image source={{ uri: currentMedia.author.profilePictureURL }} style={styles.artistImage} />
-              ) : (
-                <View style={[styles.artistImage, styles.artistPlaceholder]}>
-                  <User size={24} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={1.5} />
-                </View>
-              )}
-              <View style={styles.artistDetails}>
-                <Text style={styles.artistName}>
-                  {currentMedia.author?.stageName || currentMedia.artist || currentMedia.author?.firstName || 'Unknown Artist'}
-                </Text>
-                {currentMedia.author?.stageName && currentMedia.author?.firstName && (
-                  <Text style={styles.artistRealName}>
-                    {currentMedia.author.firstName} {currentMedia.author.lastName || ''}
-                  </Text>
-                )}
-              </View>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setShowAudioProcessing(!showAudioProcessing)}
+          >
+            <View style={styles.sectionHeaderLeft}>
+              <AudioWaveform size={20} color="#f97316" strokeWidth={2} />
+              <Text style={styles.sectionTitle}>Audio Processing</Text>
             </View>
-            {currentMedia.author?.bio ? (
-              <Text style={styles.artistBio} numberOfLines={4}>
-                {currentMedia.author.bio}
-              </Text>
-            ) : null}
-          </View>
+            {showAudioProcessing ? (
+              <ChevronUp size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            ) : (
+              <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
+          {showAudioProcessing && (
+            <View style={styles.actionsList}>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('GetAcapella')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Mic size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Get Acapella</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('StemSong')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Layers size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Stem your song</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+          )}
         </Animated.View>
 
         {/* Bottom spacing */}
@@ -774,6 +1011,11 @@ const getStyles = (isDark) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   sectionTitle: {
     fontSize: 18,
@@ -1011,6 +1253,31 @@ const getStyles = (isDark) => StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: isDark ? '#c5c5c5' : '#666666',
+  },
+  // Action list styles for new sections
+  actionsList: {
+    backgroundColor: isDark ? '#2c2c2e' : '#f5f5f5',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: isDark ? '#444444' : '#e0e0e0',
+  },
+  actionItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  actionItemText: {
+    fontSize: 15,
+    color: isDark ? '#ffffff' : '#151723',
+    flex: 1,
   },
 })
 

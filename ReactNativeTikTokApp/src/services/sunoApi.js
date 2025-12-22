@@ -40,6 +40,18 @@ export const DEFAULT_MODEL = 'V4'
  */
 export const generateSongSimple = async (description, instrumental = false, model = DEFAULT_MODEL) => {
   try {
+    // Check credits first
+    try {
+      const quota = await getQuota()
+      console.log('[sunoApi] Current credits:', quota?.data)
+      if (quota?.data?.remainingCredits !== undefined && quota.data.remainingCredits < 10) {
+        throw new Error('Insufficient credits. Please add more credits to continue generating songs.')
+      }
+    } catch (quotaError) {
+      console.warn('[sunoApi] Could not check quota:', quotaError.message)
+      // Continue anyway - quota check is optional
+    }
+
     const modelConfig = MODEL_VERSIONS[model] || MODEL_VERSIONS[DEFAULT_MODEL]
     const maxPrompt = modelConfig.maxPrompt
 
@@ -278,12 +290,18 @@ export const pollForCompletion = async (taskId, maxAttempts = 60, interval = 500
         console.log('Song still processing, status:', taskStatus)
       }
 
-      // Check for error states
-      if (taskStatus === 'CREATE_TASK_FAILED' ||
-          taskStatus === 'GENERATE_AUDIO_FAILED' ||
-          taskStatus === 'CALLBACK_EXCEPTION' ||
-          taskStatus === 'SENSITIVE_WORD_ERROR') {
-        throw new Error(`Generation failed: ${taskStatus}`)
+      // Check for error states with user-friendly messages
+      if (taskStatus === 'CREATE_TASK_FAILED') {
+        throw new Error('Failed to start song generation. Please try again.')
+      }
+      if (taskStatus === 'GENERATE_AUDIO_FAILED') {
+        throw new Error('Audio generation failed. Try a different description or style, or try again in a moment.')
+      }
+      if (taskStatus === 'CALLBACK_EXCEPTION') {
+        throw new Error('Server error during generation. Please try again.')
+      }
+      if (taskStatus === 'SENSITIVE_WORD_ERROR') {
+        throw new Error('Your prompt contains words that cannot be processed. Please modify your description.')
       }
     }
 

@@ -14,24 +14,26 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native'
 import ffirestore from '@react-native-firebase/firestore'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeInDown } from 'react-native-reanimated'
+import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List } from 'lucide-react-native'
 import { useTheme, useTranslations } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserSongs, deleteSong } from '../../services/songsService'
 import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
-const GRID_ITEM_WIDTH = (SCREEN_WIDTH - 48) / 2 // 2 columns with padding
+const HORIZONTAL_ITEM_WIDTH = 160 // Width for horizontal scroll items
+const LIST_ITEM_HEIGHT = 64 // Height for list view items
 
 // Filter tabs for the Library
 const FILTER_TABS = [
   { id: 'all', label: 'All' },
   { id: 'playlists', label: 'Playlists' },
   { id: 'songs', label: 'Songs' },
-  { id: 'ai', label: 'AI Created' },
   { id: 'videos', label: 'Videos' },
 ]
 
@@ -47,7 +49,7 @@ const LibraryScreen = ({ navigation }) => {
   const { localized } = useTranslations()
   const insets = useSafeAreaInsets()
   const currentUser = useCurrentUser()
-  const { playSong } = useMediaPlayer()
+  const { playSong, isLiked: isLikedFn, toggleLike } = useMediaPlayer()
 
   const [activeTab, setActiveTab] = useState('all')
   const [sortOption, setSortOption] = useState('recent')
@@ -55,30 +57,81 @@ const LibraryScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true)
   const [showSortMenu, setShowSortMenu] = useState(false)
 
+  // View mode: 'grid' or 'list'
+  const [viewMode, setViewMode] = useState('grid')
+
+  // Collapsible section states
+  const [isRecentlyPlayedExpanded, setIsRecentlyPlayedExpanded] = useState(true)
+  const [isRecommendedExpanded, setIsRecommendedExpanded] = useState(true)
+  const [isYourSongsExpanded, setIsYourSongsExpanded] = useState(true)
+  const [isYourPlaylistsExpanded, setIsYourPlaylistsExpanded] = useState(true)
+  const [isLikedSongsExpanded, setIsLikedSongsExpanded] = useState(true)
+
+  // Toggle handlers using useCallback to prevent re-creation
+  const toggleRecentlyPlayed = useCallback(() => {
+    setIsRecentlyPlayedExpanded(prev => !prev)
+  }, [])
+  const toggleRecommended = useCallback(() => {
+    setIsRecommendedExpanded(prev => !prev)
+  }, [])
+  const toggleYourSongs = useCallback(() => {
+    setIsYourSongsExpanded(prev => !prev)
+  }, [])
+  const toggleYourPlaylists = useCallback(() => {
+    setIsYourPlaylistsExpanded(prev => !prev)
+  }, [])
+  const toggleLikedSongs = useCallback(() => {
+    setIsLikedSongsExpanded(prev => !prev)
+  }, [])
+
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editingSong, setEditingSong] = useState(null)
   const [editTitle, setEditTitle] = useState('')
   const [editStyle, setEditStyle] = useState('')
+  const [editIsPublic, setEditIsPublic] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+
+  // Like loading state (local) - shared like state comes from context
+  const [likingInProgress, setLikingInProgress] = useState({})
 
   const colorSet = theme.colors[appearance]
 
+  // Get user ID (handle both .id and .userID property names)
+  const userId = currentUser?.id || currentUser?.userID
+
+  // Handle like button press - uses shared context
+  const handleLikePress = async (song) => {
+    if (!song?.id || likingInProgress[song.id]) {
+      return
+    }
+
+    setLikingInProgress(prev => ({ ...prev, [song.id]: true }))
+    try {
+      await toggleLike(song)
+      // Note: isLiked will update automatically via Firebase subscription in context
+    } catch (error) {
+      console.error('Error toggling like:', error)
+    } finally {
+      setLikingInProgress(prev => ({ ...prev, [song.id]: false }))
+    }
+  }
+
   // Subscribe to user's songs from Firebase
   useEffect(() => {
-    if (!currentUser?.id) {
+    if (!userId) {
       setLoading(false)
       return
     }
 
     setLoading(true)
-    const unsubscribe = subscribeToUserSongs(currentUser.id, (userSongs) => {
+    const unsubscribe = subscribeToUserSongs(userId, (userSongs) => {
       setSongs(userSongs)
       setLoading(false)
     })
 
     return () => unsubscribe && unsubscribe()
-  }, [currentUser?.id])
+  }, [userId])
 
   // Filter songs based on active tab
   const filteredSongs = useCallback(() => {
@@ -146,7 +199,7 @@ const LibraryScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteSong(song.id, currentUser?.id)
+              await deleteSong(song.id, userId)
               console.log('Song deleted:', song.id)
             } catch (error) {
               console.error('Error deleting song:', error)
@@ -238,14 +291,26 @@ const LibraryScreen = ({ navigation }) => {
       <Text style={[styles.headerTitle, { color: colorSet.primaryText }]}>
         {localized('Library')}
       </Text>
-      <TouchableOpacity
-        style={styles.searchButton}
-        onPress={() => navigation.navigate('Discover')}>
-        <Image
-          source={theme.icons.search}
-          style={[styles.searchIcon, { tintColor: colorSet.primaryText }]}
-        />
-      </TouchableOpacity>
+      <View style={styles.headerActions}>
+        {/* View mode toggle */}
+        <TouchableOpacity
+          style={styles.viewToggleButton}
+          onPress={() => setViewMode(prev => prev === 'grid' ? 'list' : 'grid')}>
+          {viewMode === 'grid' ? (
+            <List size={22} color={colorSet.primaryText} />
+          ) : (
+            <LayoutGrid size={22} color={colorSet.primaryText} />
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.searchButton}
+          onPress={() => navigation.navigate('Discover')}>
+          <Image
+            source={theme.icons.search}
+            style={[styles.searchIcon, { tintColor: colorSet.primaryText }]}
+          />
+        </TouchableOpacity>
+      </View>
     </View>
   )
 
@@ -280,24 +345,52 @@ const LibraryScreen = ({ navigation }) => {
     </ScrollView>
   )
 
-  const renderSortBar = () => (
-    <View style={styles.sortBar}>
+  // Reusable collapsible section header
+  const CollapsibleSectionHeader = ({
+    title,
+    icon: Icon,
+    iconColor,
+    isExpanded,
+    onToggle,
+    showAddButton,
+    onAdd,
+    count,
+    comingSoon,
+  }) => (
+    <View style={styles.sectionHeader}>
       <TouchableOpacity
-        style={styles.sortButton}
-        onPress={() => setShowSortMenu(!showSortMenu)}>
-        <Text style={[styles.sortText, { color: colorSet.primaryText }]}>
-          {SORT_OPTIONS.find((o) => o.id === sortOption)?.label}
+        style={styles.sectionTitleRow}
+        onPress={onToggle}
+        activeOpacity={0.7}>
+        {Icon && (
+          <View style={[styles.sectionIcon, { backgroundColor: `${iconColor}20` }]}>
+            <Icon size={18} color={iconColor} />
+          </View>
+        )}
+        <Text style={[styles.sectionTitle, { color: colorSet.primaryText }]}>
+          {title}
         </Text>
-        <Text style={[styles.sortArrow, { color: colorSet.secondaryText }]}>
-          ▼
-        </Text>
+        {count !== undefined && (
+          <View style={[styles.countBadge, { backgroundColor: colorSet.grey3 }]}>
+            <Text style={[styles.countText, { color: colorSet.secondaryText }]}>{count}</Text>
+          </View>
+        )}
+        {comingSoon && (
+          <View style={styles.comingSoonBadge}>
+            <Text style={styles.comingSoonText}>Coming Soon</Text>
+          </View>
+        )}
+        {isExpanded ? (
+          <ChevronUp size={20} color={colorSet.secondaryText} />
+        ) : (
+          <ChevronDown size={20} color={colorSet.secondaryText} />
+        )}
       </TouchableOpacity>
-      <TouchableOpacity style={styles.listViewButton}>
-        <Image
-          source={theme.icons.libraryLandscape}
-          style={[styles.listIcon, { tintColor: colorSet.secondaryText }]}
-        />
-      </TouchableOpacity>
+      {showAddButton && (
+        <TouchableOpacity style={styles.addButton} onPress={onAdd}>
+          <Plus size={20} color={colorSet.primaryForeground} />
+        </TouchableOpacity>
+      )}
     </View>
   )
 
@@ -327,6 +420,7 @@ const LibraryScreen = ({ navigation }) => {
     setEditingSong(song)
     setEditTitle(song.title || '')
     setEditStyle(song.style || '')
+    setEditIsPublic(song.isPublic !== false) // Default to true if not set
     setEditModalVisible(true)
   }
 
@@ -344,6 +438,11 @@ const LibraryScreen = ({ navigation }) => {
       }
       if (editStyle.trim() !== editingSong.style) {
         updates.style = editStyle.trim()
+      }
+      // Check if isPublic changed (treat undefined/null as true by default)
+      const currentIsPublic = editingSong.isPublic !== false
+      if (editIsPublic !== currentIsPublic) {
+        updates.isPublic = editIsPublic
       }
 
       if (Object.keys(updates).length > 0) {
@@ -383,6 +482,7 @@ const LibraryScreen = ({ navigation }) => {
       <Animated.View
         entering={FadeInDown.delay(index * 50).springify()}
         style={styles.gridItem}>
+        {/* Image area - touchable for playing song */}
         <TouchableOpacity
           onPress={() => handleSongPress(song)}
           onLongPress={() => handleSongLongPress(song)}
@@ -407,55 +507,63 @@ const LibraryScreen = ({ navigation }) => {
                 />
               </View>
             )}
-            {/* Play indicator overlay */}
-            <View style={styles.playOverlay}>
-              {isPlayable ? (
-                <View style={styles.playButton}>
-                  <Image
-                    source={theme.icons.playButton}
-                    style={styles.playIcon}
-                  />
-                </View>
-              ) : (
+            {/* Show unavailable badge only for unplayable songs */}
+            {!isPlayable && (
+              <View style={styles.unavailableOverlay}>
                 <View style={styles.unavailableBadge}>
                   <Text style={styles.unavailableText}>Unavailable</Text>
                 </View>
-              )}
-            </View>
-          </View>
-
-          {/* Song info row with edit/delete buttons */}
-          <View style={styles.songInfoRow}>
-            <View style={styles.songTextContainer}>
-              <Text
-                style={[styles.songTitle, { color: isPlayable ? colorSet.primaryText : colorSet.secondaryText }]}
-                numberOfLines={1}>
-                {song.title || 'Untitled'}
-              </Text>
-              <Text
-                style={[styles.songDescription, { color: colorSet.secondaryText }]}
-                numberOfLines={1}>
-                {song.style || 'AI Generated'}
-              </Text>
-            </View>
-
-            {/* Edit and Delete buttons */}
-            <View style={styles.songActions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleEditSong(song)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Text style={styles.actionIcon}>✏️</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.deleteButton]}
-                onPress={() => handleDeleteSong(song)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Text style={styles.actionIcon}>🗑️</Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            )}
           </View>
         </TouchableOpacity>
+
+        {/* Song info row - OUTSIDE the image touchable */}
+        <View style={styles.songInfoRow}>
+          {/* Text area - touchable for playing song */}
+          <TouchableOpacity
+            style={styles.songTextContainer}
+            onPress={() => handleSongPress(song)}
+            activeOpacity={0.7}>
+            <Text
+              style={[styles.songTitle, { color: isPlayable ? colorSet.primaryText : colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {song.title || 'Untitled'}
+            </Text>
+            <Text
+              style={[styles.songDescription, { color: colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {song.style || 'AI Generated'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Like, Edit and Delete buttons - OUTSIDE any parent touchable */}
+          <View style={styles.songActions}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleLikePress(song)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              disabled={likingInProgress[song.id]}>
+              <Heart
+                size={18}
+                color={isLikedFn(song.id) ? '#ef4444' : colorSet.secondaryText}
+                fill={isLikedFn(song.id) ? '#ef4444' : 'transparent'}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleEditSong(song)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Pencil size={16} color={colorSet.secondaryText} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleDeleteSong(song)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Trash2 size={16} color={colorSet.secondaryText} />
+            </TouchableOpacity>
+          </View>
+        </View>
       </Animated.View>
     )
   }
@@ -486,24 +594,202 @@ const LibraryScreen = ({ navigation }) => {
     </View>
   )
 
-  const renderSongsGrid = () => {
-    const sorted = sortedSongs()
+  // Placeholder for coming soon sections
+  const renderComingSoonPlaceholder = (message) => (
+    <View style={styles.comingSoonPlaceholder}>
+      <Sparkles size={32} color={colorSet.grey9} />
+      <Text style={[styles.comingSoonPlaceholderText, { color: colorSet.secondaryText }]}>
+        {message || 'Coming Soon'}
+      </Text>
+    </View>
+  )
 
-    if (sorted.length === 0) {
-      return renderEmptyState()
+  // Get liked songs from user's songs (uses shared like state from context)
+  const getLikedSongs = useCallback(() => {
+    return songs.filter(song => isLikedFn(song.id))
+  }, [songs, isLikedFn])
+
+  // Render Recently Played section
+  const renderRecentlyPlayedSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Recently Played"
+        icon={Clock}
+        iconColor="#3875e8"
+        isExpanded={isRecentlyPlayedExpanded}
+        onToggle={toggleRecentlyPlayed}
+      />
+      {isRecentlyPlayedExpanded && renderComingSoonPlaceholder('Play history coming soon')}
+    </View>
+  )
+
+  // Render Recommended section
+  const renderRecommendedSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Recommended For You"
+        icon={Sparkles}
+        iconColor="#f59e0b"
+        isExpanded={isRecommendedExpanded}
+        onToggle={toggleRecommended}
+        comingSoon
+      />
+      {isRecommendedExpanded && renderComingSoonPlaceholder('AI-powered recommendations coming soon')}
+    </View>
+  )
+
+  // Render song list based on viewMode
+  const renderSongList = (songList, emptyMessage) => {
+    if (!songList || songList.length === 0) {
+      return (
+        <View style={styles.emptySection}>
+          <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+            {emptyMessage || 'No songs yet'}
+          </Text>
+        </View>
+      )
+    }
+
+    if (viewMode === 'list') {
+      return (
+        <View style={styles.listContainer}>
+          {songList.map((song, index) => renderListItem({ item: song, index }))}
+        </View>
+      )
     }
 
     return (
       <FlatList
-        data={sorted}
+        data={songList}
         renderItem={renderSongItem}
         keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.gridRow}
-        contentContainerStyle={styles.gridContainer}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={false}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.horizontalListContainer}
+        ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
       />
+    )
+  }
+
+  // Render list view item (compact row)
+  const renderListItem = ({ item: song, index }) => {
+    const isPlayable = isSongPlayable(song)
+    return (
+      <TouchableOpacity
+        key={song.id}
+        style={[styles.listItem, !isPlayable && { opacity: 0.6 }]}
+        onPress={() => handleSongPress(song)}
+        onLongPress={() => handleSongLongPress(song)}
+        delayLongPress={500}
+        activeOpacity={0.7}>
+        <View style={styles.listItemImageContainer}>
+          {song.imageUrl ? (
+            <Image
+              source={{ uri: song.imageUrl }}
+              style={styles.listItemImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.listItemImagePlaceholder, { backgroundColor: colorSet.grey3 }]}>
+              <Music size={20} color={colorSet.grey9} />
+            </View>
+          )}
+        </View>
+        <View style={styles.listItemInfo}>
+          <Text
+            style={[styles.listItemTitle, { color: colorSet.primaryText }]}
+            numberOfLines={1}>
+            {song.title || 'Untitled'}
+          </Text>
+          <Text
+            style={[styles.listItemSubtitle, { color: colorSet.secondaryText }]}
+            numberOfLines={1}>
+            {song.style || 'AI Generated'} {song.duration ? `• ${formatDuration(song.duration)}` : ''}
+          </Text>
+        </View>
+        <View style={styles.listItemActions}>
+          <TouchableOpacity
+            style={styles.listActionButton}
+            onPress={() => handleLikePress(song)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            disabled={likingInProgress[song.id]}>
+            <Heart
+              size={18}
+              color={isLikedFn(song.id) ? '#ef4444' : colorSet.secondaryText}
+              fill={isLikedFn(song.id) ? '#ef4444' : 'transparent'}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.listActionButton}
+            onPress={() => handleSongPress(song)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Play size={18} color={colorSet.primaryForeground} fill={colorSet.primaryForeground} />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    )
+  }
+
+  // Render Your Songs section
+  const renderYourSongsSection = () => {
+    const sorted = sortedSongs()
+    return (
+      <View style={styles.section}>
+        <CollapsibleSectionHeader
+          title="Your Songs"
+          icon={Music}
+          iconColor="#10b981"
+          isExpanded={isYourSongsExpanded}
+          onToggle={toggleYourSongs}
+          count={sorted.length}
+          showAddButton
+          onAdd={() => navigation.navigate('Create')}
+        />
+        {isYourSongsExpanded && (
+          loading ? (
+            <View style={styles.sectionLoading}>
+              <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+            </View>
+          ) : (
+            renderSongList(sorted, 'Create your first song')
+          )
+        )}
+      </View>
+    )
+  }
+
+  // Render Your Playlists section
+  const renderYourPlaylistsSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Your Playlists"
+        icon={ListMusic}
+        iconColor="#8b5cf6"
+        isExpanded={isYourPlaylistsExpanded}
+        onToggle={toggleYourPlaylists}
+        count={0}
+        showAddButton
+        onAdd={handleNewPlaylist}
+      />
+      {isYourPlaylistsExpanded && renderComingSoonPlaceholder('Create and manage playlists coming soon')}
+    </View>
+  )
+
+  // Render Liked Songs section
+  const renderLikedSongsSection = () => {
+    const likedSongs = getLikedSongs()
+    return (
+      <View style={styles.section}>
+        <CollapsibleSectionHeader
+          title="Liked Songs"
+          icon={Heart}
+          iconColor="#ef4444"
+          isExpanded={isLikedSongsExpanded}
+          onToggle={toggleLikedSongs}
+          count={likedSongs.length}
+        />
+        {isLikedSongsExpanded && renderSongList(likedSongs, 'Songs you like will appear here')}
+      </View>
     )
   }
 
@@ -521,33 +807,20 @@ const LibraryScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}>
         {renderHeader()}
         {renderTabs()}
-        {renderSortBar()}
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colorSet.primaryForeground} />
-          </View>
-        ) : (
-          renderSongsGrid()
-        )}
+        {/* All collapsible sections */}
+        {renderYourSongsSection()}
+        {renderLikedSongsSection()}
+        {renderYourPlaylistsSection()}
+        {renderRecentlyPlayedSection()}
+        {renderRecommendedSection()}
       </ScrollView>
 
-      {/* FAB - Create Song */}
-      <TouchableOpacity
-        style={[styles.fab, styles.fabSong, { backgroundColor: '#3875e8' }]}
-        onPress={() => navigation.navigate('Create')}>
-        <Text style={styles.fabEmoji}>🎵</Text>
-        <Text style={styles.fabText}>Create Song</Text>
-      </TouchableOpacity>
-
-      {/* FAB - New Playlist */}
+      {/* FAB - New Playlist (positioned above mini player) */}
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colorSet.primaryForeground }]}
         onPress={handleNewPlaylist}>
-        <Image
-          source={theme.icons.add}
-          style={styles.fabIcon}
-        />
+        <ListMusic size={20} color="#fff" style={{ marginRight: 8 }} />
         <Text style={styles.fabText}>New Playlist</Text>
       </TouchableOpacity>
 
@@ -696,7 +969,20 @@ const LibraryScreen = ({ navigation }) => {
 
                 <View style={styles.editSection}>
                   <Text style={[styles.editSectionTitle, { color: colorSet.primaryText }]}>Visibility</Text>
-                  <MetadataRow label="Public" value={editingSong.isPublic ? 'Yes' : 'No'} />
+                  <View style={styles.toggleRow}>
+                    <View style={styles.toggleLabelContainer}>
+                      <Text style={[styles.toggleLabel, { color: colorSet.primaryText }]}>Public</Text>
+                      <Text style={[styles.toggleDescription, { color: colorSet.secondaryText }]}>
+                        {editIsPublic ? 'Everyone can see this song' : 'Only you can see this song'}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={editIsPublic}
+                      onValueChange={setEditIsPublic}
+                      trackColor={{ false: colorSet.grey3, true: colorSet.primaryForeground }}
+                      thumbColor="#fff"
+                    />
+                  </View>
                   <MetadataRow label="Deleted" value={editingSong.isDeleted ? 'Yes' : 'No'} />
                 </View>
 
@@ -751,6 +1037,14 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewToggleButton: {
+    padding: 8,
+  },
   tabsContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -766,25 +1060,61 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  sortBar: {
+  section: {
+    marginBottom: 8,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
-  sortButton: {
+  sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 10,
+    flex: 1,
   },
-  sortText: {
-    fontSize: 14,
-    fontWeight: '500',
+  sectionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  sortArrow: {
-    fontSize: 10,
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  countBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
     marginLeft: 4,
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  comingSoonBadge: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginLeft: 4,
+  },
+  comingSoonText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listViewButton: {
     padding: 8,
@@ -792,6 +1122,33 @@ const styles = StyleSheet.create({
   listIcon: {
     width: 24,
     height: 24,
+  },
+  sectionLoading: {
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptySection: {
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  emptySectionText: {
+    fontSize: 14,
+  },
+  comingSoonPlaceholder: {
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(128, 128, 128, 0.1)',
+    marginBottom: 8,
+  },
+  comingSoonPlaceholderText: {
+    fontSize: 14,
+    marginTop: 8,
   },
   gridContainer: {
     paddingHorizontal: 16,
@@ -801,7 +1158,59 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   gridItem: {
-    width: GRID_ITEM_WIDTH,
+    width: HORIZONTAL_ITEM_WIDTH,
+  },
+  horizontalListContainer: {
+    paddingHorizontal: 16,
+  },
+  // List view styles
+  listContainer: {
+    paddingHorizontal: 16,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
+  },
+  listItemImageContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  listItemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  listItemImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listItemInfo: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  listItemTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  listItemSubtitle: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  listItemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  listActionButton: {
+    padding: 8,
   },
   imageContainer: {
     position: 'relative',
@@ -824,25 +1233,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
   },
-  playOverlay: {
+  unavailableOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-  },
-  playButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playIcon: {
-    width: 20,
-    height: 20,
-    tintColor: '#000',
-    marginLeft: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   unplayableImageContainer: {
     opacity: 0.6,
@@ -885,13 +1280,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   actionButton: {
-    padding: 4,
-  },
-  actionIcon: {
-    fontSize: 16,
-  },
-  deleteButton: {
-    // Slightly separated from edit
+    padding: 6,
+    marginLeft: 2,
   },
   loadingContainer: {
     flex: 1,
@@ -957,13 +1347,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-  },
-  fabSong: {
-    bottom: 156, // Position above the playlist FAB
-  },
-  fabEmoji: {
-    fontSize: 18,
-    marginRight: 8,
   },
   // Edit Modal Styles
   modalContainer: {
@@ -1042,6 +1425,26 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
+  },
+  toggleLabelContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  toggleLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  toggleDescription: {
+    fontSize: 12,
+    marginTop: 2,
   },
   metadataRow: {
     flexDirection: 'row',

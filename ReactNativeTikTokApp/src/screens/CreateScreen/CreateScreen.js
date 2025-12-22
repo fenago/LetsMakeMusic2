@@ -54,6 +54,8 @@ const ESTIMATED_TIME_SECONDS = 120 // 2-3 minutes, we use 2 as estimate
 const CREATE_MODES = {
   VIDEO: 'video',
   SONG: 'song',
+  LYRICS: 'lyrics',
+  BEATS: 'beats',
 }
 
 const SONG_MODES = {
@@ -394,7 +396,7 @@ export default function CreateScreen({ navigation }) {
           <View style={styles.closeButton} />
         </View>
 
-        {/* Mode Toggle: Video / Song */}
+        {/* Mode Toggle: Video / Song / Lyrics / Beats */}
         <View style={styles.modeToggleContainer}>
           <TouchableOpacity
             style={[
@@ -426,6 +428,38 @@ export default function CreateScreen({ navigation }) {
               ]}
             >
               Song
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.modeToggle,
+              createMode === CREATE_MODES.LYRICS && styles.modeToggleActive,
+            ]}
+            onPress={() => navigation.navigate('CreateLyrics')}
+          >
+            <Text
+              style={[
+                styles.modeToggleText,
+                createMode === CREATE_MODES.LYRICS && styles.modeToggleTextActive,
+              ]}
+            >
+              Lyrics
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.modeToggle,
+              createMode === CREATE_MODES.BEATS && styles.modeToggleActive,
+            ]}
+            onPress={() => navigation.navigate('BuildBeats')}
+          >
+            <Text
+              style={[
+                styles.modeToggleText,
+                createMode === CREATE_MODES.BEATS && styles.modeToggleTextActive,
+              ]}
+            >
+              Beats
             </Text>
           </TouchableOpacity>
         </View>
@@ -742,7 +776,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingBottom: 120, // Extra padding for mini player when song is playing
   },
   songModeToggleContainer: {
     flexDirection: 'row',

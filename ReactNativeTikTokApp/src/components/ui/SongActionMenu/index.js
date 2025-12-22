@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react'
+import React, { useCallback, useState } from 'react'
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useColorScheme } from 'react-native'
-import { toggleSongLike, isSongLiked, deleteSong } from '../../../services/songsService'
+import { deleteSong } from '../../../services/songsService'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 
 /**
@@ -36,10 +36,8 @@ const SongActionMenu = ({
 }) => {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { addToQueue, queue } = useMediaPlayer()
+  const { addToQueue, queue, isLiked: isLikedFn, toggleLike } = useMediaPlayer()
 
-  const [isLiked, setIsLiked] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(null)
 
   // Check if current user is the song owner
@@ -48,33 +46,16 @@ const SongActionMenu = ({
   // Check if song is already in queue
   const isInQueue = queue?.some(item => item.id === song?.id)
 
-  // Check like status when menu opens
-  useEffect(() => {
-    if (visible && song?.id && currentUserId) {
-      checkLikeStatus()
-    }
-  }, [visible, song?.id, currentUserId])
-
-  const checkLikeStatus = async () => {
-    try {
-      const liked = await isSongLiked(song.id, currentUserId)
-      setIsLiked(liked)
-    } catch (error) {
-      console.error('Error checking like status:', error)
-    }
-  }
+  // Get like status from shared context
+  const isLiked = song?.id ? isLikedFn(song.id) : false
 
   const handleLike = useCallback(async () => {
-    if (!song?.id || !currentUserId) return
+    if (!song?.id) return
 
     setActionLoading('like')
     try {
-      const result = await toggleSongLike(song.id, currentUserId, {
-        title: song.title,
-        artist: song.artist || song.author?.stageName,
-        thumbnailUrl: song.thumbnailUrl || song.coverUrl,
-      })
-      setIsLiked(result.liked)
+      await toggleLike(song)
+      // Note: isLiked will update automatically via Firebase subscription in context
       onClose?.()
     } catch (error) {
       console.error('Error toggling like:', error)
@@ -82,7 +63,7 @@ const SongActionMenu = ({
     } finally {
       setActionLoading(null)
     }
-  }, [song, currentUserId, onClose])
+  }, [song, toggleLike, onClose])
 
   const handleAddToQueue = useCallback(() => {
     if (!song) return

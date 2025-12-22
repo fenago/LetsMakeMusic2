@@ -1,8 +1,9 @@
-import React, { useLayoutEffect } from 'react'
+import React, { useLayoutEffect, useState, useCallback } from 'react'
 import { SafeAreaView, ScrollView, Image, View, Text, TouchableOpacity, Dimensions } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { Video } from 'expo-av'
 import { RefreshControl } from 'react-native'
+import { Heart } from 'lucide-react-native'
 import { useTheme, ActivityIndicator, EmptyStateView } from '../../../core/dopebase'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 import { prepareSongForPlayer } from '../../../utils/audioUtils'
@@ -27,11 +28,37 @@ export default function Discover(props) {
     songsLoading = false,
   } = props
 
-  const { playSong } = useMediaPlayer()
+  const {
+    playSong,
+    // Shared like state from context
+    isLiked: isLikedFn,
+    toggleLike,
+  } = useMediaPlayer()
 
   const navigation = useNavigation()
   const { theme, appearance } = useTheme()
   const styles = dynamicStyles(theme, appearance)
+  const isDark = appearance === 'dark'
+
+  // Track which songs are currently being liked (loading state)
+  const [likingInProgress, setLikingInProgress] = useState({})
+
+  // Handle like button press - uses shared context
+  const handleLikePress = useCallback(async (song) => {
+    if (!song?.id || likingInProgress[song?.id]) {
+      return
+    }
+
+    setLikingInProgress(prev => ({ ...prev, [song.id]: true }))
+    try {
+      await toggleLike(song)
+      // Note: isLiked will update automatically via Firebase subscription in context
+    } catch (error) {
+      console.error('Error toggling like:', error)
+    } finally {
+      setLikingInProgress(prev => ({ ...prev, [song.id]: false }))
+    }
+  }, [likingInProgress, toggleLike])
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -93,33 +120,54 @@ export default function Discover(props) {
           </View>
         </View>
         <View style={songStyles.songsGrid}>
-          {songs.slice(0, 20).map((song) => (
-            <TouchableOpacity
-              key={song.id}
-              style={songStyles.songCard}
-              onPress={() => handleSongPress(song)}
-              activeOpacity={0.8}
-            >
-              <Image
-                source={{ uri: song.imageUrl || 'https://picsum.photos/200/200?random=' + song.id }}
-                style={songStyles.songImage}
-              />
-              <View style={songStyles.songInfo}>
-                <Text
-                  style={[songStyles.songTitle, { color: theme.colors[appearance].primaryText }]}
-                  numberOfLines={1}
+          {songs.slice(0, 20).map((song) => {
+            const isLiked = song?.id ? isLikedFn(song.id) : false
+            return (
+              <View key={song.id} style={songStyles.songCard}>
+                {/* Song image - tap to play */}
+                <TouchableOpacity
+                  onPress={() => handleSongPress(song)}
+                  activeOpacity={0.8}
                 >
-                  {song.title || 'Untitled Song'}
-                </Text>
-                <Text
-                  style={[songStyles.songStyle, { color: theme.colors[appearance].secondaryText }]}
-                  numberOfLines={1}
-                >
-                  {song.style || 'AI Generated'}
-                </Text>
+                  <Image
+                    source={{ uri: song.imageUrl || 'https://picsum.photos/200/200?random=' + song.id }}
+                    style={songStyles.songImage}
+                  />
+                </TouchableOpacity>
+
+                {/* Song info row with heart button */}
+                <View style={songStyles.songInfo}>
+                  <View style={songStyles.songTextContainer}>
+                    <Text
+                      style={[songStyles.songTitle, { color: theme.colors[appearance].primaryText }]}
+                      numberOfLines={1}
+                    >
+                      {song.title || 'Untitled Song'}
+                    </Text>
+                    <Text
+                      style={[songStyles.songStyle, { color: theme.colors[appearance].secondaryText }]}
+                      numberOfLines={1}
+                    >
+                      {song.style || 'AI Generated'}
+                    </Text>
+                  </View>
+
+                  {/* Heart button - SEPARATE touchable */}
+                  <TouchableOpacity
+                    style={songStyles.heartButton}
+                    onPress={() => handleLikePress(song)}
+                    activeOpacity={0.6}
+                  >
+                    <Heart
+                      size={20}
+                      color={isLiked ? '#ef4444' : (isDark ? '#737373' : '#a3a3a3')}
+                      fill={isLiked ? '#ef4444' : 'transparent'}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
-            </TouchableOpacity>
-          ))}
+            )
+          })}
         </View>
       </View>
     )
@@ -263,6 +311,12 @@ const songStyles = {
   },
   songInfo: {
     padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  songTextContainer: {
+    flex: 1,
   },
   songTitle: {
     fontSize: 14,
@@ -271,5 +325,12 @@ const songStyles = {
   songStyle: {
     fontSize: 12,
     marginTop: 4,
+  },
+  heartButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
 }

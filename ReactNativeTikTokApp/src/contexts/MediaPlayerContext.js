@@ -8,6 +8,8 @@ import React, {
 } from 'react'
 import { Audio } from 'expo-av'
 import { Alert } from 'react-native'
+import { subscribeToLikedSongs, toggleSongLike } from '../services/songsService'
+import useCurrentUser from '../core/onboarding/hooks/useCurrentUser'
 
 const MediaPlayerContext = createContext(null)
 
@@ -18,6 +20,10 @@ const MediaPlayerContext = createContext(null)
  * This provider handles the global playback state across the app.
  */
 export const MediaPlayerProvider = ({ children }) => {
+  // Get current user for likes functionality
+  const currentUser = useCurrentUser()
+  const userId = currentUser?.id || currentUser?.userID
+
   // State
   const [mediaType, setMediaType] = useState(null) // 'audio' | 'video' | null
   const [isPlaying, setIsPlaying] = useState(false)
@@ -29,6 +35,9 @@ export const MediaPlayerProvider = ({ children }) => {
   const [queueIndex, setQueueIndex] = useState(-1)
   const [isFullPlayerVisible, setIsFullPlayerVisible] = useState(false)
   const [isMiniPlayerVisible, setIsMiniPlayerVisible] = useState(false)
+
+  // Liked songs state - shared across all components
+  const [likedSongIds, setLikedSongIds] = useState(new Set())
 
   // Refs
   const soundRef = useRef(null)
@@ -53,6 +62,25 @@ export const MediaPlayerProvider = ({ children }) => {
     }
     setupAudio()
   }, [])
+
+  // Subscribe to user's liked songs for real-time sync across all components
+  useEffect(() => {
+    if (!userId) {
+      setLikedSongIds(new Set())
+      return
+    }
+
+    console.log('[MediaPlayerContext] Subscribing to liked songs for user:', userId)
+    const unsubscribe = subscribeToLikedSongs(userId, (likedIds) => {
+      console.log('[MediaPlayerContext] Liked songs updated:', likedIds.size, 'songs')
+      setLikedSongIds(likedIds)
+    })
+
+    return () => {
+      console.log('[MediaPlayerContext] Unsubscribing from liked songs')
+      unsubscribe()
+    }
+  }, [userId])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -455,6 +483,39 @@ export const MediaPlayerProvider = ({ children }) => {
     return loadMedia(song)
   }, [loadMedia])
 
+  /**
+   * Check if a song is liked (uses shared state)
+   */
+  const isLiked = useCallback((songId) => {
+    return likedSongIds.has(songId)
+  }, [likedSongIds])
+
+  /**
+   * Toggle like status for a song (updates shared state via Firebase subscription)
+   * @param {Object} song - Song object with id, title, imageUrl, etc.
+   * @returns {Promise<boolean>} - New like status (true = liked, false = unliked)
+   */
+  const toggleLike = useCallback(async (song) => {
+    if (!song?.id || !userId) {
+      console.warn('[MediaPlayerContext] toggleLike: Missing song.id or userId')
+      return false
+    }
+
+    try {
+      const nowLiked = await toggleSongLike(song.id, userId, {
+        title: song.title || song.name || song.label,
+        imageUrl: song.imageUrl || song.thumbnailUrl || song.coverUrl,
+        artist: song.artist || song.style || song.description || song.author?.firstName,
+      })
+      console.log('[MediaPlayerContext] toggleLike result:', nowLiked, 'for song:', song.id)
+      // Note: likedSongIds will update automatically via Firebase subscription
+      return nowLiked
+    } catch (error) {
+      console.error('[MediaPlayerContext] toggleLike error:', error)
+      throw error
+    }
+  }, [userId])
+
   const value = {
     // State
     mediaType,
@@ -467,6 +528,11 @@ export const MediaPlayerProvider = ({ children }) => {
     queueIndex,
     isFullPlayerVisible,
     isMiniPlayerVisible,
+
+    // Likes - shared state for all components
+    likedSongIds,
+    isLiked,
+    toggleLike,
 
     // Actions
     loadMedia,

@@ -83,6 +83,83 @@ const backfillAuthors = require('./seed/backfillSongAuthors')
 exports.backfillSongAuthors = backfillAuthors.backfillSongAuthors
 exports.backfillSongAuthorsHTTP = backfillAuthors.backfillSongAuthorsHTTP
 
+// Debug function to check likes for a song
+const functions = require('firebase-functions')
+exports.debugCheckLikes = functions.https.onRequest(async (req, res) => {
+  const { songId, userId, action } = req.query
+  const db = admin.firestore()
+
+  // Find all likes across all songs
+  if (action === 'findAllLikes') {
+    const songsSnapshot = await db.collection('songs').limit(20).get()
+    const allLikes = []
+    for (const songDoc of songsSnapshot.docs) {
+      const likesSnapshot = await db.collection('songs').doc(songDoc.id).collection('likes').get()
+      likesSnapshot.docs.forEach(likeDoc => {
+        allLikes.push({
+          songId: songDoc.id,
+          songTitle: songDoc.data().title,
+          userId: likeDoc.id,
+          likedAt: likeDoc.data().likedAt,
+        })
+      })
+    }
+    return res.json({ totalLikes: allLikes.length, likes: allLikes })
+  }
+
+  // Find all user likedSongs
+  if (action === 'findUserLikedSongs' && userId) {
+    const likedSnapshot = await db.collection('users').doc(userId).collection('likedSongs').get()
+    const likedSongs = likedSnapshot.docs.map(doc => ({
+      songId: doc.id,
+      ...doc.data(),
+    }))
+    return res.json({ userId, totalLiked: likedSongs.length, likedSongs })
+  }
+
+  // If no songId, list first 10 songs
+  if (!songId) {
+    const songsSnapshot = await db.collection('songs').orderBy('createdAt', 'desc').limit(10).get()
+    const songs = songsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      title: doc.data().title,
+      likeCount: doc.data().likeCount || 0,
+    }))
+    return res.json({ songs })
+  }
+
+  const result = {
+    songId,
+    userId,
+    songExists: false,
+    likesSubcollection: [],
+    userLikedSong: null,
+  }
+
+  // Check if song exists
+  const songDoc = await db.collection('songs').doc(songId).get()
+  result.songExists = songDoc.exists
+  if (songDoc.exists) {
+    result.songData = { likeCount: songDoc.data().likeCount, title: songDoc.data().title }
+  }
+
+  // Get all likes for this song
+  const likesSnapshot = await db.collection('songs').doc(songId).collection('likes').get()
+  result.likesSubcollection = likesSnapshot.docs.map(doc => ({ userId: doc.id, ...doc.data() }))
+
+  // If userId provided, check user's likedSongs
+  if (userId) {
+    const userLikeDoc = await db.collection('users').doc(userId).collection('likedSongs').doc(songId).get()
+    result.userLikedSong = userLikeDoc.exists ? userLikeDoc.data() : null
+
+    // Also check if specific like exists
+    const specificLike = await db.collection('songs').doc(songId).collection('likes').doc(userId).get()
+    result.specificLikeExists = specificLike.exists
+  }
+
+  res.json(result)
+})
+
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
 //

@@ -1,4 +1,4 @@
-import React, { memo } from 'react'
+import React, { memo, useState, useCallback } from 'react'
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Dimensions,
   useColorScheme,
 } from 'react-native'
+import { Play, Pause, X, Music, Heart } from 'lucide-react-native'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -40,7 +41,33 @@ const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
     togglePlayPause,
     showFullPlayer,
     dismissPlayer,
+    // Shared like state from context
+    isLiked: isLikedFn,
+    toggleLike,
   } = useMediaPlayer()
+
+  // Like loading state (local)
+  const [isLikeLoading, setIsLikeLoading] = useState(false)
+
+  // Get like status from shared context
+  const isLiked = currentMedia?.id ? isLikedFn(currentMedia.id) : false
+
+  // Handle like button press - uses shared context
+  const handleLikePress = useCallback(async () => {
+    if (!currentMedia?.id || isLikeLoading) {
+      return
+    }
+
+    setIsLikeLoading(true)
+    try {
+      await toggleLike(currentMedia)
+      // Note: isLiked will update automatically via Firebase subscription in context
+    } catch (error) {
+      console.error('Error toggling like:', error)
+    } finally {
+      setIsLikeLoading(false)
+    }
+  }, [currentMedia, isLikeLoading, toggleLike])
 
   // Only show for audio playback AND when full player is NOT visible
   if (!isMiniPlayerVisible || isFullPlayerVisible || mediaType !== 'audio' || !currentMedia) {
@@ -54,62 +81,74 @@ const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.card}
-        onPress={showFullPlayer}
-        activeOpacity={0.95}
-      >
+      <View style={styles.card}>
         <View style={styles.content}>
-          {/* Thumbnail */}
-          <View style={styles.thumbnailContainer}>
-            {thumbnailUrl ? (
-              <Image source={{ uri: thumbnailUrl }} style={styles.thumbnail} />
-            ) : (
-              <View style={[styles.thumbnail, styles.placeholderThumbnail]}>
-                <Text style={styles.placeholderIcon}>🎵</Text>
-              </View>
-            )}
-          </View>
+          {/* Thumbnail + Track info - touchable to show full player */}
+          <TouchableOpacity
+            style={styles.trackArea}
+            onPress={showFullPlayer}
+            activeOpacity={0.7}
+          >
+            {/* Thumbnail */}
+            <View style={styles.thumbnailContainer}>
+              {thumbnailUrl ? (
+                <Image source={{ uri: thumbnailUrl }} style={styles.thumbnail} />
+              ) : (
+                <View style={[styles.thumbnail, styles.placeholderThumbnail]}>
+                  <Music size={24} color={isDark ? '#737373' : '#a3a3a3'} />
+                </View>
+              )}
+            </View>
 
-          {/* Track info */}
-          <View style={styles.trackInfo}>
-            <Text style={styles.title} numberOfLines={1}>
-              {currentMedia.title || currentMedia.label || currentMedia.name || 'Unknown Track'}
-            </Text>
-            <Text style={styles.artist} numberOfLines={1}>
-              {currentMedia.artist || currentMedia.subLabel || currentMedia.description || currentMedia.author?.firstName || 'Unknown Artist'}
-            </Text>
-          </View>
+            {/* Track info */}
+            <View style={styles.trackInfo}>
+              <Text style={styles.title} numberOfLines={1}>
+                {currentMedia.title || currentMedia.label || currentMedia.name || 'Unknown Track'}
+              </Text>
+              <Text style={styles.artist} numberOfLines={1}>
+                {currentMedia.artist || currentMedia.subLabel || currentMedia.description || currentMedia.author?.firstName || 'Unknown Artist'}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
-          {/* Controls - using separate touchables to prevent event bubbling */}
+          {/* Controls - OUTSIDE the track touchable */}
           <View style={styles.controls}>
+            {/* Like button */}
+            <TouchableOpacity
+              style={styles.likeButton}
+              onPress={handleLikePress}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              disabled={isLikeLoading}
+            >
+              <Heart
+                size={22}
+                color={isLiked ? '#ef4444' : (isDark ? '#737373' : '#a3a3a3')}
+                fill={isLiked ? '#ef4444' : 'transparent'}
+              />
+            </TouchableOpacity>
+
             {/* Play/Pause button */}
             <TouchableOpacity
               style={styles.playButton}
-              onPress={() => {
-                console.log('=== MINIPLAYER BUTTON PRESSED ===')
-                console.log('isPlaying state:', isPlaying)
-                togglePlayPause()
-              }}
+              onPress={togglePlayPause}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <View style={styles.playButtonCircle}>
-                <Text style={styles.playButtonText}>
-                  {isPlaying ? '⏸' : '▶️'}
-                </Text>
+                {isPlaying ? (
+                  <Pause size={18} color={isDark ? '#0a0a0a' : '#fafafa'} fill={isDark ? '#0a0a0a' : '#fafafa'} />
+                ) : (
+                  <Play size={18} color={isDark ? '#0a0a0a' : '#fafafa'} fill={isDark ? '#0a0a0a' : '#fafafa'} />
+                )}
               </View>
             </TouchableOpacity>
 
             {/* Close button */}
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={(e) => {
-                e.stopPropagation()
-                dismissPlayer()
-              }}
+              onPress={dismissPlayer}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.closeButtonText}>✕</Text>
+              <X size={20} color={isDark ? '#737373' : '#a3a3a3'} />
             </TouchableOpacity>
           </View>
         </View>
@@ -118,7 +157,7 @@ const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
         <View style={styles.progressBarContainer}>
           <View style={[styles.progressBar, { width: `${progress}%` }]} />
         </View>
-      </TouchableOpacity>
+      </View>
     </View>
   )
 }
@@ -149,6 +188,11 @@ const getStyles = (isDark, tabBarHeight) => StyleSheet.create({
     marginLeft: 12, // ml-3
     marginRight: 8, // mr-2
     paddingTop: 12, // pt-3
+  },
+  trackArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12, // space-md
   },
   thumbnailContainer: {
@@ -163,9 +207,6 @@ const getStyles = (isDark, tabBarHeight) => StyleSheet.create({
   placeholderThumbnail: {
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  placeholderIcon: {
-    fontSize: 24,
   },
   trackInfo: {
     flex: 1,
@@ -185,6 +226,13 @@ const getStyles = (isDark, tabBarHeight) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  likeButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 4,
+  },
   playButton: {
     marginRight: 8,
   },
@@ -196,19 +244,11 @@ const getStyles = (isDark, tabBarHeight) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  playButtonText: {
-    fontSize: 16,
-    color: isDark ? '#0a0a0a' : '#fafafa', // Inverted text color
-  },
   closeButton: {
     width: 32,
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 16,
-    color: isDark ? '#737373' : '#a3a3a3',
   },
   progressBarContainer: {
     position: 'absolute',
