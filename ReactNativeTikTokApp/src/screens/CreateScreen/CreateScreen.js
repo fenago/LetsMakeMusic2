@@ -13,6 +13,68 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native'
+// Custom slider component (replacing broken @react-native-community/slider)
+const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 1, step = 0.05 }) => {
+  const trackRef = React.useRef(null)
+
+  const handlePress = (event) => {
+    // Capture touch position immediately (event is recycled after this function returns)
+    const touchPageX = event.nativeEvent.pageX
+    if (touchPageX == null) return
+
+    trackRef.current?.measure((x, y, width, height, pageX, pageY) => {
+      if (width <= 0) return
+      const touchX = touchPageX - pageX
+      const percentage = Math.max(0, Math.min(1, touchX / width))
+      const rawValue = minimumValue + percentage * (maximumValue - minimumValue)
+      const steppedValue = Math.round(rawValue / step) * step
+      onValueChange(Math.max(minimumValue, Math.min(maximumValue, steppedValue)))
+    })
+  }
+
+  const percentage = ((value - minimumValue) / (maximumValue - minimumValue)) * 100
+
+  return (
+    <TouchableOpacity
+      ref={trackRef}
+      onPress={handlePress}
+      activeOpacity={0.8}
+      style={{
+        height: 44,
+        justifyContent: 'center',
+        paddingVertical: 10,
+      }}
+    >
+      <View style={{
+        height: 8,
+        backgroundColor: '#3a3a4a',
+        borderRadius: 4,
+        overflow: 'hidden',
+      }}>
+        <View style={{
+          height: '100%',
+          width: `${percentage}%`,
+          backgroundColor: '#6366F1',
+          borderRadius: 4,
+        }} />
+      </View>
+      <View style={{
+        position: 'absolute',
+        left: `${percentage}%`,
+        marginLeft: -12,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 5,
+      }} />
+    </TouchableOpacity>
+  )
+}
 import { useCurrentUser } from '../../core/onboarding'
 import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
 import {
@@ -25,6 +87,9 @@ import {
 } from '../../services/sunoApi'
 import { saveSong } from '../../services/songsService'
 import { uploadAudioToFirebase } from '../../services/audioStorageService'
+import { DEFAULT_SONG_RIGHTS } from '../../constants/songRights'
+import functions from '@react-native-firebase/functions'
+import { logInfo, logSuccess, logError, logWarn } from '../../services/debugLogService'
 
 // Model version options for picker
 const MODEL_OPTIONS = Object.entries(MODEL_VERSIONS).map(([key, value]) => ({
@@ -93,6 +158,18 @@ export default function CreateScreen({ navigation }) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationStatus, setGenerationStatus] = useState('')
   const [elapsedTime, setElapsedTime] = useState(0)
+
+  // Advanced options (collapsed by default)
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
+  const [negativeTags, setNegativeTags] = useState('')
+  const [vocalGender, setVocalGender] = useState(null) // null = any, 'm' = male, 'f' = female
+  const [styleWeight, setStyleWeight] = useState(0.5) // 0.00-1.00
+  const [weirdnessConstraint, setWeirdnessConstraint] = useState(0.5) // 0.00-1.00 (lower = more cohesive)
+
+  // Song Rights (collapsed by default)
+  const [showSongRights, setShowSongRights] = useState(false)
+  const [isPublic, setIsPublic] = useState(true)
+  const [songRights, setSongRights] = useState({ ...DEFAULT_SONG_RIGHTS })
 
   // Get current model config for dynamic limits
   const currentModelConfig = MODEL_VERSIONS[selectedModel] || MODEL_VERSIONS[DEFAULT_MODEL]
@@ -167,9 +244,17 @@ export default function CreateScreen({ navigation }) {
     try {
       let result
 
+      // Build advanced options object
+      const advancedOptions = {
+        negativeTags: negativeTags.trim() || undefined,
+        vocalGender: vocalGender || undefined,
+        styleWeight: styleWeight !== 0.5 ? styleWeight : undefined, // Only send if changed from default
+        weirdnessConstraint: weirdnessConstraint !== 0.5 ? weirdnessConstraint : undefined,
+      }
+
       // Step 1: Submit generation request
       if (songMode === SONG_MODES.SIMPLE) {
-        result = await generateSongSimple(description, instrumental, selectedModel)
+        result = await generateSongSimple(description, instrumental, selectedModel, advancedOptions)
       } else {
         result = await generateSongCustom({
           title,
@@ -177,6 +262,7 @@ export default function CreateScreen({ navigation }) {
           lyrics: lyrics || '',
           instrumental,
           model: selectedModel,
+          ...advancedOptions,
         })
       }
 
@@ -245,22 +331,7 @@ export default function CreateScreen({ navigation }) {
             try {
               setGenerationStatus(`Saving song ${i + 1} of ${allSongs.length}...`)
 
-              // Upload audio to Firebase Storage as permanent backup (non-blocking)
-              // This runs in background - we don't wait for it to complete
-              let firebaseAudioUrl = null
-              const audioSourceUrl = song.audio_url || song.stream_url
-              if (audioSourceUrl && song.id) {
-                setGenerationStatus(`Backing up audio ${i + 1} to Firebase...`)
-                try {
-                  firebaseAudioUrl = await uploadAudioToFirebase(audioSourceUrl, song.id)
-                  console.log(`Audio ${i + 1} backed up to Firebase:`, firebaseAudioUrl)
-                } catch (uploadError) {
-                  console.warn(`Could not backup audio ${i + 1} to Firebase:`, uploadError)
-                  // Continue anyway - Suno CDN is primary, Firebase is backup
-                }
-              }
-
-              // Save ALL song metadata to Firebase
+              // Save ALL song metadata to Firebase FIRST (to get songId)
               const savedSong = await saveSong({
                 userId: currentUser.id,
                 // Author info (denormalized for display in FullPlayer "About the Artist")
@@ -273,30 +344,117 @@ export default function CreateScreen({ navigation }) {
                   lastName: currentUser.lastName || null,
                 },
                 sunoId: song.id,
+                sunoTaskId: result.taskId, // Required for video generation
+                // Primary URLs
                 audioUrl: song.audio_url,
                 streamUrl: song.stream_url,
-                firebaseAudioUrl: firebaseAudioUrl, // Our backup copy
                 imageUrl: song.image_url,
+                firebaseAudioUrl: null, // Will be updated by Cloud Function
                 videoUrl: song.video_url || null, // Some songs have video
+                // Backup source URLs (in case primary expires)
+                sourceAudioUrl: song.source_audio_url || null,
+                sourceStreamUrl: song.source_stream_url || null,
+                sourceImageUrl: song.source_image_url || null,
+                // Song content
                 title: songTitle,
                 style: song.style || style || '',
+                tags: song.tags || null, // Suno-generated genre tags
                 rawLyrics: timestampedLyrics?.rawLyrics || song.lyric || '',
                 timestampedLyrics: timestampedLyrics?.lyrics || [],
                 duration: song.duration || 0,
+                // Generation settings (for reference/recreation)
                 model: selectedModel,
                 instrumental: instrumental,
                 prompt: songMode === SONG_MODES.SIMPLE ? description : lyrics,
+                // Advanced options used (for reference)
+                generationOptions: {
+                  negativeTags: negativeTags.trim() || null,
+                  vocalGender: vocalGender || null,
+                  styleWeight: styleWeight !== 0.5 ? styleWeight : null,
+                  weirdnessConstraint: weirdnessConstraint !== 0.5 ? weirdnessConstraint : null,
+                },
                 // Additional Suno metadata
                 sunoModelName: song.model_name || selectedModel,
                 sunoStatus: song.status || 'complete',
-                sunoCreatedAt: song.created_at || null,
+                sunoCreatedAt: song.create_time || song.created_at || null,
+                // Song rights - use user's selected settings
+                isPublic: isPublic,
+                rights: {
+                  ...songRights,
+                  visibility: isPublic ? 'public' : 'private',
+                },
               })
               savedSongs.push({ ...savedSong, timestampedLyrics })
               console.log(`Song ${i + 1} saved to Firebase:`, savedSong.id)
+
+              // Now backup audio to Firebase Storage via Cloud Function
+              // This runs async - Cloud Function will update the song doc with firebaseAudioUrl
+              const audioSourceUrl = song.audio_url || song.stream_url
+              if (audioSourceUrl && savedSong.id) {
+                setGenerationStatus(`Backing up audio ${i + 1} to Firebase...`)
+                // Don't await - let it run in background
+                uploadAudioToFirebase(audioSourceUrl, savedSong.id, song.id, currentUser.id)
+                  .then((url) => {
+                    if (url) console.log(`Audio ${i + 1} backed up to Firebase:`, url)
+                  })
+                  .catch((err) => {
+                    console.warn(`Could not backup audio ${i + 1} to Firebase:`, err)
+                  })
+              }
             } catch (saveError) {
               console.warn(`Could not save song ${i + 1} to Firebase:`, saveError)
             }
           }
+        }
+
+        // Auto-share to feed if user has enabled this setting
+        logInfo('Checking auto-share setting', {
+          setting: currentUser?.auto_share_to_feed,
+          savedSongsCount: savedSongs.length,
+        })
+
+        if (currentUser?.auto_share_to_feed === 'On' && savedSongs.length > 0) {
+          setGenerationStatus('Sharing to feed...')
+          logInfo('Auto-share enabled, calling createSongPost cloud function')
+
+          const createSongPost = functions().httpsCallable('createSongPost')
+
+          // Auto-share only the first song (main song)
+          const autoShareSong = savedSongs[0]
+          if (autoShareSong?.id) {
+            try {
+              logInfo('Calling createSongPost', {
+                songId: autoShareSong.id,
+                songTitle: autoShareSong.title || title || 'AI Song',
+              })
+
+              const result = await createSongPost({
+                songId: autoShareSong.id,
+                caption: `Just created a new song: ${autoShareSong.title || title || 'AI Song'} 🎵`,
+                hashtags: [], // Auto-generated from song style in cloud function
+              })
+
+              logSuccess('Song auto-shared to feed!', {
+                songId: autoShareSong.id,
+                postId: result?.data?.postId,
+              })
+              console.log('Song auto-shared to feed:', autoShareSong.id)
+            } catch (shareError) {
+              logError('Failed to auto-share song', {
+                error: shareError.message || shareError.toString(),
+                code: shareError.code,
+                songId: autoShareSong.id,
+              })
+              console.warn('Could not auto-share song to feed:', shareError)
+              // Don't show error - auto-share is a convenience feature
+            }
+          }
+        } else {
+          logInfo('Auto-share skipped', {
+            reason: currentUser?.auto_share_to_feed !== 'On'
+              ? 'Setting is OFF'
+              : 'No saved songs',
+          })
         }
 
         // Play the first song immediately using MediaPlayer
@@ -305,7 +463,10 @@ export default function CreateScreen({ navigation }) {
         const firstSongTitle = firstSong.title || title || 'AI Song'
 
         loadMedia({
-          id: firstSong.id,
+          // Use Firebase document ID, not Suno ID
+          id: firstSavedSong?.id || firstSong.id,
+          sunoId: firstSong.id,
+          sunoTaskId: result.taskId, // Required for video generation!
           audioUrl: firstSong.audio_url || firstSong.stream_url,
           title: firstSongTitle,
           thumbnailUrl: firstSong.image_url,
@@ -370,10 +531,16 @@ export default function CreateScreen({ navigation }) {
     lyrics,
     instrumental,
     selectedModel,
+    negativeTags,
+    vocalGender,
+    styleWeight,
+    weirdnessConstraint,
     currentUser,
     isGenerating,
     navigation,
     loadMedia,
+    isPublic,
+    songRights,
   ])
 
   // Character count helpers - dynamic based on model
@@ -651,6 +818,348 @@ export default function CreateScreen({ navigation }) {
                   ))}
                 </ScrollView>
               </View>
+
+              {/* Advanced Options Toggle */}
+              <TouchableOpacity
+                style={styles.advancedToggle}
+                onPress={() => setShowAdvancedOptions(!showAdvancedOptions)}
+              >
+                <Text style={styles.advancedToggleText}>
+                  {showAdvancedOptions ? '▼ Hide' : '▶ Show'} Advanced Options
+                </Text>
+              </TouchableOpacity>
+
+              {/* Advanced Options Section */}
+              {showAdvancedOptions && (
+                <View style={styles.advancedSection}>
+                  {/* Vocal Gender */}
+                  {!instrumental && (
+                    <View style={styles.formSection}>
+                      <View style={styles.labelRow}>
+                        <Text style={styles.label}>Vocal Gender</Text>
+                        <TouchableOpacity
+                          onPress={() => Alert.alert(
+                            '🎤 Vocal Gender',
+                            'Choose the voice type for your song:\n\n' +
+                            '• Any - Let the AI decide based on your style\n' +
+                            '• Male - Deeper, masculine vocals\n' +
+                            '• Female - Higher, feminine vocals\n\n' +
+                            'Tip: The AI picks what fits best if you choose "Any"'
+                          )}
+                          style={styles.infoButton}
+                        >
+                          <Text style={styles.infoButtonText}>ⓘ</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.sublabel}>
+                        Prefer male or female vocals
+                      </Text>
+                      <View style={styles.genderToggleContainer}>
+                        <TouchableOpacity
+                          style={[
+                            styles.genderToggle,
+                            vocalGender === null && styles.genderToggleActive,
+                          ]}
+                          onPress={() => setVocalGender(null)}
+                        >
+                          <Text
+                            style={[
+                              styles.genderToggleText,
+                              vocalGender === null && styles.genderToggleTextActive,
+                            ]}
+                          >
+                            Any
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.genderToggle,
+                            vocalGender === 'm' && styles.genderToggleActive,
+                          ]}
+                          onPress={() => setVocalGender('m')}
+                        >
+                          <Text
+                            style={[
+                              styles.genderToggleText,
+                              vocalGender === 'm' && styles.genderToggleTextActive,
+                            ]}
+                          >
+                            Male
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.genderToggle,
+                            vocalGender === 'f' && styles.genderToggleActive,
+                          ]}
+                          onPress={() => setVocalGender('f')}
+                        >
+                          <Text
+                            style={[
+                              styles.genderToggleText,
+                              vocalGender === 'f' && styles.genderToggleTextActive,
+                            ]}
+                          >
+                            Female
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Negative Tags */}
+                  <View style={styles.formSection}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.label}>Exclude Styles</Text>
+                      <TouchableOpacity
+                        onPress={() => Alert.alert(
+                          '🚫 Exclude Styles',
+                          'Tell the AI what NOT to include in your song:\n\n' +
+                          'Examples:\n' +
+                          '• "Screaming, Growling" - no harsh vocals\n' +
+                          '• "Autotune, Electronic" - keep it natural\n' +
+                          '• "Heavy Metal, Dubstep" - avoid intense genres\n\n' +
+                          'Separate multiple styles with commas. Leave empty if you\'re open to anything!'
+                        )}
+                        style={styles.infoButton}
+                      >
+                        <Text style={styles.infoButtonText}>ⓘ</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.sublabel}>
+                      Styles to avoid (e.g., "Heavy Metal, Screaming, Autotune")
+                    </Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g., Heavy Metal, Screaming, Autotune"
+                      placeholderTextColor="#666"
+                      value={negativeTags}
+                      onChangeText={setNegativeTags}
+                      maxLength={200}
+                    />
+                  </View>
+
+                  {/* Style Weight Slider */}
+                  <View style={styles.formSection}>
+                    <View style={styles.sliderHeader}>
+                      <View style={styles.labelRow}>
+                        <Text style={styles.label}>Style Influence</Text>
+                        <TouchableOpacity
+                          onPress={() => Alert.alert(
+                            '🎨 Style Influence',
+                            'Controls how closely the AI follows your style description:\n\n' +
+                            '• Low (0-30%) - Subtle hint, AI has creative freedom\n' +
+                            '• Medium (40-60%) - Balanced mix of your style and AI creativity\n' +
+                            '• High (70-100%) - Strictly follows your style tags\n\n' +
+                            'Start at 50% and adjust based on results. Higher = more predictable but less surprising.'
+                          )}
+                          style={styles.infoButton}
+                        >
+                          <Text style={styles.infoButtonText}>ⓘ</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.sliderValue}>{Math.round(styleWeight * 100)}%</Text>
+                    </View>
+                    <Text style={styles.sublabel}>
+                      How strongly the style guides the output
+                    </Text>
+                    <CustomSlider
+                      minimumValue={0}
+                      maximumValue={1}
+                      step={0.05}
+                      value={styleWeight}
+                      onValueChange={setStyleWeight}
+                    />
+                    <View style={styles.sliderLabels}>
+                      <Text style={styles.sliderLabelText}>Subtle</Text>
+                      <Text style={styles.sliderLabelText}>Strong</Text>
+                    </View>
+                  </View>
+
+                  {/* Weirdness/Creativity Slider */}
+                  <View style={styles.formSection}>
+                    <View style={styles.sliderHeader}>
+                      <View style={styles.labelRow}>
+                        <Text style={styles.label}>Creativity</Text>
+                        <TouchableOpacity
+                          onPress={() => Alert.alert(
+                            '✨ Creativity',
+                            'How "out there" should the AI get?\n\n' +
+                            '• Low (0-30%) - Safe, familiar, radio-friendly\n' +
+                            '• Medium (40-60%) - Balanced, some surprises\n' +
+                            '• High (70-100%) - Experimental, unexpected twists\n\n' +
+                            'Low = sounds like songs you know\n' +
+                            'High = unique but might be weird\n\n' +
+                            'Tip: Start at 50% for your first song!'
+                          )}
+                          style={styles.infoButton}
+                        >
+                          <Text style={styles.infoButtonText}>ⓘ</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.sliderValue}>{Math.round(weirdnessConstraint * 100)}%</Text>
+                    </View>
+                    <Text style={styles.sublabel}>
+                      Higher = more experimental, lower = more cohesive
+                    </Text>
+                    <CustomSlider
+                      minimumValue={0}
+                      maximumValue={1}
+                      step={0.05}
+                      value={weirdnessConstraint}
+                      onValueChange={setWeirdnessConstraint}
+                    />
+                    <View style={styles.sliderLabels}>
+                      <Text style={styles.sliderLabelText}>Cohesive</Text>
+                      <Text style={styles.sliderLabelText}>Experimental</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Song Rights Toggle */}
+              <TouchableOpacity
+                style={styles.advancedToggle}
+                onPress={() => setShowSongRights(!showSongRights)}
+              >
+                <Text style={[styles.advancedToggleText, { color: '#22c55e' }]}>
+                  {showSongRights ? '▼ Hide' : '▶ Show'} Song Rights
+                </Text>
+              </TouchableOpacity>
+
+              {/* Song Rights Section */}
+              {showSongRights && (
+                <View style={styles.advancedSection}>
+                  {/* Visibility Toggle */}
+                  <View style={styles.rightsRow}>
+                    <View style={styles.rightsLabel}>
+                      <Text style={styles.label}>Visibility</Text>
+                      <Text style={styles.sublabel}>
+                        {isPublic ? 'Anyone can see this song' : 'Only you can see this song'}
+                      </Text>
+                    </View>
+                    <View style={styles.rightsToggleContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.rightsToggle,
+                          isPublic && styles.rightsToggleActive,
+                        ]}
+                        onPress={() => setIsPublic(true)}
+                      >
+                        <Text style={[
+                          styles.rightsToggleText,
+                          isPublic && styles.rightsToggleTextActive,
+                        ]}>Public</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.rightsToggle,
+                          !isPublic && styles.rightsToggleActive,
+                        ]}
+                        onPress={() => setIsPublic(false)}
+                      >
+                        <Text style={[
+                          styles.rightsToggleText,
+                          !isPublic && styles.rightsToggleTextActive,
+                        ]}>Private</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Derivative Works Section */}
+                  <Text style={[styles.label, { marginTop: 16, marginBottom: 8 }]}>Derivative Works</Text>
+                  <Text style={[styles.sublabel, { marginBottom: 12 }]}>
+                    What can others do with your song?
+                  </Text>
+
+                  {/* Allow Extend */}
+                  <View style={styles.rightsOptionRow}>
+                    <View style={styles.rightsOptionLabel}>
+                      <Text style={styles.rightsOptionTitle}>Allow Extensions</Text>
+                      <Text style={styles.rightsOptionDesc}>Others can extend/continue this song</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        songRights.allowExtend && styles.toggleButtonActive,
+                      ]}
+                      onPress={() => setSongRights(prev => ({ ...prev, allowExtend: !prev.allowExtend }))}
+                    >
+                      <Text style={styles.toggleButtonText}>
+                        {songRights.allowExtend ? 'ON' : 'OFF'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Allow Lyrics Use */}
+                  <View style={styles.rightsOptionRow}>
+                    <View style={styles.rightsOptionLabel}>
+                      <Text style={styles.rightsOptionTitle}>Allow Lyrics Use</Text>
+                      <Text style={styles.rightsOptionDesc}>Others can use your lyrics</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        songRights.allowLyricsUse && styles.toggleButtonActive,
+                      ]}
+                      onPress={() => setSongRights(prev => ({ ...prev, allowLyricsUse: !prev.allowLyricsUse }))}
+                    >
+                      <Text style={styles.toggleButtonText}>
+                        {songRights.allowLyricsUse ? 'ON' : 'OFF'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Allow Video Creation */}
+                  <View style={styles.rightsOptionRow}>
+                    <View style={styles.rightsOptionLabel}>
+                      <Text style={styles.rightsOptionTitle}>Allow Video Creation</Text>
+                      <Text style={styles.rightsOptionDesc}>Others can pair this with their videos</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        songRights.allowVideoCreation && styles.toggleButtonActive,
+                      ]}
+                      onPress={() => setSongRights(prev => ({ ...prev, allowVideoCreation: !prev.allowVideoCreation }))}
+                    >
+                      <Text style={styles.toggleButtonText}>
+                        {songRights.allowVideoCreation ? 'ON' : 'OFF'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Attribution Section */}
+                  <Text style={[styles.label, { marginTop: 16, marginBottom: 8 }]}>Attribution</Text>
+
+                  {/* Require Attribution */}
+                  <View style={styles.rightsOptionRow}>
+                    <View style={styles.rightsOptionLabel}>
+                      <Text style={styles.rightsOptionTitle}>Require Attribution</Text>
+                      <Text style={styles.rightsOptionDesc}>Derivatives must credit you</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        songRights.requireAttribution && styles.toggleButtonActive,
+                      ]}
+                      onPress={() => setSongRights(prev => ({ ...prev, requireAttribution: !prev.requireAttribution }))}
+                    >
+                      <Text style={styles.toggleButtonText}>
+                        {songRights.requireAttribution ? 'ON' : 'OFF'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Coming Soon Features */}
+                  <View style={styles.comingSoonSection}>
+                    <Text style={styles.comingSoonTitle}>Coming Soon</Text>
+                    <Text style={styles.comingSoonText}>
+                      Monetization, Stem Extraction, WAV Export, Reinterpretation, Sampling, Commercial Licensing
+                    </Text>
+                  </View>
+                </View>
+              )}
 
               {/* Generate Button */}
               <TouchableOpacity
@@ -1003,5 +1512,155 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 11,
     marginTop: 2,
+  },
+  // Advanced Options styles
+  advancedToggle: {
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  advancedToggleText: {
+    color: '#8B8BF5',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  advancedSection: {
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  genderToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 3,
+  },
+  genderToggle: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  genderToggleActive: {
+    backgroundColor: '#2126A2',
+  },
+  genderToggleText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  genderToggleTextActive: {
+    color: '#fff',
+  },
+  sliderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sliderValue: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  infoButtonText: {
+    color: '#6366F1',
+    fontSize: 16,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: -8,
+  },
+  sliderLabelText: {
+    color: '#666',
+    fontSize: 12,
+  },
+  // Song Rights styles
+  rightsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  rightsLabel: {
+    flex: 1,
+    marginRight: 16,
+  },
+  rightsToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 3,
+  },
+  rightsToggle: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  rightsToggleActive: {
+    backgroundColor: '#22c55e',
+  },
+  rightsToggleText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  rightsToggleTextActive: {
+    color: '#fff',
+  },
+  rightsOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  rightsOptionLabel: {
+    flex: 1,
+    marginRight: 12,
+  },
+  rightsOptionTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  rightsOptionDesc: {
+    color: '#888',
+    fontSize: 12,
+  },
+  comingSoonSection: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+    alignItems: 'center',
+  },
+  comingSoonTitle: {
+    color: '#888',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  comingSoonText: {
+    color: '#555',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 })

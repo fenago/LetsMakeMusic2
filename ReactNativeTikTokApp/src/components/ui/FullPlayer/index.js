@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, memo, useState } from 'react'
+import React, { useCallback, useRef, useEffect, useState, memo } from 'react'
 import {
   View,
   Text,
@@ -11,9 +11,7 @@ import {
   TouchableOpacity as RNTouchableOpacity,
   Pressable,
 } from 'react-native'
-import { TouchableOpacity } from 'react-native-gesture-handler'
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated'
+import BottomSheet, { BottomSheetScrollView, TouchableOpacity } from '@gorhom/bottom-sheet'
 import {
   ChevronDown,
   MoreHorizontal,
@@ -48,6 +46,47 @@ import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const ARTWORK_SIZE = SCREEN_WIDTH - 80
 const LYRICS_PREVIEW_LINES = 4
+
+/**
+ * Separate Progress Section component - Subscribes directly to position from context
+ * This isolates position updates to this component only, preventing full parent re-renders
+ */
+const ProgressSection = ({ styles }) => {
+  const { position, duration, seek, formatTime } = useMediaPlayer()
+  const progress = duration > 0 ? (position / duration) * 100 : 0
+
+  const handleProgressPress = useCallback((event) => {
+    const { locationX } = event.nativeEvent
+    const progressBarWidth = SCREEN_WIDTH - 80
+    const percentage = Math.max(0, Math.min(100, (locationX / progressBarWidth) * 100))
+    const newPosition = (percentage / 100) * duration
+    seek(newPosition)
+  }, [duration, seek])
+
+  return (
+    <View style={styles.progressSection}>
+      <Pressable
+        style={styles.progressBarContainer}
+        onPress={handleProgressPress}
+        hitSlop={15}
+      >
+        <View style={styles.progressBarBackground}>
+          <View style={[styles.progressBar, { width: `${progress}%` }]} />
+        </View>
+        <View
+          style={[
+            styles.progressKnob,
+            { left: `${progress}%` },
+          ]}
+        />
+      </Pressable>
+      <View style={styles.timeContainer}>
+        <Text style={styles.timeText}>{formatTime(position)}</Text>
+        <Text style={styles.timeText}>{formatTime(duration)}</Text>
+      </View>
+    </View>
+  )
+}
 
 /**
  * FullPlayerBottomSheet - Full screen audio player
@@ -87,15 +126,12 @@ const FullPlayerBottomSheet = () => {
     mediaType,
     isPlaying,
     currentMedia,
-    position,
-    duration,
+    position, // Still needed for hasPrevious and karaoke lyrics
     isFullPlayerVisible,
     togglePlayPause,
     hideFullPlayer,
     playNext,
     playPrevious,
-    seek,
-    formatTime,
     queue,
     queueIndex,
     // Shared like state from context
@@ -106,23 +142,6 @@ const FullPlayerBottomSheet = () => {
   // Get like status from shared context
   const isLiked = currentMedia?.id ? isLikedFn(currentMedia.id) : false
 
-  // Debug: Log media data when media changes (lyrics + author info)
-  useEffect(() => {
-    if (currentMedia) {
-      console.log('=== FULLPLAYER: Media Debug ===')
-      console.log('Title:', currentMedia.title)
-      console.log('rawLyrics:', currentMedia.rawLyrics ? `${currentMedia.rawLyrics.substring(0, 100)}...` : 'MISSING')
-      console.log('timestampedLyrics length:', currentMedia.timestampedLyrics?.length || 0)
-
-      // Debug: Log author info for "About the Artist" section
-      console.log('=== FULLPLAYER: Author Debug (About the Artist) ===')
-      console.log('author object:', currentMedia.author)
-      console.log('author.stageName:', currentMedia.author?.stageName)
-      console.log('author.bio:', currentMedia.author?.bio)
-      console.log('author.profilePictureURL:', currentMedia.author?.profilePictureURL)
-      console.log('artist field:', currentMedia.artist)
-    }
-  }, [currentMedia])
 
   // Handle like button press - uses shared context
   const handleLikePress = useCallback(async () => {
@@ -156,15 +175,6 @@ const FullPlayerBottomSheet = () => {
     }
   }, [hideFullPlayer])
 
-  // Handle progress bar press
-  const handleProgressPress = useCallback((event) => {
-    const { locationX } = event.nativeEvent
-    const progressWidth = SCREEN_WIDTH - 40 // padding
-    const percentage = locationX / progressWidth
-    const newPosition = percentage * duration
-    seek(Math.max(0, Math.min(duration, newPosition)))
-  }, [duration, seek])
-
   // Toggle repeat mode
   const toggleRepeat = useCallback(() => {
     setRepeatMode(prev => {
@@ -185,7 +195,6 @@ const FullPlayerBottomSheet = () => {
     return null
   }
 
-  const progress = duration > 0 ? (position / duration) * 100 : 0
   const thumbnailUrl = currentMedia.thumbnailUrl || currentMedia.imageUrl || currentMedia.coverUrl || currentMedia.profilePictureURL
   const hasNext = queueIndex < queue.length - 1
   const hasPrevious = queueIndex > 0 || position > 3000
@@ -223,10 +232,7 @@ const FullPlayerBottomSheet = () => {
         </View>
 
         {/* Artwork */}
-        <Animated.View
-          entering={FadeInDown.duration(400).delay(100)}
-          style={styles.artworkContainer}
-        >
+        <View style={styles.artworkContainer}>
           {thumbnailUrl ? (
             <Image source={{ uri: thumbnailUrl }} style={styles.artwork} />
           ) : (
@@ -234,13 +240,10 @@ const FullPlayerBottomSheet = () => {
               <Music size={100} color={isDark ? '#666666' : '#cccccc'} strokeWidth={1.5} />
             </View>
           )}
-        </Animated.View>
+        </View>
 
         {/* Track Info with Favorite Button */}
-        <Animated.View
-          entering={FadeInDown.duration(400).delay(200)}
-          style={styles.trackInfo}
-        >
+        <View style={styles.trackInfo}>
           <View style={styles.trackInfoText}>
             <Text style={styles.title} numberOfLines={2}>
               {currentMedia.title || currentMedia.label || currentMedia.name || 'Unknown Track'}
@@ -262,54 +265,30 @@ const FullPlayerBottomSheet = () => {
               strokeWidth={2}
             />
           </RNTouchableOpacity>
-        </Animated.View>
+        </View>
 
-        {/* Progress Bar */}
-        <Animated.View
-          entering={FadeInDown.duration(400).delay(300)}
-          style={styles.progressSection}
-        >
-          <TouchableOpacity
-            style={styles.progressBarContainer}
-            onPress={handleProgressPress}
-            activeOpacity={1}
-          >
-            <View style={styles.progressBarBackground}>
-              <View style={[styles.progressBar, { width: `${progress}%` }]} />
-            </View>
-            <View
-              style={[
-                styles.progressKnob,
-                { left: `${progress}%` },
-              ]}
-            />
-          </TouchableOpacity>
-          <View style={styles.timeContainer}>
-            <Text style={styles.timeText}>{formatTime(position)}</Text>
-            <Text style={styles.timeText}>{formatTime(duration)}</Text>
-          </View>
-        </Animated.View>
+        {/* Progress Bar - Separate component to isolate position updates */}
+        <ProgressSection styles={styles} />
 
-        {/* Controls */}
-        <Animated.View
-          entering={FadeInDown.duration(400).delay(400)}
-          style={styles.controls}
-        >
-          <TouchableOpacity
+        {/* Controls - Using Pressable for fastest response */}
+        <View style={styles.controls}>
+          <Pressable
             style={styles.secondaryButton}
             onPress={() => setIsShuffleOn(!isShuffleOn)}
+            hitSlop={12}
           >
             <Shuffle
               size={24}
               color={isShuffleOn ? '#3875e8' : (isDark ? '#888888' : '#666666')}
               strokeWidth={2}
             />
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             style={[styles.controlButton, !hasPrevious && styles.disabledButton]}
             onPress={playPrevious}
             disabled={!hasPrevious && position <= 3000}
+            hitSlop={12}
           >
             <SkipBack
               size={32}
@@ -317,27 +296,25 @@ const FullPlayerBottomSheet = () => {
               fill={isDark ? '#ffffff' : '#151723'}
               strokeWidth={0}
             />
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             style={styles.playPauseButton}
-            onPress={() => {
-              console.log('=== FULLPLAYER PLAY/PAUSE BUTTON PRESSED ===')
-              console.log('Current isPlaying state:', isPlaying)
-              togglePlayPause()
-            }}
+            onPress={togglePlayPause}
+            hitSlop={12}
           >
             {isPlaying ? (
               <Pause size={32} color="#ffffff" fill="#ffffff" strokeWidth={0} />
             ) : (
               <Play size={32} color="#ffffff" fill="#ffffff" strokeWidth={0} style={{ marginLeft: 4 }} />
             )}
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             style={[styles.controlButton, !hasNext && styles.disabledButton]}
             onPress={playNext}
             disabled={!hasNext}
+            hitSlop={12}
           >
             <SkipForward
               size={32}
@@ -345,11 +322,12 @@ const FullPlayerBottomSheet = () => {
               fill={isDark ? '#ffffff' : '#151723'}
               strokeWidth={0}
             />
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             style={styles.secondaryButton}
             onPress={toggleRepeat}
+            hitSlop={12}
           >
             {repeatMode === 'one' ? (
               <Repeat1 size={24} color="#3875e8" strokeWidth={2} />
@@ -360,16 +338,14 @@ const FullPlayerBottomSheet = () => {
                 strokeWidth={2}
               />
             )}
-          </TouchableOpacity>
-        </Animated.View>
+          </Pressable>
+        </View>
 
         {/* Lyrics Section */}
-        <Animated.View
-          entering={FadeInDown.duration(400).delay(500)}
-          style={styles.section}
-        >
+        <View style={styles.section}>
           <TouchableOpacity
             style={styles.sectionHeader}
+            activeOpacity={0.7}
             onPress={() => setShowLyrics(!showLyrics)}
           >
             <Text style={styles.sectionTitle}>Lyrics</Text>
@@ -394,7 +370,7 @@ const FullPlayerBottomSheet = () => {
               </View>
             </TouchableOpacity>
           )}
-        </Animated.View>
+        </View>
 
         {/* Full Lyrics Modal */}
         <Modal
@@ -532,12 +508,10 @@ const FullPlayerBottomSheet = () => {
 
         {/* Next in Queue Section */}
         {nextSongs.length > 0 && (
-          <Animated.View
-            entering={FadeInRight.duration(400).delay(600)}
-            style={styles.section}
-          >
+          <View style={styles.section}>
             <TouchableOpacity
               style={styles.sectionHeader}
+              activeOpacity={0.7}
               onPress={() => setShowQueue(!showQueue)}
             >
               <View style={styles.sectionHeaderLeft}>
@@ -578,16 +552,14 @@ const FullPlayerBottomSheet = () => {
                 ))}
               </View>
             )}
-          </Animated.View>
+          </View>
         )}
 
         {/* About the Artist Section */}
-        <Animated.View
-          entering={FadeInRight.duration(400).delay(700)}
-          style={styles.section}
-        >
+        <View style={styles.section}>
           <TouchableOpacity
             style={styles.sectionHeader}
+            activeOpacity={0.7}
             onPress={() => setShowArtist(!showArtist)}
           >
             <Text style={styles.sectionTitle}>About the artist</Text>
@@ -625,15 +597,13 @@ const FullPlayerBottomSheet = () => {
               ) : null}
             </View>
           )}
-        </Animated.View>
+        </View>
 
         {/* Create Video Section */}
-        <Animated.View
-          entering={FadeInRight.duration(400).delay(750)}
-          style={styles.section}
-        >
+        <View style={styles.section}>
           <TouchableOpacity
             style={styles.sectionHeader}
+            activeOpacity={0.7}
             onPress={() => setShowCreateVideo(!showCreateVideo)}
           >
             <View style={styles.sectionHeaderLeft}>
@@ -660,15 +630,13 @@ const FullPlayerBottomSheet = () => {
               </TouchableOpacity>
             </View>
           )}
-        </Animated.View>
+        </View>
 
         {/* Music Generation Section */}
-        <Animated.View
-          entering={FadeInRight.duration(400).delay(800)}
-          style={styles.section}
-        >
+        <View style={styles.section}>
           <TouchableOpacity
             style={styles.sectionHeader}
+            activeOpacity={0.7}
             onPress={() => setShowMusicGeneration(!showMusicGeneration)}
           >
             <View style={styles.sectionHeaderLeft}>
@@ -735,15 +703,13 @@ const FullPlayerBottomSheet = () => {
               </TouchableOpacity>
             </View>
           )}
-        </Animated.View>
+        </View>
 
         {/* Change Song Cover Section */}
-        <Animated.View
-          entering={FadeInRight.duration(400).delay(850)}
-          style={styles.section}
-        >
+        <View style={styles.section}>
           <TouchableOpacity
             style={styles.sectionHeader}
+            activeOpacity={0.7}
             onPress={() => setShowSongCover(!showSongCover)}
           >
             <View style={styles.sectionHeaderLeft}>
@@ -780,15 +746,13 @@ const FullPlayerBottomSheet = () => {
               </TouchableOpacity>
             </View>
           )}
-        </Animated.View>
+        </View>
 
         {/* Audio Processing Section */}
-        <Animated.View
-          entering={FadeInRight.duration(400).delay(900)}
-          style={[styles.section, styles.lastSection]}
-        >
+        <View style={[styles.section, styles.lastSection]}>
           <TouchableOpacity
             style={styles.sectionHeader}
+            activeOpacity={0.7}
             onPress={() => setShowAudioProcessing(!showAudioProcessing)}
           >
             <View style={styles.sectionHeaderLeft}>
@@ -825,7 +789,7 @@ const FullPlayerBottomSheet = () => {
               </TouchableOpacity>
             </View>
           )}
-        </Animated.View>
+        </View>
 
         {/* Bottom spacing */}
         <View style={{ height: 40 }} />

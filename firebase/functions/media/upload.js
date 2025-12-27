@@ -57,13 +57,13 @@ exports.uploadMedia = functions
         file.pipe(fs.createWriteStream(filepath))
       })
 
-      busboy.on('finish', () => {
+      busboy.on('finish', async () => {
         console.log('on finish')
         console.log(imageToBeUploaded)
-        admin
-          .storage()
-          .bucket(storageBucket)
-          .upload(imageToBeUploaded.filepath, {
+        try {
+          const bucket = admin.storage().bucket(storageBucket)
+          await bucket.upload(imageToBeUploaded.filepath, {
+            destination: imageFileName,
             resumable: false,
             metadata: {
               metadata: {
@@ -71,18 +71,22 @@ exports.uploadMedia = functions
               },
             },
           })
-          .then(response => {
-            const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${imageFileName}?alt=media`
-            console.log('media uploaded successfully ' + imageUrl)
-            console.log(`response: ${JSON.stringify(response)}`)
-            return res.status(200).json({
-              downloadURL: imageUrl,
-            })
+
+          // Make file publicly readable (no IAM permissions needed)
+          const file = bucket.file(imageFileName)
+          await file.makePublic()
+
+          // Construct the public URL
+          const publicUrl = `https://storage.googleapis.com/${storageBucket}/${imageFileName}`
+
+          console.log('media uploaded successfully ' + publicUrl)
+          return res.status(200).json({
+            downloadURL: publicUrl,
           })
-          .catch(err => {
-            console.error(err)
-            return res.status(500).json({ error: 'something went wrong' })
-          })
+        } catch (err) {
+          console.error(err)
+          return res.status(500).json({ error: 'something went wrong' })
+        }
       })
 
       busboy.end(req.rawBody)

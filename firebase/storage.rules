@@ -1,0 +1,53 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Audio files - allow public read (for feed playback)
+    match /audio/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Songs folder - allow public read
+    match /songs/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Images - allow public read
+    match /images/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Videos - allow public read
+    match /videos/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Media uploads - allow public read (for videos/images uploaded via app)
+    match /media/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Profile pictures - allow public read
+    match /profilePictures/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Any file with numeric name (like 146288498744.mp3) - allow read
+    // These are legacy audio files uploaded without folder structure
+    match /{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Default: authenticated users can read/write their own files
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}

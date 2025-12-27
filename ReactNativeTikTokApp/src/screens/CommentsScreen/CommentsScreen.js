@@ -24,11 +24,15 @@ const CommentsScreen = props => {
   }`
 
   useEffect(() => {
+    console.log('[CommentsScreen] useEffect triggered, item.id:', item?.id)
     if (!item?.id) {
+      console.log('[CommentsScreen] No item.id, skipping subscription')
       return
     }
+    console.log('[CommentsScreen] Subscribing to comments for post:', item.id)
     const commentsUnsubscribe = subscribeToComments(item.id)
     return () => {
+      console.log('[CommentsScreen] Unsubscribing from comments')
       commentsUnsubscribe && commentsUnsubscribe()
     }
   }, [item?.id])
@@ -41,7 +45,25 @@ const CommentsScreen = props => {
 
   const onCommentSend = useCallback(
     async text => {
-      await addComment(text, item.id, currentUser.id)
+      console.log('[CommentsScreen] ========== onCommentSend called ==========')
+      console.log('[CommentsScreen] text:', text)
+      console.log('[CommentsScreen] item.id:', item?.id)
+      console.log('[CommentsScreen] currentUser:', currentUser?.id, currentUser?.username)
+
+      // Validate inputs before calling
+      if (!text || !item?.id || !currentUser?.id) {
+        console.log('[CommentsScreen] ❌ Missing required data:', {
+          hasText: !!text,
+          hasPostId: !!item?.id,
+          hasUserId: !!currentUser?.id
+        })
+        return
+      }
+
+      console.log('[CommentsScreen] ✅ All data valid, calling addComment...')
+      const result = await addComment(text, item.id, currentUser.id)
+      console.log('[CommentsScreen] 📥 Comment send result:', result)
+      return result
     },
     [addComment, currentUser?.id, item?.id],
   )
@@ -66,10 +88,14 @@ const CommentsScreen = props => {
         scrollViewRef={scrollViewRef}
         commentItems={comments}
         commentsLoading={commentsLoading}
-        onCommentSend={text => {
+        onCommentSend={async text => {
+          console.log('[CommentsScreen] 🔔 Comment send triggered with text:', text)
+          // Dismiss keyboard but DON'T dismiss bottom sheet - let user see result
           Keyboard.dismiss()
-          bottomSheetRef.current?.dismiss()
-          onCommentSend(text)
+          const result = await onCommentSend(text)
+          console.log('[CommentsScreen] 📤 Comment send completed, result:', result)
+          // Don't auto-dismiss - let user see the comment appear in list
+          return result
         }}
         insets={insets}
       />

@@ -1,15 +1,17 @@
-import React, { memo } from 'react'
+import React, { memo, useState } from 'react'
 import {
   View,
   Text,
   TouchableOpacity,
-  Image,
   ImageBackground,
   ScrollView,
   StyleSheet,
   Dimensions,
   useColorScheme,
 } from 'react-native'
+import { Image } from 'expo-image'
+import { Film, Music } from 'lucide-react-native'
+import { getPlayableImageUrl } from '../../../utils/audioUtils'
 // Note: Reanimated entering animations removed to fix refresh crash
 // import Animated, { FadeInRight } from 'react-native-reanimated'
 
@@ -30,6 +32,23 @@ const IMAGE_SIZE = 160
 const TodaysPicks = ({ picks = [], onPickPress }) => {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
+  const [failedImages, setFailedImages] = useState({})
+
+  // Handle image load error - track which images failed
+  const handleImageError = (itemId) => {
+    console.log('[TodaysPicks] Image failed to load for:', itemId)
+    setFailedImages(prev => ({ ...prev, [itemId]: true }))
+  }
+
+  // Get image URL with fallback for failed images
+  const getImageUrl = (item) => {
+    const resolvedUrl = getPlayableImageUrl(item)
+    if (failedImages[item.id]) {
+      // Use picsum fallback if the resolved URL failed
+      return `https://picsum.photos/seed/${item.id}/400/400`
+    }
+    return resolvedUrl
+  }
 
   if (!picks || picks.length === 0) {
     return null
@@ -45,35 +64,46 @@ const TodaysPicks = ({ picks = [], onPickPress }) => {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {picks.map((item, index) => (
-          <View key={item.id ?? index}>
+        {picks.map((item, index) => {
+          // Use centralized image URL resolution with error fallback
+          const imageUrl = getImageUrl(item)
+          return (
+          <View key={`${item.id}-${index}`}>
             <TouchableOpacity
               style={styles.card}
               onPress={() => onPickPress?.(item, index)}
               activeOpacity={0.9}
             >
-              {/* Blurred Background */}
+              {/* Blurred Background - using resolved URL */}
               <ImageBackground
-                source={{ uri: item.imageUrl || item.thumbnailUrl }}
+                source={{ uri: imageUrl }}
                 style={styles.backgroundImage}
                 blurRadius={15}
                 resizeMode="cover"
+                onError={() => handleImageError(item.id)}
               >
                 <View style={styles.overlay} />
               </ImageBackground>
 
               {/* Content */}
               <View style={styles.content}>
-                {/* Circular Image */}
+                {/* Circular Image - using expo-image with error handling */}
                 <View style={styles.imageContainer}>
-                  {item.imageUrl || item.thumbnailUrl ? (
-                    <Image
-                      source={{ uri: item.imageUrl || item.thumbnailUrl }}
-                      style={styles.circleImage}
-                    />
-                  ) : (
-                    <View style={[styles.circleImage, styles.placeholderImage]}>
-                      <Text style={styles.placeholderIcon}>🎵</Text>
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={styles.circleImage}
+                    contentFit="cover"
+                    transition={200}
+                    onError={() => handleImageError(item.id)}
+                  />
+                  {/* Music icon overlay - shows on gray background */}
+                  <View style={styles.musicIconOverlay}>
+                    <Music size={24} color="rgba(255,255,255,0.5)" />
+                  </View>
+                  {/* Video badge - show if song has a video */}
+                  {item.videoUrl && (
+                    <View style={styles.videoBadge}>
+                      <Film size={14} color="#fff" />
                     </View>
                   )}
                 </View>
@@ -88,7 +118,7 @@ const TodaysPicks = ({ picks = [], onPickPress }) => {
               </View>
             </TouchableOpacity>
           </View>
-        ))}
+        )})}
       </ScrollView>
     </View>
   )
@@ -136,6 +166,7 @@ const getStyles = (isDark) => StyleSheet.create({
   },
   imageContainer: {
     marginBottom: 16,
+    position: 'relative',
   },
   circleImage: {
     width: IMAGE_SIZE, // h-40 w-40 = 160px
@@ -143,12 +174,28 @@ const getStyles = (isDark) => StyleSheet.create({
     borderRadius: IMAGE_SIZE / 2, // rounded-full
     backgroundColor: isDark ? '#333333' : '#e0e0e0',
   },
-  placeholderImage: {
+  videoBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(56, 117, 232, 0.9)',
+    borderRadius: 12,
+    padding: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+  },
+  musicIconOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  placeholderIcon: {
-    fontSize: 60,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: IMAGE_SIZE / 2,
   },
   label: {
     fontSize: 18, // size="lg"

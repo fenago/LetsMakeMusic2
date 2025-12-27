@@ -1,27 +1,38 @@
 import { StyleSheet, Dimensions, Platform, StatusBar } from 'react-native'
 
+// Get screen dimensions for responsive sizing
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0
+
+// Feed item height - responsive calculation based on screen size
+// Calculate available height: Screen - safe area top (~59) - header (~50) - tabs (48) - tab bar (~49) - safe area bottom (~34)
+// This ensures each feed item fills exactly the available space with no overlap
+// On iPhone 14 Pro (852pt height): 852 - 59 - 50 - 48 - 49 - 34 = 612, which is ~72% of screen
+// This value is EXPORTED so Feed.js and MusicFeed can use the exact same height
+export const FEED_ITEM_HEIGHT = Math.round(SCREEN_HEIGHT * 0.72)
+
+// Responsive calculations based on feed item height
+const BOTTOM_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.08) // 8% from bottom
+const TOP_CONTROLS_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.12) // 12% from top
+const BOTTOM_CONTROLS_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.15) // 15% from bottom
+
 const styles = StyleSheet.create({
   videoContent: {
-    height:
-      Dimensions.get('window').height -
-      (Platform.OS === 'android' ? StatusBar.currentHeight : 0),
+    height: FEED_ITEM_HEIGHT,
     backgroundColor: '#010101',
   },
   videoImage: {
-    height: Dimensions.get('window').height,
+    height: FEED_ITEM_HEIGHT,
     backgroundColor: '#010101',
   },
   contentRight: {
     position: 'absolute',
     padding: 10,
     right: 5,
-    top: '40%',
-    // bottom: '20%',
-    height: 350,
+    top: TOP_CONTROLS_OFFSET,
+    bottom: BOTTOM_CONTROLS_OFFSET,
     zIndex: 99,
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     justifyContent: 'space-around',
   },
   contentRightUser: {
@@ -82,12 +93,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     padding: 10,
     left: 5,
-    bottom: Platform.select({
-      android: '15%',
-      default: '12%',
-    }),
+    bottom: BOTTOM_OFFSET,
     zIndex: 99,
-    width: '75%',
+    width: '70%',
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
@@ -121,6 +129,165 @@ const styles = StyleSheet.create({
     height: 20,
     width: 20,
     tintColor: '#fff',
+  },
+  // Song post styles - Full screen display with centered album art
+  songPostContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#1a1a2e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: BOTTOM_OFFSET + 40, // Extra space for bottom content
+  },
+  songAlbumArt: {
+    width: SCREEN_WIDTH * 0.55, // Slightly smaller for better fit
+    height: SCREEN_WIDTH * 0.55,
+    borderRadius: 16,
+    marginBottom: 20,
+  },
+  songOverlay: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  songPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    zIndex: 10,
+  },
+  songPlayIcon: {
+    width: 70,
+    height: 70,
+    tintColor: '#fff',
+    opacity: 0.9,
+  },
+  songTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  songArtist: {
+    fontSize: 14,
+    color: '#ccc',
+    textAlign: 'center',
+  },
+  // Song progress bar and timer - positioned at top left, below media badge
+  songProgressContainer: {
+    position: 'absolute',
+    top: 45, // Below the media type badge
+    left: 16,
+    right: 70, // Leave room for right side controls
+    zIndex: 50,
+  },
+  songProgressBarTouchable: {
+    paddingVertical: 10, // Larger touch target
+    marginVertical: -6,
+  },
+  songProgressBarBg: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  songProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 3,
+  },
+  songProgressHandle: {
+    position: 'absolute',
+    top: 4, // Center on the progress bar (touchable has padding)
+    marginLeft: -6, // Center the handle on the position
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  songProgressTime: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 6,
+  },
+  songTimeText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+  },
+  songTimeRemaining: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontWeight: '400',
+  },
+  // Media type indicator badge (video/audio)
+  mediaTypeBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    zIndex: 100,
+  },
+  mediaTypeBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  mediaTypeIcon: {
+    width: 14,
+    height: 14,
+  },
+  // Video progress bar and timer - positioned at bottom
+  videoProgressContainer: {
+    position: 'absolute',
+    bottom: 120, // Above the bottom actions
+    left: 16,
+    right: 80,
+    zIndex: 100,
+  },
+  videoProgressBarBg: {
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  videoProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 2,
+  },
+  videoProgressTime: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 4,
+  },
+  videoTimeText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+  },
+  videoTimeRemaining: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontWeight: '400',
   },
 })
 

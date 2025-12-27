@@ -4633,13 +4633,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-community/slider@npm:^5.0.1":
-  version: 5.1.1
-  resolution: "@react-native-community/slider@npm:5.1.1"
-  checksum: 10c0/d32bc014b4464fc4e3672da0e98ef6cc622a31e32d053b93f22ac1ddd39431454774442cbb088490626a52d16ba189c092fa0c59464de6779a6e6381f555ea04
-  languageName: node
-  linkType: hard
-
 "@react-native-firebase/app@npm:^23.3.1":
   version: 23.7.0
   resolution: "@react-native-firebase/app@npm:23.7.0"
@@ -4701,6 +4694,15 @@ __metadata:
     expo:
       optional: true
   checksum: 10c0/b14248624c36fbc4503c28564d04c3f744008193992762326473ed80dfdde892a1f074ecd321be8a43ffd332e8eb9ff97fb69bf222f7b4f7e2fa64516d6f45fe
+  languageName: node
+  linkType: hard
+
+"@react-native-firebase/storage@npm:^23.7.0":
+  version: 23.7.0
+  resolution: "@react-native-firebase/storage@npm:23.7.0"
+  peerDependencies:
+    "@react-native-firebase/app": 23.7.0
+  checksum: 10c0/043474707f4cf94541593731d3302b07338ac7f8da3c0c29562da3a0fd41a977424651cb4172874cbd1840331be902f01f90470cd5d41974e3eb0db952fd9c59
   languageName: node
   linkType: hard
 
@@ -7432,6 +7434,13 @@ __metadata:
   version: 1.0.0
   resolution: "base-64@npm:1.0.0"
   checksum: 10c0/d886cb3236cee0bed9f7075675748b59b32fad623ddb8ce1793c790306aa0f76a03238cad4b3fb398abda6527ce08a5588388533a4ccade0b97e82b9da660e28
+  languageName: node
+  linkType: hard
+
+"base-64@npm:^0.1.0":
+  version: 0.1.0
+  resolution: "base-64@npm:0.1.0"
+  checksum: 10c0/fe0dcf076e823f04db7ee9b02495be08a91c445fbc6db03cb9913be9680e2fcc0af8b74459041fe08ad16800b1f65a549501d8f08696a8a6d32880789b7de69d
   languageName: node
   linkType: hard
 
@@ -10989,12 +10998,12 @@ __metadata:
     "@react-native-community/datetimepicker": "npm:8.2.0"
     "@react-native-community/geolocation": "npm:3.4.0"
     "@react-native-community/netinfo": "npm:11.4.1"
-    "@react-native-community/slider": "npm:^5.0.1"
     "@react-native-firebase/app": "npm:^23.3.1"
     "@react-native-firebase/auth": "npm:^23.3.1"
     "@react-native-firebase/firestore": "npm:^23.3.1"
     "@react-native-firebase/functions": "npm:^23.3.1"
     "@react-native-firebase/messaging": "npm:^23.3.1"
+    "@react-native-firebase/storage": "npm:^23.7.0"
     "@react-native-google-signin/google-signin": "npm:^16.0.0"
     "@react-native-picker/picker": "npm:^2.11.2"
     "@react-native/babel-preset": "npm:0.81.0"
@@ -11062,6 +11071,7 @@ __metadata:
     react-native-dialog-input: "npm:^1.0.8"
     react-native-elements: "npm:3.4.3"
     react-native-fbsdk-next: "npm:13.0.0"
+    react-native-fs: "npm:^2.20.0"
     react-native-gesture-handler: "npm:^2.28.0"
     react-native-get-random-values: "npm:1.11.0"
     react-native-image-picker: "npm:^8.2.1"
@@ -14980,6 +14990,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-native-fs@npm:^2.20.0":
+  version: 2.20.0
+  resolution: "react-native-fs@npm:2.20.0"
+  dependencies:
+    base-64: "npm:^0.1.0"
+    utf8: "npm:^3.0.0"
+  peerDependencies:
+    react-native: "*"
+    react-native-windows: "*"
+  peerDependenciesMeta:
+    react-native-windows:
+      optional: true
+  checksum: 10c0/3722b5568610cd72f319c90f60ba8b019a005d015f27e49017ddd0ea314d1ea6991f79288c28549fdc2964dc81c0fa24f8a5f87a4a6283c97c6ea88d4caa6851
+  languageName: node
+  linkType: hard
+
 "react-native-gesture-handler@npm:^2.28.0":
   version: 2.29.1
   resolution: "react-native-gesture-handler@npm:2.29.1"
@@ -17473,6 +17499,13 @@ __metadata:
   peerDependencies:
     react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
   checksum: 10c0/35e1179f872a53227bdf8a827f7911da4c37c0f4091c29b76b1e32473d1670ebe7bcd880b808b7549ba9a5605c233350f800ffab963ee4a4ee346ee983b6019b
+  languageName: node
+  linkType: hard
+
+"utf8@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "utf8@npm:3.0.0"
+  checksum: 10c0/675d008bab65fc463ce718d5cae8fd4c063540f269e4f25afebce643098439d53e7164bb1f193e0c3852825c7e3e32fbd8641163d19a618dbb53f1f09acb0d5a
   languageName: node
   linkType: hard
 

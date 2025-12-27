@@ -85,6 +85,8 @@ function IMFormComponent(props) {
   }
 
   const renderSelectField = (selectField, index) => {
+    const currentValue = computeValue(selectField)
+    const isOn = currentValue === 'On'
     return (
       <TouchableOpacity
         key={index}
@@ -101,8 +103,27 @@ function IMFormComponent(props) {
           )
         }}
         style={[styles.settingsTypeContainer, styles.appSettingsTypeContainer]}>
-        <Text style={styles.text}>{selectField.displayName}</Text>
-        <Text style={styles.text}>{computeValue(selectField)}</Text>
+        <Text style={[styles.text, { flex: 1 }]}>{selectField.displayName}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View
+            style={{
+              backgroundColor: isOn ? '#34C759' : '#E5E5EA',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 14,
+              minWidth: 50,
+              alignItems: 'center',
+            }}>
+            <Text
+              style={{
+                color: isOn ? '#fff' : '#666',
+                fontSize: 14,
+                fontWeight: '600',
+              }}>
+              {currentValue}
+            </Text>
+          </View>
+        </View>
       </TouchableOpacity>
     )
   }

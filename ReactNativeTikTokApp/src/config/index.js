@@ -293,22 +293,26 @@ export const ConfigProvider = ({ children }) => {
           fields: [
             {
               displayName: localized('Allow Push Notifications'),
-              type: 'switch',
+              type: 'select',
               editable: true,
               key: 'push_notifications_enabled',
-              value: true,
+              value: 'On',
+              options: ['Off', 'On'],
+              displayOptions: ['Off', 'On'],
             },
-            {
-              ...(Platform.OS === 'ios'
-                ? {
+            ...(Platform.OS === 'ios'
+              ? [
+                  {
                     displayName: localized('Enable Face ID / Touch ID'),
-                    type: 'switch',
+                    type: 'select',
                     editable: true,
                     key: 'face_id_enabled',
-                    value: false,
-                  }
-                : {}),
-            },
+                    value: 'Off',
+                    options: ['Off', 'On'],
+                    displayOptions: ['Off', 'On'],
+                  },
+                ]
+              : []),
           ],
         },
         {
@@ -316,17 +320,44 @@ export const ConfigProvider = ({ children }) => {
           fields: [
             {
               displayName: localized('Autoplay Videos'),
-              type: 'switch',
+              type: 'select',
               editable: true,
               key: 'autoplay_video_enabled',
-              value: true,
+              value: 'On',
+              options: ['Off', 'On'],
+              displayOptions: ['Off', 'On'],
             },
             {
               displayName: localized('Always Mute Videos'),
-              type: 'switch',
+              type: 'select',
               editable: true,
               key: 'mute_video_enabled',
-              value: true,
+              value: 'On',
+              options: ['Off', 'On'],
+              displayOptions: ['Off', 'On'],
+            },
+            {
+              displayName: localized('Auto-advance Feed'),
+              type: 'select',
+              editable: true,
+              key: 'auto_advance_feed',
+              value: 'On',
+              options: ['Off', 'On'],
+              displayOptions: ['Off', 'On'],
+            },
+          ],
+        },
+        {
+          title: localized('Song Creation'),
+          fields: [
+            {
+              displayName: localized('Auto-share to Feed'),
+              type: 'select',
+              editable: true,
+              key: 'auto_share_to_feed',
+              value: 'Off',
+              options: ['Off', 'On'],
+              displayOptions: ['Off', 'On'],
             },
           ],
         },

@@ -12,6 +12,9 @@ export const useComments = () => {
   const [commentsLoading, setCommentsLoading] = useState(false)
   const pagination = useRef({ page: 0, size: batchSize, exhausted: false })
 
+  // Debug: Log comments state changes
+  console.log('[useComments] Current comments state:', comments?.length ?? 'null', 'loading:', commentsLoading)
+
   const loadMoreComments = async postID => {
     if (pagination.current.exhausted) {
       return
@@ -31,13 +34,20 @@ export const useComments = () => {
   }
 
   const subscribeToComments = postID => {
+    console.log('[useComments] subscribeToComments called with postID:', postID)
     setCommentsLoading(true)
     setComments(null)
     return subscribeToCommentsAPI(postID, newComments => {
+      console.log('[useComments] 🔥 Received callback with', newComments?.length ?? 0, 'comments')
+      if (newComments?.length > 0) {
+        console.log('[useComments] First comment:', JSON.stringify(newComments[0]).substring(0, 150))
+      }
       setCommentsLoading(false)
-      setComments(oldComments =>
-        deduplicatedComments(oldComments, newComments, false),
-      )
+      setComments(oldComments => {
+        const dedupedComments = deduplicatedComments(oldComments, newComments, false)
+        console.log('[useComments] After dedup:', dedupedComments?.length ?? 0, 'comments')
+        return dedupedComments
+      })
     })
   }
 

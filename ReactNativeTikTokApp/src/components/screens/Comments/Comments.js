@@ -8,6 +8,12 @@ import dynamicStyles from './styles'
 function Comments(props) {
   const { commentItems, onCommentSend, commentsLoading, insets } = props
 
+  // Debug: Log received data
+  console.log('[Comments] Received commentItems:', commentItems?.length ?? 'null', 'loading:', commentsLoading)
+  if (commentItems?.length > 0) {
+    console.log('[Comments] First comment:', JSON.stringify(commentItems[0]).substring(0, 200))
+  }
+
   const { theme, appearance } = useTheme()
   const styles = dynamicStyles(theme, appearance)
 

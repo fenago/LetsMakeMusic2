@@ -28,7 +28,7 @@ function CommentItem(props) {
           <Text style={styles.commentItemBodyTitle}>
             {author.username?.length > 0 ? author.username : author.firstName}
           </Text>
-          <Text style={styles.commentItemBodySubtitle}>{item.commentText}</Text>
+          <Text style={styles.commentItemBodySubtitle}>{item.text || item.commentText}</Text>
         </View>
       </View>
     </View>

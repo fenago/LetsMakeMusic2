@@ -52,6 +52,8 @@ const FeedScreen = props => {
     following: null,
     forYou: null,
   })
+  // NEW: Media type filter state (all/music/video)
+  const [mediaFilter, setMediaFilter] = useState('all')
 
   useEffect(() => {
     if (isFocused) {
@@ -83,26 +85,41 @@ const FeedScreen = props => {
   }, [currentUser?.id])
 
   useEffect(() => {
+    console.log('[HomeScreen] Raw posts from useHomeFeedPosts:', posts?.length || 0)
     if (posts?.length > 0) {
+      // Log first 3 posts for debugging
+      posts.slice(0, 3).forEach((p, i) => {
+        console.log(`[HomeScreen] Post ${i}:`, {
+          id: p.id,
+          postType: p.postType,
+          mediaType: p.postMedia?.[0]?.type,
+          description: p.description?.substring(0, 30),
+        })
+      })
       const filteredFeed = filterNonVideoFeed(posts)
+      console.log('[HomeScreen] Filtered posts (songs + videos):', filteredFeed.length)
       setFeed(prevFeed => ({
         ...prevFeed,
         following: filteredFeed,
       }))
     } else {
+      console.log('[HomeScreen] No posts received from useHomeFeedPosts')
       setFeed({ following: [] })
     }
   }, [posts])
 
   useEffect(() => {
+    console.log('[HomeScreen] Raw discoverPosts (For You):', discoverPosts?.length || 0)
     if (discoverPosts) {
       const filteredOutPosts = filterOutUserPost(discoverPosts)
       const feed = filterNonVideoFeed(filteredOutPosts)
+      console.log('[HomeScreen] Filtered For You posts:', feed.length)
       setFeed(prevFeed => ({
         ...prevFeed,
         forYou: feed,
       }))
     } else {
+      console.log('[HomeScreen] No discoverPosts received')
       setFeed({ forYou: [] })
     }
   }, [discoverPosts])
@@ -129,14 +146,59 @@ const FeedScreen = props => {
     })
   }
 
+  /**
+   * Filter feed posts to show video, audio, and song posts
+   * - Video posts: postMedia[0].type includes 'video'
+   * - Audio posts: postMedia[0].type includes 'audio'
+   * - Song posts: postType === 'song' (created by createSongPost cloud function)
+   */
   const filterNonVideoFeed = feedPosts => {
     return feedPosts.filter(feedPost => {
-      if (feedPost.postMedia && feedPost.postMedia.length > 0) {
-        return feedPost?.postMedia[0].type?.includes('video')
+      // Always include song posts (from auto-share and manual share)
+      if (feedPost.postType === 'song') {
+        return true
       }
-      return feedPost?.postMedia?.type?.includes('video')
+      // Include video and audio posts
+      if (feedPost.postMedia && feedPost.postMedia.length > 0) {
+        const mediaType = feedPost?.postMedia[0]?.type || ''
+        return mediaType.includes('video') || mediaType.includes('audio')
+      }
+      return false
     })
   }
+
+  /**
+   * NEW: Filter feed posts by media type (all/music/video)
+   * - all: Show everything (songs + videos + audio)
+   * - music: Only song posts and audio posts
+   * - video: Only video posts
+   */
+  const filterByMediaType = useCallback((feedPosts, filterType) => {
+    if (!feedPosts || filterType === 'all') {
+      return feedPosts
+    }
+
+    return feedPosts.filter(post => {
+      if (filterType === 'music') {
+        // Include song posts and audio posts
+        if (post.postType === 'song') return true
+        if (post.postMedia?.[0]?.type?.includes('audio')) return true
+        return false
+      }
+      if (filterType === 'video') {
+        // Only video posts
+        if (post.postMedia?.[0]?.type?.includes('video')) return true
+        return false
+      }
+      return true
+    })
+  }, [])
+
+  // NEW: Handle media filter change from MusicFeed tabs
+  const handleMediaFilterChange = useCallback((filterId) => {
+    console.log('[HomeScreen] Media filter changed to:', filterId)
+    setMediaFilter(filterId)
+  }, [])
 
   const onCommentPress = item => {
     setSelectedItem(item)
@@ -222,14 +284,20 @@ const FeedScreen = props => {
     setFeedType('following')
   }
 
+  // NEW: Apply media type filter to the feed
+  const filteredFeed = useMemo(() => {
+    const baseFeed = feed[feedType]
+    return filterByMediaType(baseFeed, mediaFilter)
+  }, [feed, feedType, mediaFilter, filterByMediaType])
+
   // Memoized video feed component to pass to HomeFeed
   const videoFeedComponent = useMemo(() => (
     <Feed
       loading={loading}
       refreshing={refreshing}
       pullToRefresh={onRefresh}
-      feed={feed[feedType]}
-      isCustomFeed={false}
+      feed={filteredFeed}
+      isCustomFeed={true}
       onCommentPress={onCommentPress}
       user={currentUser}
       onFeedUserItemPress={onFeedUserItemPress}
@@ -246,25 +314,28 @@ const FeedScreen = props => {
       onForYouFeedPress={onForYouFeedPress}
       isForYouFeed={feedType === 'forYou'}
       isFollowingDisabled={(feed.following ?? []).length < 1}
+      isCommentsOpen={isVisible}
     />
   ), [
-    loading, refreshing, onRefresh, feed, feedType, onCommentPress,
+    loading, refreshing, onRefresh, filteredFeed, feedType, onCommentPress,
     currentUser, onFeedUserItemPress, onReaction, isLoadingBottom,
     onSharePost, onDeletePost, onUserReport, navigation,
     onTextFieldUserPress, onTextFieldHashTagPress,
-    onFollowingFeedPress, onForYouFeedPress,
+    onFollowingFeedPress, onForYouFeedPress, feed.following, isVisible,
   ])
 
-  // Get user's first name for greeting
-  const userName = currentUser?.firstName || currentUser?.username || 'there'
+  // Get user's display name for greeting (prefer stage name)
+  const userName = currentUser?.stageName || currentUser?.firstName || currentUser?.username || 'there'
 
   return (
     <View style={styles.container}>
       <HomeFeed
         videoFeedComponent={videoFeedComponent}
         userName={userName}
+        currentUserId={currentUser?.id}
         refreshing={refreshing}
         onRefresh={onRefresh}
+        onFilterChange={handleMediaFilterChange}
         onArtistPress={(artist) => {
           navigation.push('Profile', { user: artist })
         }}

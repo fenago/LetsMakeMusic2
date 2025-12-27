@@ -35,6 +35,12 @@ function IMProfileSettings(props) {
           },
         ],
       })
+    } else if (routeName === 'Videos') {
+      // Direct navigation for Videos screen (not prefixed)
+      navigation.navigate('Videos')
+    } else if (routeName === 'DebugLogs') {
+      // Direct navigation for Debug Logs screen
+      navigation.navigate('DebugLogs')
     } else {
       navigation.navigate(lastScreenTitle + routeName, {
         form,
@@ -73,6 +79,11 @@ function IMProfileSettings(props) {
           screenTitle: localized('Edit Profile'),
         })}
         {renderSettingsType({
+          type: 'My Videos',
+          routeName: 'Videos',
+          screenTitle: localized('My Videos'),
+        })}
+        {renderSettingsType({
           type: 'Blocked Users',
           routeName: 'BlockedSettings',
           screenTitle: localized('Blocked Users'),
@@ -84,11 +95,26 @@ function IMProfileSettings(props) {
           screenTitle: localized('User Settings'),
         })}
         {renderSettingsType({
+          type: 'Founders & Dev Team',
+          routeName: 'Founders',
+          screenTitle: localized('Founders & Dev Team'),
+        })}
+        {renderSettingsType({
           type: 'Contact Us',
           routeName: 'ContactUs',
           form: config.contactUsFields,
           phone: config.contactUsPhoneNumber,
           screenTitle: localized('Contact Us'),
+        })}
+        {renderSettingsType({
+          type: 'About Us',
+          routeName: 'AboutUs',
+          screenTitle: localized('About Us'),
+        })}
+        {renderSettingsType({
+          type: 'Debug Logs',
+          routeName: 'DebugLogs',
+          screenTitle: localized('Debug Logs'),
         })}
         {renderSettingsType({ type: 'Logout' })}
       </View>

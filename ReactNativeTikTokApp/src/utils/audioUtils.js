@@ -16,12 +16,12 @@ const isFirebaseUrlAccessible = (url) => {
     console.warn('[audioUtils] ⚠️ Skipping inaccessible Firebase bucket: development-69cdc')
     return false
   }
-  // Check it's from our actual project bucket
-  if (url.includes('letsmakemusic-4e0fe.appspot.com')) {
+  // Check it's from our actual project bucket (firebasestorage.app is the new format)
+  if (url.includes('letsmakemusic-4e0fe.firebasestorage.app') || url.includes('letsmakemusic-4e0fe.appspot.com')) {
     return true
   }
-  // For any other Firebase URL, be cautious
-  if (url.includes('firebasestorage.googleapis.com')) {
+  // For any other Firebase URL, be cautious (but our bucket should match above)
+  if (url.includes('firebasestorage.googleapis.com') && !url.includes('letsmakemusic-4e0fe')) {
     console.warn('[audioUtils] ⚠️ Unknown Firebase bucket, skipping:', url.substring(0, 80))
     return false
   }
@@ -47,14 +47,11 @@ export const getPlayableUrl = (song) => {
     return null
   }
 
-  // ENHANCED DEBUG: Log all URL fields for every song
-  console.log('[audioUtils] getPlayableUrl checking song:', {
-    id: song.id,
-    title: song.title || song.name || song.label,
-    firebaseAudioUrl: song.firebaseAudioUrl ? `${song.firebaseAudioUrl.substring(0, 50)}...` : 'NULL',
-    audioUrl: song.audioUrl ? `${song.audioUrl.substring(0, 50)}...` : 'NULL',
-    streamUrl: song.streamUrl ? `${song.streamUrl.substring(0, 50)}...` : 'NULL',
-    sunoId: song.sunoId || 'NULL',
+  // Debug: Log URL resolution (minimal for production)
+  console.log('[audioUtils] getPlayableUrl:', {
+    id: song.id?.substring?.(0, 8) || song.id,
+    hasFirebase: !!song.firebaseAudioUrl,
+    hasAudio: !!song.audioUrl,
   })
 
   // Priority 1: Our Firebase Storage backup - permanent
@@ -161,8 +158,115 @@ export const prepareSongsForPlaylist = (songs) => {
   return prepared
 }
 
+/**
+ * Get playable image URL from a song object
+ *
+ * PRIORITY ORDER:
+ * 1. Firebase Storage URL (our permanent backup) - firebaseImageUrl (if stored)
+ * 2. Our app bucket images (letsmakemusic-4e0fe)
+ * 3. Original imageUrl from Suno API
+ * 4. thumbnailUrl fallback
+ * 5. Picsum placeholder with song ID for consistency
+ *
+ * @param {Object} song - Song object from Firebase or API
+ * @returns {string} Playable image URL (never null - always has fallback)
+ */
+export const getPlayableImageUrl = (song) => {
+  if (!song) {
+    console.warn('[audioUtils] getPlayableImageUrl: song is null/undefined')
+    return 'https://picsum.photos/400/400?music'
+  }
+
+  const songId = song.id || 'unknown'
+  const songTitle = song.title || song.label || song.name || 'unknown'
+
+  console.log('[audioUtils] getPlayableImageUrl checking:', {
+    id: songId?.substring?.(0, 8) || songId,
+    title: songTitle?.substring?.(0, 20),
+    hasFirebaseImageUrl: !!song.firebaseImageUrl,
+    hasImageUrl: !!song.imageUrl,
+    hasThumbnailUrl: !!song.thumbnailUrl,
+    hasSunoId: !!song.sunoId,
+    imageUrlPreview: song.imageUrl?.substring?.(0, 50),
+  })
+
+  // Priority 1: Firebase Storage backup for images (if we stored it)
+  if (song.firebaseImageUrl && isFirebaseUrlAccessible(song.firebaseImageUrl)) {
+    console.log('[audioUtils] ✓ IMAGE via firebaseImageUrl')
+    return song.firebaseImageUrl
+  }
+
+  // Priority 2: imageUrl from our app bucket (permanent)
+  if (song.imageUrl && song.imageUrl.includes('letsmakemusic-4e0fe')) {
+    console.log('[audioUtils] ✓ IMAGE via imageUrl (our bucket)')
+    return song.imageUrl
+  }
+
+  // Priority 3: Any imageUrl - try it even if potentially expired
+  // The image component will handle failed loads gracefully
+  if (song.imageUrl && song.imageUrl.startsWith('http')) {
+    console.log('[audioUtils] ✓ IMAGE via imageUrl (may be expired)')
+    return song.imageUrl
+  }
+
+  // Priority 4: thumbnailUrl fallback
+  if (song.thumbnailUrl && song.thumbnailUrl.startsWith('http')) {
+    console.log('[audioUtils] ✓ IMAGE via thumbnailUrl')
+    return song.thumbnailUrl
+  }
+
+  // Priority 5: Suno CDN image fallback (if we have sunoId)
+  // Note: These also expire, but worth trying
+  if (song.sunoId) {
+    const cdnImageUrl = `https://cdn1.suno.ai/image_${song.sunoId}.jpeg`
+    console.log('[audioUtils] ✓ IMAGE via Suno CDN fallback')
+    return cdnImageUrl
+  }
+
+  // Final fallback: Gradient placeholder with consistent seed
+  // Using a more reliable placeholder service
+  const fallbackUrl = `https://picsum.photos/seed/${songId}/400/400`
+  console.log('[audioUtils] ⚠️ IMAGE using fallback for:', songTitle)
+  return fallbackUrl
+}
+
+/**
+ * Check if a Suno URL is likely expired based on creation date
+ * Suno CDN URLs typically expire after ~2 weeks
+ */
+const isSunoUrlLikelyExpired = (url, createdAt) => {
+  if (!url) return true
+  if (!url.includes('suno.ai') && !url.includes('cdn1.suno.ai')) return false
+
+  // If no createdAt, assume it might be expired if it's a Suno URL
+  if (!createdAt) return true
+
+  // Convert Firestore timestamp to Date if needed
+  let createdDate
+  if (createdAt?.toDate) {
+    createdDate = createdAt.toDate()
+  } else if (createdAt?.seconds) {
+    createdDate = new Date(createdAt.seconds * 1000)
+  } else if (typeof createdAt === 'string') {
+    createdDate = new Date(createdAt)
+  } else {
+    return true // Can't determine, assume expired
+  }
+
+  // Check if older than 14 days
+  const twoWeeksAgo = new Date()
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+
+  const isExpired = createdDate < twoWeeksAgo
+  if (isExpired) {
+    console.log('[audioUtils] ⚠️ Suno URL likely expired (>14 days old)')
+  }
+  return isExpired
+}
+
 export default {
   getPlayableUrl,
+  getPlayableImageUrl,
   prepareSongForPlayer,
   prepareSongsForPlaylist,
 }

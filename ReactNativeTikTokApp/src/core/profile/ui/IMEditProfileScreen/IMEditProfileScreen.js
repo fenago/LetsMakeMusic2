@@ -13,6 +13,7 @@ import {
 } from '../../../onboarding/api/ErrorCode'
 import dynamicStyles from './styles'
 import { useCurrentUser } from '../../../onboarding'
+import { updateUserSongsAuthorInfo } from '../../../../services/songsService'
 
 export default function IMEditProfileScreen(props) {
   const { navigation, route } = props
@@ -98,6 +99,15 @@ export default function IMEditProfileScreen(props) {
 
     if (allFieldsAreValid) {
       await updateUser(currentUser.id, newUser)
+
+      // Sync profile changes to all user's existing songs (stageName, bio, profilePictureURL)
+      try {
+        await updateUserSongsAuthorInfo(currentUser.id, newUser)
+      } catch (syncError) {
+        console.warn('Failed to sync profile to songs:', syncError)
+        // Don't block profile save if song sync fails
+      }
+
       dispatch(setUserData({ user: newUser }))
       navigation.goBack()
       if (onComplete) {

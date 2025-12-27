@@ -1,14 +1,33 @@
 import React, { useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import { Video, Audio } from 'expo-av';
+import { getPlayableUrl } from '../../../utils/audioUtils';
 
-const VideoPlayer = ({ video, isMounted, paused, onTouchStart, song }) => {
+const VideoPlayer = ({ video, isMounted, paused, onTouchStart, song, onComplete, onPlaybackUpdate }) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
+  // CRITICAL DEBUG: Log all props received
+  console.log('[VideoPlayer] === PROPS RECEIVED ===', {
+    hasVideo: !!video,
+    videoUrl: video?.url?.substring(0, 50),
+    videoType: video?.type,
+    thumbnailURL: video?.thumbnailURL?.substring(0, 50),
+    isMounted,
+    paused,
+    hasSong: !!song,
+    songTitle: song?.title,
+  });
+
+  // Get resolved audio URL using centralized utility
+  // Handles: firebaseAudioUrl > audioUrl > streamUrl > Suno CDN fallback
+  const resolvedAudioUrl = song ? getPlayableUrl(song) : null;
+
   useEffect(() => {
     async function setupAudio() {
-      if (song?.streamURL) {
+      // Use resolved URL instead of song.streamURL (fixes case sensitivity issue)
+      if (resolvedAudioUrl) {
+        console.log('[VideoPlayer] Setting up audio with URL:', resolvedAudioUrl?.substring(0, 60));
         try {
           await Audio.setAudioModeAsync({
             playsInSilentModeIOS: true,
@@ -17,14 +36,17 @@ const VideoPlayer = ({ video, isMounted, paused, onTouchStart, song }) => {
           });
 
           const { sound } = await Audio.Sound.createAsync(
-            { uri: song.streamURL },
+            { uri: resolvedAudioUrl },
             { shouldPlay: false }
           );
-          
+
           audioRef.current = sound;
+          console.log('[VideoPlayer] Audio loaded successfully');
         } catch (error) {
-          console.log('Error loading audio:', error);
+          console.log('[VideoPlayer] Error loading audio:', error);
         }
+      } else {
+        console.log('[VideoPlayer] No audio URL available for song');
       }
     }
 
@@ -34,14 +56,22 @@ const VideoPlayer = ({ video, isMounted, paused, onTouchStart, song }) => {
         audioRef.current.unloadAsync();
       }
     };
-  }, [song?.streamURL]);
+  }, [resolvedAudioUrl]);
 
   useEffect(() => {
     playMediaIfShould();
   }, [paused, isMounted]);
 
   const playMediaIfShould = async () => {
+    console.log('[VideoPlayer] 🎮 playMediaIfShould called:', {
+      isMounted,
+      paused,
+      hasVideoRef: !!videoRef.current,
+      hasAudioRef: !!audioRef.current,
+    });
+
     if (!isMounted || paused) {
+      console.log('[VideoPlayer] ⏸️ Stopping playback (not mounted or paused)');
       videoRef.current?.setStatusAsync({ shouldPlay: false });
       if (audioRef.current) {
         await audioRef.current.setStatusAsync({ shouldPlay: false });
@@ -49,15 +79,14 @@ const VideoPlayer = ({ video, isMounted, paused, onTouchStart, song }) => {
       return;
     }
 
+    console.log('[VideoPlayer] ▶️ Starting playback');
     videoRef.current?.setStatusAsync({ shouldPlay: true });
     if (audioRef.current) {
       try {
-        await audioRef.current.setStatusAsync({ shouldPlay: true });
-        await audioRef.current.setStatusAsync({
-          isLooping: true,
-        })
+        await audioRef.current.setStatusAsync({ shouldPlay: true, isLooping: false });
+        console.log('[VideoPlayer] ✅ Audio playback started');
       } catch (error) {
-        console.log('Error playing audio:', error);
+        console.log('[VideoPlayer] ❌ Error playing audio:', error);
       }
     }
   };
@@ -80,8 +109,22 @@ const VideoPlayer = ({ video, isMounted, paused, onTouchStart, song }) => {
         source={isMounted ? { uri: video.url } : undefined}
         onTouchStart={onTouchStart}
         resizeMode={'cover'}
-        isLooping={true}
+        isLooping={false}
         onLoad={playMediaIfShould}
+        onPlaybackStatusUpdate={(status) => {
+          // Report position/duration for video timer UI
+          if (status.isLoaded && onPlaybackUpdate) {
+            onPlaybackUpdate({
+              position: status.positionMillis || 0,
+              duration: status.durationMillis || 0,
+              isPlaying: status.isPlaying,
+            })
+          }
+          if (status.didJustFinish && !status.isLooping) {
+            console.log('[VideoPlayer] ✅ Video finished, triggering auto-advance')
+            onComplete?.()
+          }
+        }}
         posterSource={{ uri: video.thumbnailURL }}
         posterStyle={{
           height: '100%',

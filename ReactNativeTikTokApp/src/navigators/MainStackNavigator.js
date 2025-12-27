@@ -23,6 +23,11 @@ import {
   NewPostScreen,
   SongPickerScreen,
   SystemStatusScreen,
+  FoundersScreen,
+  AboutUsScreen,
+  VideosScreen,
+  ShareSongToFeedScreen,
+  DebugLogsScreen,
   // Song Features screens
   CreateMusicVideoScreen,
   ExtendSongScreen,
@@ -110,6 +115,27 @@ const MainStackNavigator = () => {
         component={IMBlockedUsersScreen}
       />
       <MainStack.Screen name="ProfileContactUs" component={IMContactUsScreen} />
+      <MainStack.Screen name="ProfileFounders" component={FoundersScreen} />
+      <MainStack.Screen name="ProfileAboutUs" component={AboutUsScreen} />
+      <MainStack.Screen
+        name="Videos"
+        options={{
+          headerTitle: 'My Videos',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+        }}
+        component={VideosScreen}
+      />
+      <MainStack.Screen
+        name="ShareSongToFeed"
+        options={{
+          headerTitle: 'Share to Feed',
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={ShareSongToFeedScreen}
+      />
       <MainStack.Screen name="AllFriends" component={IMAllFriendsScreen} />
       <MainStack.Screen
         name="Friends"
@@ -166,6 +192,13 @@ const MainStackNavigator = () => {
           headerTintColor: '#fff',
         }}
         component={SystemStatusScreen}
+      />
+      <MainStack.Screen
+        name="DebugLogs"
+        options={{
+          headerShown: false,
+        }}
+        component={DebugLogsScreen}
       />
       {/* Song Feature Screens */}
       <MainStack.Screen

@@ -8,10 +8,17 @@ import {
   Share,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native'
 import { useColorScheme } from 'react-native'
+import { useNavigation } from '@react-navigation/native'
 import { deleteSong } from '../../../services/songsService'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
+import {
+  DEFAULT_SONG_RIGHTS,
+  RIGHTS_DESCRIPTIONS,
+  canUserPerformAction,
+} from '../../../constants/songRights'
 
 /**
  * SongActionMenu - Bottom sheet action menu for song interactions
@@ -36,7 +43,8 @@ const SongActionMenu = ({
 }) => {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { addToQueue, queue, isLiked: isLikedFn, toggleLike } = useMediaPlayer()
+  const navigation = useNavigation()
+  const { addToQueue, queue, isLiked: isLikedFn, toggleLike, stopIfPlaying } = useMediaPlayer()
 
   const [actionLoading, setActionLoading] = useState(null)
 
@@ -71,7 +79,7 @@ const SongActionMenu = ({
     addToQueue({
       id: song.id,
       title: song.title,
-      artist: song.artist || song.author?.stageName || 'Unknown Artist',
+      artist: song.author?.stageName || song.artist || 'Unknown Artist',
       audioUrl: song.audioUrl,
       thumbnailUrl: song.thumbnailUrl || song.coverUrl,
     })
@@ -83,7 +91,7 @@ const SongActionMenu = ({
 
     try {
       await Share.share({
-        message: `Check out "${song.title}" by ${song.artist || song.author?.stageName || 'Unknown Artist'} on LetsMakeMusic!`,
+        message: `Check out "${song.title}" by ${song.author?.stageName || song.artist || 'Unknown Artist'} on LetsMakeMusic!`,
         // TODO: Add deep link URL when available
         // url: `letsmakemusic://song/${song.id}`,
       })
@@ -108,6 +116,37 @@ const SongActionMenu = ({
     onClose?.()
   }, [song, onEditSong, onClose])
 
+  // Song feature navigation handlers (owner only)
+  const handleChangeCover = useCallback(() => {
+    onClose?.()
+    navigation.navigate('ChangeSongCover', { song })
+  }, [song, navigation, onClose])
+
+  const handleCreateVideo = useCallback(() => {
+    onClose?.()
+    navigation.navigate('AddMediaForVideo', { song })
+  }, [song, navigation, onClose])
+
+  const handleAIVideo = useCallback(() => {
+    onClose?.()
+    navigation.navigate('CreateMusicVideo', { song })
+  }, [song, navigation, onClose])
+
+  const handleMusicGeneration = useCallback(() => {
+    onClose?.()
+    navigation.navigate('MusicGeneration', { song })
+  }, [song, navigation, onClose])
+
+  const handleAudioProcessing = useCallback(() => {
+    onClose?.()
+    navigation.navigate('AudioProcessing', { song })
+  }, [song, navigation, onClose])
+
+  const handleShareToFeed = useCallback(() => {
+    onClose?.()
+    navigation.navigate('ShareSongToFeed', { song })
+  }, [song, navigation, onClose])
+
   const handleDelete = useCallback(() => {
     Alert.alert(
       'Delete Song',
@@ -122,6 +161,8 @@ const SongActionMenu = ({
             try {
               const result = await deleteSong(song.id, currentUserId)
               if (result.success) {
+                // Stop playback if this song is currently playing
+                await stopIfPlaying(song.id)
                 onClose?.()
               } else {
                 Alert.alert('Error', result.error || 'Failed to delete song')
@@ -136,7 +177,7 @@ const SongActionMenu = ({
         },
       ]
     )
-  }, [song, currentUserId, onClose])
+  }, [song, currentUserId, onClose, stopIfPlaying])
 
   if (!visible || !song) return null
 
@@ -170,6 +211,12 @@ const SongActionMenu = ({
       onPress: handleShare,
     },
     {
+      id: 'shareToFeed',
+      label: 'Share to Feed',
+      icon: '📣',
+      onPress: handleShareToFeed,
+    },
+    {
       id: 'artist',
       label: 'View Artist',
       icon: '👤',
@@ -181,6 +228,40 @@ const SongActionMenu = ({
   // Owner-only actions
   if (isOwner) {
     actions.push(
+      {
+        id: 'changeCover',
+        label: 'Change Cover',
+        icon: '🖼️',
+        onPress: handleChangeCover,
+      },
+      {
+        id: 'aiVideo',
+        label: 'AI Music Video',
+        icon: '🎥',
+        onPress: handleAIVideo,
+        // Only show if song has sunoId (Suno-generated song) AND audio is still available
+        show: !!song?.sunoId && song?.sunoAudioAvailable !== false,
+      },
+      {
+        id: 'createVideo',
+        label: 'Custom Video (Add Media)',
+        icon: '🎬',
+        onPress: handleCreateVideo,
+        // Only show if song has sunoId (Suno-generated song) AND audio is still available
+        show: !!song?.sunoId && song?.sunoAudioAvailable !== false,
+      },
+      {
+        id: 'musicGen',
+        label: 'Music Generation',
+        icon: '✨',
+        onPress: handleMusicGeneration,
+      },
+      {
+        id: 'audioProcessing',
+        label: 'Audio Processing',
+        icon: '🎛️',
+        onPress: handleAudioProcessing,
+      },
       {
         id: 'edit',
         label: 'Edit Song',
@@ -217,12 +298,13 @@ const SongActionMenu = ({
               {song.title}
             </Text>
             <Text style={styles.songArtist} numberOfLines={1}>
-              {song.artist || song.author?.stageName || 'Unknown Artist'}
+              {song.author?.stageName || song.artist || 'Unknown Artist'}
             </Text>
           </View>
 
           <View style={styles.divider} />
 
+          <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Action Buttons */}
           <View style={styles.actionsContainer}>
             {actions
@@ -262,6 +344,200 @@ const SongActionMenu = ({
 
           <View style={styles.divider} />
 
+          {/* Song Rights Section */}
+          <View style={styles.rightsSection}>
+            <Text style={styles.rightsSectionTitle}>Song Rights</Text>
+
+            {/* Monetization */}
+            <View style={styles.rightsCategory}>
+              <Text style={styles.rightsCategoryTitle}>💰 Monetization</Text>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Price</Text>
+                <Text style={styles.rightsValue}>
+                  {song.rights?.monetized
+                    ? `$${((song.rights?.price || 0) / 100).toFixed(2)}`
+                    : 'Free'}
+                </Text>
+              </View>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Tipping</Text>
+                <Text style={[
+                  styles.rightsValue,
+                  (song.rights?.allowTipping ?? DEFAULT_SONG_RIGHTS.allowTipping)
+                    ? styles.rightsEnabled
+                    : styles.rightsDisabled
+                ]}>
+                  {(song.rights?.allowTipping ?? DEFAULT_SONG_RIGHTS.allowTipping) ? 'Allowed' : 'Disabled'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Derivatives */}
+            <View style={styles.rightsCategory}>
+              <Text style={styles.rightsCategoryTitle}>🎵 Derivative Works</Text>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Extend</Text>
+                <Text style={[
+                  styles.rightsValue,
+                  (song.rights?.allowExtend ?? DEFAULT_SONG_RIGHTS.allowExtend)
+                    ? styles.rightsEnabled
+                    : styles.rightsDisabled
+                ]}>
+                  {(song.rights?.allowExtend ?? DEFAULT_SONG_RIGHTS.allowExtend) ? 'Allowed' : 'Disabled'}
+                </Text>
+              </View>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Stem Extraction</Text>
+                <View style={styles.rightsValueContainer}>
+                  <Text style={[
+                    styles.rightsValue,
+                    (song.rights?.allowStemExtraction ?? DEFAULT_SONG_RIGHTS.allowStemExtraction)
+                      ? styles.rightsEnabled
+                      : styles.rightsDisabled
+                  ]}>
+                    {(song.rights?.allowStemExtraction ?? DEFAULT_SONG_RIGHTS.allowStemExtraction) ? 'Allowed' : 'Disabled'}
+                  </Text>
+                  <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+                </View>
+              </View>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>WAV Export</Text>
+                <View style={styles.rightsValueContainer}>
+                  <Text style={[
+                    styles.rightsValue,
+                    (song.rights?.allowWavExport ?? DEFAULT_SONG_RIGHTS.allowWavExport)
+                      ? styles.rightsEnabled
+                      : styles.rightsDisabled
+                  ]}>
+                    {(song.rights?.allowWavExport ?? DEFAULT_SONG_RIGHTS.allowWavExport) ? 'Allowed' : 'Disabled'}
+                  </Text>
+                  <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+                </View>
+              </View>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Lyrics Use</Text>
+                <Text style={[
+                  styles.rightsValue,
+                  (song.rights?.allowLyricsUse ?? DEFAULT_SONG_RIGHTS.allowLyricsUse)
+                    ? styles.rightsEnabled
+                    : styles.rightsDisabled
+                ]}>
+                  {(song.rights?.allowLyricsUse ?? DEFAULT_SONG_RIGHTS.allowLyricsUse) ? 'Allowed' : 'Disabled'}
+                </Text>
+              </View>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Reinterpret (Cover)</Text>
+                <View style={styles.rightsValueContainer}>
+                  <Text style={[
+                    styles.rightsValue,
+                    (song.rights?.allowReinterpret ?? DEFAULT_SONG_RIGHTS.allowReinterpret)
+                      ? styles.rightsEnabled
+                      : styles.rightsDisabled
+                  ]}>
+                    {(song.rights?.allowReinterpret ?? DEFAULT_SONG_RIGHTS.allowReinterpret) ? 'Allowed' : 'Disabled'}
+                  </Text>
+                  <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+                </View>
+              </View>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Sampling</Text>
+                <View style={styles.rightsValueContainer}>
+                  <Text style={[
+                    styles.rightsValue,
+                    (song.rights?.allowSampling ?? DEFAULT_SONG_RIGHTS.allowSampling)
+                      ? styles.rightsEnabled
+                      : styles.rightsDisabled
+                  ]}>
+                    {(song.rights?.allowSampling ?? DEFAULT_SONG_RIGHTS.allowSampling) ? 'Allowed' : 'Disabled'}
+                  </Text>
+                  <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+                </View>
+              </View>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Create Persona</Text>
+                <View style={styles.rightsValueContainer}>
+                  <Text style={[
+                    styles.rightsValue,
+                    (song.rights?.allowPersonaCreation ?? DEFAULT_SONG_RIGHTS.allowPersonaCreation)
+                      ? styles.rightsEnabled
+                      : styles.rightsDisabled
+                  ]}>
+                    {(song.rights?.allowPersonaCreation ?? DEFAULT_SONG_RIGHTS.allowPersonaCreation) ? 'Allowed' : 'Disabled'}
+                  </Text>
+                  <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+                </View>
+              </View>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Video Creation</Text>
+                <Text style={[
+                  styles.rightsValue,
+                  (song.rights?.allowVideoCreation ?? DEFAULT_SONG_RIGHTS.allowVideoCreation)
+                    ? styles.rightsEnabled
+                    : styles.rightsDisabled
+                ]}>
+                  {(song.rights?.allowVideoCreation ?? DEFAULT_SONG_RIGHTS.allowVideoCreation) ? 'Allowed' : 'Disabled'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Attribution */}
+            <View style={styles.rightsCategory}>
+              <Text style={styles.rightsCategoryTitle}>📝 Attribution</Text>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Attribution Required</Text>
+                <Text style={[
+                  styles.rightsValue,
+                  (song.rights?.requireAttribution ?? DEFAULT_SONG_RIGHTS.requireAttribution)
+                    ? styles.rightsEnabled
+                    : styles.rightsDisabled
+                ]}>
+                  {(song.rights?.requireAttribution ?? DEFAULT_SONG_RIGHTS.requireAttribution) ? 'Yes' : 'No'}
+                </Text>
+              </View>
+              {song.rights?.attributionText ? (
+                <View style={styles.rightsRow}>
+                  <Text style={styles.rightsLabel}>Credit As</Text>
+                  <Text style={styles.rightsValue} numberOfLines={1}>
+                    {song.rights.attributionText}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Commercial */}
+            <View style={styles.rightsCategory}>
+              <Text style={styles.rightsCategoryTitle}>💼 Commercial Use</Text>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>Commercial Use</Text>
+                <View style={styles.rightsValueContainer}>
+                  <Text style={[
+                    styles.rightsValue,
+                    (song.rights?.allowCommercialUse ?? DEFAULT_SONG_RIGHTS.allowCommercialUse)
+                      ? styles.rightsEnabled
+                      : styles.rightsDisabled
+                  ]}>
+                    {(song.rights?.allowCommercialUse ?? DEFAULT_SONG_RIGHTS.allowCommercialUse) ? 'Allowed' : 'Disabled'}
+                  </Text>
+                  <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+                </View>
+              </View>
+              <View style={styles.rightsRow}>
+                <Text style={styles.rightsLabel}>License Fee</Text>
+                <View style={styles.rightsValueContainer}>
+                  <Text style={styles.rightsValue}>
+                    {song.rights?.commercialLicenseFee
+                      ? `$${((song.rights.commercialLicenseFee) / 100).toFixed(2)}`
+                      : 'Not set'}
+                  </Text>
+                  <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+          </ScrollView>
+
+          <View style={styles.divider} />
+
           {/* Cancel Button */}
           <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
             <Text style={styles.cancelText}>Cancel</Text>
@@ -284,6 +560,10 @@ const createStyles = (isDark) =>
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       paddingBottom: 34, // Safe area
+      maxHeight: '80%',
+    },
+    scrollContent: {
+      maxHeight: 400,
     },
     header: {
       paddingHorizontal: 20,
@@ -343,6 +623,63 @@ const createStyles = (isDark) =>
       fontSize: 16,
       fontWeight: '600',
       color: isDark ? '#0a84ff' : '#3b82f6',
+    },
+    // Song Rights Styles
+    rightsSection: {
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+    },
+    rightsSectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: isDark ? '#ffffff' : '#000000',
+      marginBottom: 16,
+    },
+    rightsCategory: {
+      marginBottom: 16,
+    },
+    rightsCategoryTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? '#a1a1aa' : '#71717a',
+      marginBottom: 8,
+    },
+    rightsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 6,
+    },
+    rightsLabel: {
+      fontSize: 14,
+      color: isDark ? '#d4d4d8' : '#52525b',
+      flex: 1,
+    },
+    rightsValue: {
+      fontSize: 14,
+      color: isDark ? '#ffffff' : '#000000',
+      textAlign: 'right',
+    },
+    rightsValueContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    rightsEnabled: {
+      color: '#22c55e',
+    },
+    rightsDisabled: {
+      color: isDark ? '#6b7280' : '#9ca3af',
+    },
+    comingSoonBadge: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: '#f59e0b',
+      backgroundColor: isDark ? '#422006' : '#fef3c7',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      overflow: 'hidden',
     },
   })
 

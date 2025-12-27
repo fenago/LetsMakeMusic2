@@ -16,28 +16,27 @@
                         <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Coded with ❤️ by Instamobile" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumFontSize="9" translatesAutoresizingMaskIntoConstraints="NO" id="MN2-I3-ftu">
-                                <rect key="frame" x="0.0" y="626" width="375" height="21"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
-                                <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                <nil key="highlightedColor"/>
-                            </label>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="logo-icon" translatesAutoresizingMaskIntoConstraints="NO" id="3zh-m5-HQw">
-                                <rect key="frame" x="112.5" y="183.5" width="150" height="150"/>
+                                <rect key="frame" x="87.5" y="233.5" width="200" height="200"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" constant="150" id="H0G-yV-AIe"/>
-                                    <constraint firstAttribute="width" constant="150" id="NZE-5k-6kF"/>
+                                    <constraint firstAttribute="height" constant="200" id="H0G-yV-AIe"/>
+                                    <constraint firstAttribute="width" constant="200" id="NZE-5k-6kF"/>
                                 </constraints>
                             </imageView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Coded with ❤️ by LetsMake.Music" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Lmk-Qz-9Fp">
+                                <rect key="frame" x="87.5" y="600" width="200" height="20"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                                <color key="textColor" red="0.5" green="0.5" blue="0.5" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="Bcu-3y-fUS"/>
-                        <color key="backgroundColor" red="0.396078431372549" green="0.27450980392156865" blue="0.84313725490196079" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="3zh-m5-HQw" firstAttribute="centerX" secondItem="Bcu-3y-fUS" secondAttribute="centerX" id="M6s-pj-ub3"/>
-                            <constraint firstItem="Bcu-3y-fUS" firstAttribute="bottom" secondItem="MN2-I3-ftu" secondAttribute="bottom" constant="20" id="OZV-Vh-mqD"/>
-                            <constraint firstItem="MN2-I3-ftu" firstAttribute="centerX" secondItem="Bcu-3y-fUS" secondAttribute="centerX" id="akx-eg-2ui"/>
-                            <constraint firstItem="MN2-I3-ftu" firstAttribute="leading" secondItem="Bcu-3y-fUS" secondAttribute="leading" id="i1E-0Y-4RG"/>
-                            <constraint firstItem="3zh-m5-HQw" firstAttribute="centerY" secondItem="Bcu-3y-fUS" secondAttribute="centerY" constant="-75" id="is2-IF-a1H"/>
+                            <constraint firstItem="3zh-m5-HQw" firstAttribute="centerY" secondItem="Bcu-3y-fUS" secondAttribute="centerY" id="is2-IF-a1H"/>
+                            <constraint firstItem="Lmk-Qz-9Fp" firstAttribute="centerX" secondItem="Bcu-3y-fUS" secondAttribute="centerX" id="Lbl-cX-001"/>
+                            <constraint firstItem="Bcu-3y-fUS" firstAttribute="bottom" secondItem="Lmk-Qz-9Fp" secondAttribute="bottom" constant="30" id="Lbl-bT-002"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -47,6 +46,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="logo-icon" width="50" height="50"/>
+        <image name="logo-icon" width="170" height="170"/>
     </resources>
 </document>

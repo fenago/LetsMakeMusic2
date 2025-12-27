@@ -7,7 +7,7 @@ import {
   StyleSheet,
   useColorScheme,
 } from 'react-native'
-import { Heart, MoreHorizontal } from 'lucide-react-native'
+import { Heart, MoreHorizontal, Film } from 'lucide-react-native'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 
 /**
@@ -78,6 +78,12 @@ const SongDetailCard = ({
               <Text style={styles.placeholderIcon}>🎵</Text>
             </View>
           )}
+          {/* Video badge - show if song has a video */}
+          {song.videoUrl && (
+            <View style={styles.videoBadge}>
+              <Film size={10} color="#fff" />
+            </View>
+          )}
         </View>
 
         {/* Info */}
@@ -132,6 +138,7 @@ const getStyles = (isDark) => StyleSheet.create({
     gap: 16, // gap-x-4
   },
   imageContainer: {
+    position: 'relative',
     // No extra margin - gap handles spacing
   },
   image: {
@@ -139,6 +146,14 @@ const getStyles = (isDark) => StyleSheet.create({
     height: 60, // h-[60px]
     borderRadius: 8, // rounded-lg
     backgroundColor: isDark ? '#333333' : '#e0e0e0',
+  },
+  videoBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: 'rgba(56, 117, 232, 0.9)',
+    borderRadius: 3,
+    padding: 3,
   },
   placeholderImage: {
     justifyContent: 'center',

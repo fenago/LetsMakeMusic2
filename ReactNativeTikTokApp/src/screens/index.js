@@ -11,6 +11,11 @@ export { default as NewPostScreen } from './NewPostScreen/NewPostScreen'
 export { default as SongPickerScreen } from './SongPickerScreen/SongPickerScreen'
 export { default as LibraryScreen } from './LibraryScreen/LibraryScreen'
 export { default as SystemStatusScreen } from './SystemStatusScreen/SystemStatusScreen'
+export { default as FoundersScreen } from './FoundersScreen/FoundersScreen'
+export { default as AboutUsScreen } from './AboutUsScreen/AboutUsScreen'
+export { default as VideosScreen } from './VideosScreen/VideosScreen'
+export { default as ShareSongToFeedScreen } from './ShareSongToFeedScreen/ShareSongToFeedScreen'
+export { default as DebugLogsScreen } from './DebugLogsScreen/DebugLogsScreen'
 
 // Song Features screens (FullPlayer expandable sections + Create menu)
 export {

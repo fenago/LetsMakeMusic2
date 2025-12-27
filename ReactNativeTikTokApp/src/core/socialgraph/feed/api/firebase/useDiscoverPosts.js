@@ -21,9 +21,9 @@ export const useDiscoverPosts = () => {
 
   useEffect(() => {
     if (posts?.length && locallyDeletedPosts?.length) {
-      const hydrateDeletedPosts = posts.filter(post => {
-        !locallyDeletedPosts.includes(post.id)
-      })
+      const hydrateDeletedPosts = posts.filter(
+        post => !locallyDeletedPosts.includes(post.id)
+      )
       setPosts(hydrateDeletedPosts)
     }
   }, [JSON.stringify(locallyDeletedPosts)])

@@ -106,7 +106,7 @@ const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
                 {currentMedia.title || currentMedia.label || currentMedia.name || 'Unknown Track'}
               </Text>
               <Text style={styles.artist} numberOfLines={1}>
-                {currentMedia.artist || currentMedia.subLabel || currentMedia.description || currentMedia.author?.firstName || 'Unknown Artist'}
+                {currentMedia.author?.stageName || currentMedia.artist || currentMedia.subLabel || currentMedia.author?.firstName || 'Unknown Artist'}
               </Text>
             </View>
           </TouchableOpacity>

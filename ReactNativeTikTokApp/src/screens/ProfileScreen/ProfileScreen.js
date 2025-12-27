@@ -91,6 +91,22 @@ const ProfileScreen = props => {
   ])
 
   const onMessage = () => {
+    console.log('[ProfileScreen] onMessage called')
+    console.log('[ProfileScreen] currentUser:', currentUser?.id)
+    console.log('[ProfileScreen] otherUser:', otherUser?.id, otherUser?.firstName)
+
+    if (!currentUser?.id) {
+      console.error('[ProfileScreen] Cannot send message: currentUser is not available')
+      alert('Please log in to send messages.')
+      return
+    }
+
+    if (!otherUser?.id) {
+      console.error('[ProfileScreen] Cannot send message: otherUser is not available')
+      alert('Cannot send message to this user. Please try again.')
+      return
+    }
+
     const viewer = currentUser
     const viewerID = viewer.id || viewer.userID
     const friendID = otherUser.id || otherUser.userID
@@ -98,6 +114,7 @@ const ProfileScreen = props => {
       id: viewerID < friendID ? viewerID + friendID : friendID + viewerID,
       participants: [otherUser],
     }
+    console.log('[ProfileScreen] Navigating to PersonalChat with channel:', channel.id)
     navigation.navigate('PersonalChat', { channel })
   }
 

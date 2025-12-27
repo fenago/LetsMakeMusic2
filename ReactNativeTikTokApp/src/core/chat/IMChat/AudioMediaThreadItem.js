@@ -9,10 +9,50 @@ import
 } from 'react-native'
 import { useTheme } from '../../dopebase'
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid, } from 'expo-av'
-import Slider from '@react-native-community/slider'
 import { loadCachedItem } from '../../helpers/cacheManager'
 import dynamicStyles from './styles'
 import { getDocFromServer } from '@react-native-firebase/firestore'
+
+// Custom Slider component to replace @react-native-community/slider
+const CustomAudioSlider = ({ value, onValueChange, onSlidingComplete, minimumTrackTintColor, thumbTintColor, disabled, style }) => {
+  const trackRef = useRef(null)
+  const [trackWidth, setTrackWidth] = useState(0)
+
+  const handlePress = (event) => {
+    if (disabled) return
+    const touchX = event.nativeEvent.locationX
+    if (trackWidth <= 0) return
+    const percentage = Math.max(0, Math.min(1, touchX / trackWidth))
+    onValueChange?.(percentage)
+    onSlidingComplete?.(percentage)
+  }
+
+  const percentage = Math.max(0, Math.min(1, value || 0)) * 100
+
+  return (
+    <TouchableOpacity
+      ref={trackRef}
+      onPress={handlePress}
+      onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+      activeOpacity={0.8}
+      disabled={disabled}
+      style={[{ height: 30, justifyContent: 'center' }, style]}
+    >
+      <View style={{ height: 4, backgroundColor: '#444', borderRadius: 2, overflow: 'hidden' }}>
+        <View style={{ height: '100%', width: `${percentage}%`, backgroundColor: minimumTrackTintColor || '#3875e8', borderRadius: 2 }} />
+      </View>
+      <View style={{
+        position: 'absolute',
+        left: `${percentage}%`,
+        marginLeft: -6,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: thumbTintColor || '#3875e8',
+      }} />
+    </TouchableOpacity>
+  )
+}
 
 const assets = {
   play: require('../assets/play.png'),
@@ -265,17 +305,14 @@ export default AudioMediaThreadItem = memo(props =>
           </View>
         </TouchableOpacity>
         <View style={styles.audioMeterContainer}>
-          <Slider
+          <CustomAudioSlider
               style={styles.audioMeter}
-              thumbStyle={styles.audioMeterThumb}
               value={getSeekSliderPosition(soundPosition, soundDuration)}
-              step={getSeekSliderPosition(soundPosition, soundDuration)}
               onValueChange={onSeekSliderValueChange}
               onSlidingComplete={value =>
                   onSeekSliderSlidingComplete(value, soundDuration)
               }
               minimumTrackTintColor={styles.minimumAudioTrackTintColor.color}
-              //   maximumTrackTintColor={styles.maximumAudioTrackTintColor.color}
               thumbTintColor={styles.audioThumbTintColor.color}
               disabled={isLoading}
           />

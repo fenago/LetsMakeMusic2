@@ -67,7 +67,7 @@ export default function PlaceholderScreen({
               {song.title || song.name || 'Unknown Song'}
             </Text>
             <Text style={styles.songArtist} numberOfLines={1}>
-              {song.artist || song.author?.stageName || 'Unknown Artist'}
+              {song.author?.stageName || song.artist || 'Unknown Artist'}
             </Text>
           </View>
         )}

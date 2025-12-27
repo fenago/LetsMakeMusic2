@@ -10,20 +10,15 @@ import {
   ActivityIndicator,
   FlatList,
   Alert,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  Switch,
 } from 'react-native'
-import ffirestore from '@react-native-firebase/firestore'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeInDown } from 'react-native-reanimated'
-import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film } from 'lucide-react-native'
 import { useTheme, useTranslations } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserSongs, deleteSong } from '../../services/songsService'
 import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
+import EditSongModal from '../../components/ui/EditSongModal'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const HORIZONTAL_ITEM_WIDTH = 160 // Width for horizontal scroll items
@@ -49,7 +44,7 @@ const LibraryScreen = ({ navigation }) => {
   const { localized } = useTranslations()
   const insets = useSafeAreaInsets()
   const currentUser = useCurrentUser()
-  const { playSong, isLiked: isLikedFn, toggleLike } = useMediaPlayer()
+  const { playSong, isLiked: isLikedFn, toggleLike, addToQueue } = useMediaPlayer()
 
   const [activeTab, setActiveTab] = useState('all')
   const [sortOption, setSortOption] = useState('recent')
@@ -87,10 +82,6 @@ const LibraryScreen = ({ navigation }) => {
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editingSong, setEditingSong] = useState(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editStyle, setEditStyle] = useState('')
-  const [editIsPublic, setEditIsPublic] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
 
   // Like loading state (local) - shared like state comes from context
   const [likingInProgress, setLikingInProgress] = useState({})
@@ -142,7 +133,8 @@ const LibraryScreen = ({ navigation }) => {
       case 'playlists':
         return [] // Playlists feature coming soon
       case 'videos':
-        return [] // Filter by videos when available
+        // Filter songs that have a video URL
+        return songs.filter(song => song.videoUrl)
       case 'all':
       default:
         return songs
@@ -224,10 +216,29 @@ const LibraryScreen = ({ navigation }) => {
 
     // Add play option if song is playable
     if (isSongPlayable(song)) {
-      options.unshift({
-        text: 'Play',
-        onPress: () => handleSongPress(song),
-      })
+      const audioUrl = getPlayableUrl(song)
+      options.unshift(
+        {
+          text: 'Play',
+          onPress: () => handleSongPress(song),
+        },
+        {
+          text: 'Add to Queue',
+          onPress: () => {
+            addToQueue({
+              id: song.id,
+              title: song.title || 'Untitled',
+              artist: currentUser?.username || 'You',
+              audioUrl: audioUrl,
+              imageUrl: song.imageUrl,
+              duration: song.duration,
+              rawLyrics: song.rawLyrics,
+              timestampedLyrics: song.timestampedLyrics,
+            })
+            Alert.alert('Added to Queue', `"${song.title || 'Untitled'}" has been added to your queue.`)
+          },
+        }
+      )
     }
 
     Alert.alert(
@@ -415,65 +426,17 @@ const LibraryScreen = ({ navigation }) => {
     })
   }
 
-  // Handle edit song - open modal with all metadata
+  // Handle edit song - open modal
   const handleEditSong = (song) => {
     setEditingSong(song)
-    setEditTitle(song.title || '')
-    setEditStyle(song.style || '')
-    setEditIsPublic(song.isPublic !== false) // Default to true if not set
     setEditModalVisible(true)
   }
 
-  // Save edited song
-  const handleSaveEdit = async () => {
-    if (!editingSong) return
-
-    setIsSaving(true)
-    try {
-      const { songsRef } = require('../../services/songsService')
-      const updates = {}
-
-      if (editTitle.trim() !== editingSong.title) {
-        updates.title = editTitle.trim()
-      }
-      if (editStyle.trim() !== editingSong.style) {
-        updates.style = editStyle.trim()
-      }
-      // Check if isPublic changed (treat undefined/null as true by default)
-      const currentIsPublic = editingSong.isPublic !== false
-      if (editIsPublic !== currentIsPublic) {
-        updates.isPublic = editIsPublic
-      }
-
-      if (Object.keys(updates).length > 0) {
-        updates.updatedAt = ffirestore.FieldValue.serverTimestamp()
-        await songsRef.doc(editingSong.id).update(updates)
-        console.log('Song updated:', editingSong.id, updates)
-      }
-
-      setEditModalVisible(false)
-      setEditingSong(null)
-    } catch (error) {
-      console.error('Error updating song:', error)
-      Alert.alert('Error', 'Failed to update song.')
-    } finally {
-      setIsSaving(false)
-    }
+  // Handle close edit modal
+  const handleCloseEditModal = () => {
+    setEditModalVisible(false)
+    setEditingSong(null)
   }
-
-  // Render metadata row
-  const MetadataRow = ({ label, value, copyable = false }) => (
-    <View style={styles.metadataRow}>
-      <Text style={[styles.metadataLabel, { color: colorSet.secondaryText }]}>{label}</Text>
-      <Text
-        style={[styles.metadataValue, { color: colorSet.primaryText }]}
-        numberOfLines={1}
-        ellipsizeMode="middle"
-      >
-        {value || 'N/A'}
-      </Text>
-    </View>
-  )
 
   const renderSongItem = ({ item: song, index }) => {
     const isPlayable = isSongPlayable(song)
@@ -513,6 +476,12 @@ const LibraryScreen = ({ navigation }) => {
                 <View style={styles.unavailableBadge}>
                   <Text style={styles.unavailableText}>Unavailable</Text>
                 </View>
+              </View>
+            )}
+            {/* Video badge - show if song has a video */}
+            {song.videoUrl && (
+              <View style={styles.videoBadge}>
+                <Film size={12} color="#fff" />
               </View>
             )}
           </View>
@@ -694,6 +663,12 @@ const LibraryScreen = ({ navigation }) => {
               <Music size={20} color={colorSet.grey9} />
             </View>
           )}
+          {/* Video badge for list view */}
+          {song.videoUrl && (
+            <View style={styles.listVideoBadge}>
+              <Film size={10} color="#fff" />
+            </View>
+          )}
         </View>
         <View style={styles.listItemInfo}>
           <Text
@@ -824,189 +799,13 @@ const LibraryScreen = ({ navigation }) => {
         <Text style={styles.fabText}>New Playlist</Text>
       </TouchableOpacity>
 
-      {/* Edit Song Modal */}
-      <Modal
+      {/* Edit Song Modal - Shared Component */}
+      <EditSongModal
         visible={editModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={[styles.modalContainer, { backgroundColor: colorSet.primaryBackground }]}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          {/* Modal Header */}
-          <View style={[styles.modalHeader, { borderBottomColor: colorSet.grey3 }]}>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setEditModalVisible(false)}
-            >
-              <Text style={[styles.modalCloseText, { color: colorSet.secondaryText }]}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={[styles.modalTitle, { color: colorSet.primaryText }]}>Edit Song</Text>
-            <TouchableOpacity
-              style={styles.modalSaveButton}
-              onPress={handleSaveEdit}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator size="small" color={colorSet.primaryForeground} />
-              ) : (
-                <Text style={[styles.modalSaveText, { color: colorSet.primaryForeground }]}>Save</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.modalContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {editingSong && (
-              <>
-                {/* Song Cover Image */}
-                <View style={styles.editImageContainer}>
-                  {editingSong.imageUrl ? (
-                    <Image
-                      source={{ uri: editingSong.imageUrl }}
-                      style={styles.editSongImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[styles.editSongImagePlaceholder, { backgroundColor: colorSet.grey3 }]}>
-                      <Image
-                        source={theme.icons.musicalNotes}
-                        style={[styles.editPlaceholderIcon, { tintColor: colorSet.grey9 }]}
-                      />
-                    </View>
-                  )}
-                </View>
-
-                {/* Editable Fields */}
-                <View style={styles.editSection}>
-                  <Text style={[styles.editSectionTitle, { color: colorSet.primaryText }]}>Editable</Text>
-
-                  <View style={styles.editField}>
-                    <Text style={[styles.editFieldLabel, { color: colorSet.secondaryText }]}>Title</Text>
-                    <TextInput
-                      style={[styles.editInput, {
-                        color: colorSet.primaryText,
-                        backgroundColor: colorSet.grey3,
-                        borderColor: colorSet.grey6,
-                      }]}
-                      value={editTitle}
-                      onChangeText={setEditTitle}
-                      placeholder="Song title"
-                      placeholderTextColor={colorSet.secondaryText}
-                    />
-                  </View>
-
-                  <View style={styles.editField}>
-                    <Text style={[styles.editFieldLabel, { color: colorSet.secondaryText }]}>Style / Genre</Text>
-                    <TextInput
-                      style={[styles.editInput, {
-                        color: colorSet.primaryText,
-                        backgroundColor: colorSet.grey3,
-                        borderColor: colorSet.grey6,
-                      }]}
-                      value={editStyle}
-                      onChangeText={setEditStyle}
-                      placeholder="e.g., Pop, Rock, Jazz"
-                      placeholderTextColor={colorSet.secondaryText}
-                    />
-                  </View>
-                </View>
-
-                {/* Read-Only Metadata */}
-                <View style={styles.editSection}>
-                  <Text style={[styles.editSectionTitle, { color: colorSet.primaryText }]}>Song Info</Text>
-                  <MetadataRow label="Duration" value={formatDuration(editingSong.duration)} />
-                  <MetadataRow label="Instrumental" value={editingSong.instrumental ? 'Yes' : 'No'} />
-                  <MetadataRow label="AI Model" value={editingSong.model || editingSong.sunoModelName || 'Unknown'} />
-                  <MetadataRow label="Play Count" value={String(editingSong.playCount || 0)} />
-                  <MetadataRow label="Likes" value={String(editingSong.likeCount || 0)} />
-                </View>
-
-                <View style={styles.editSection}>
-                  <Text style={[styles.editSectionTitle, { color: colorSet.primaryText }]}>Dates</Text>
-                  <MetadataRow label="Created" value={formatDate(editingSong.createdAt)} />
-                  <MetadataRow label="Updated" value={formatDate(editingSong.updatedAt)} />
-                  {editingSong.sunoCreatedAt && (
-                    <MetadataRow label="Suno Created" value={editingSong.sunoCreatedAt} />
-                  )}
-                </View>
-
-                <View style={styles.editSection}>
-                  <Text style={[styles.editSectionTitle, { color: colorSet.primaryText }]}>Technical IDs</Text>
-                  <MetadataRow label="Firebase ID" value={editingSong.id} />
-                  <MetadataRow label="Suno ID" value={editingSong.sunoId} />
-                  <MetadataRow label="User ID" value={editingSong.userId} />
-                </View>
-
-                <View style={styles.editSection}>
-                  <Text style={[styles.editSectionTitle, { color: colorSet.primaryText }]}>Audio URLs</Text>
-                  <MetadataRow label="Suno CDN" value={editingSong.sunoId ? `cdn1.suno.ai/${editingSong.sunoId}.mp3` : 'N/A'} />
-                  <MetadataRow label="Firebase Backup" value={editingSong.firebaseAudioUrl ? 'Available' : 'Not backed up'} />
-                  <MetadataRow label="Stream URL" value={editingSong.streamUrl} />
-                  <MetadataRow label="Audio URL" value={editingSong.audioUrl} />
-                </View>
-
-                <View style={styles.editSection}>
-                  <Text style={[styles.editSectionTitle, { color: colorSet.primaryText }]}>Lyrics</Text>
-                  <MetadataRow label="Has Raw Lyrics" value={editingSong.rawLyrics ? 'Yes' : 'No'} />
-                  <MetadataRow label="Timestamped Lines" value={String(editingSong.timestampedLyrics?.length || 0)} />
-                  {editingSong.rawLyrics && (
-                    <View style={[styles.lyricsPreview, { backgroundColor: colorSet.grey3 }]}>
-                      <Text
-                        style={[styles.lyricsPreviewText, { color: colorSet.secondaryText }]}
-                        numberOfLines={6}
-                      >
-                        {editingSong.rawLyrics}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.editSection}>
-                  <Text style={[styles.editSectionTitle, { color: colorSet.primaryText }]}>Visibility</Text>
-                  <View style={styles.toggleRow}>
-                    <View style={styles.toggleLabelContainer}>
-                      <Text style={[styles.toggleLabel, { color: colorSet.primaryText }]}>Public</Text>
-                      <Text style={[styles.toggleDescription, { color: colorSet.secondaryText }]}>
-                        {editIsPublic ? 'Everyone can see this song' : 'Only you can see this song'}
-                      </Text>
-                    </View>
-                    <Switch
-                      value={editIsPublic}
-                      onValueChange={setEditIsPublic}
-                      trackColor={{ false: colorSet.grey3, true: colorSet.primaryForeground }}
-                      thumbColor="#fff"
-                    />
-                  </View>
-                  <MetadataRow label="Deleted" value={editingSong.isDeleted ? 'Yes' : 'No'} />
-                </View>
-
-                {/* Danger Zone */}
-                <View style={[styles.editSection, styles.dangerSection]}>
-                  <Text style={[styles.editSectionTitle, { color: '#ff4444' }]}>Danger Zone</Text>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => {
-                      setEditModalVisible(false)
-                      handleDeleteSong(editingSong)
-                    }}
-                  >
-                    <Text style={styles.deleteButtonText}>Delete Song</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Bottom padding */}
-                <View style={{ height: 50 }} />
-              </>
-            )}
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
+        song={editingSong}
+        onClose={handleCloseEditModal}
+        onDeleteSong={handleDeleteSong}
+      />
     </View>
   )
 }
@@ -1256,6 +1055,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  videoBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(56, 117, 232, 0.9)',
+    borderRadius: 4,
+    padding: 4,
+  },
+  listVideoBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: 'rgba(56, 117, 232, 0.9)',
+    borderRadius: 3,
+    padding: 3,
+  },
   songInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1346,149 +1161,6 @@ const styles = StyleSheet.create({
   fabText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
-  },
-  // Edit Modal Styles
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  modalCloseButton: {
-    padding: 8,
-    minWidth: 60,
-  },
-  modalCloseText: {
-    fontSize: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  modalSaveButton: {
-    padding: 8,
-    minWidth: 60,
-    alignItems: 'flex-end',
-  },
-  modalSaveText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalContent: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  editImageContainer: {
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  editSongImage: {
-    width: 150,
-    height: 150,
-    borderRadius: 12,
-  },
-  editSongImagePlaceholder: {
-    width: 150,
-    height: 150,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editPlaceholderIcon: {
-    width: 60,
-    height: 60,
-  },
-  editSection: {
-    marginBottom: 24,
-  },
-  editSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  editField: {
-    marginBottom: 16,
-  },
-  editFieldLabel: {
-    fontSize: 13,
-    marginBottom: 6,
-  },
-  editInput: {
-    fontSize: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
-  },
-  toggleLabelContainer: {
-    flex: 1,
-    marginRight: 16,
-  },
-  toggleLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  toggleDescription: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  metadataRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
-  },
-  metadataLabel: {
-    fontSize: 14,
-    flex: 1,
-  },
-  metadataValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    flex: 2,
-    textAlign: 'right',
-  },
-  lyricsPreview: {
-    marginTop: 8,
-    padding: 12,
-    borderRadius: 8,
-  },
-  lyricsPreviewText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  dangerSection: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 68, 68, 0.3)',
-  },
-  deleteButton: {
-    backgroundColor: '#ff4444',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 16,
     fontWeight: '600',
   },
 })

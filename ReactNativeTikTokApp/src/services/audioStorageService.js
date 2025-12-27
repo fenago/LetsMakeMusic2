@@ -1,90 +1,59 @@
 /**
  * Audio Storage Service
  *
- * Downloads audio from external URLs (like Suno CDN) and uploads to Firebase Storage.
+ * Uploads audio to Firebase Storage via Cloud Function.
  * This ensures we have a permanent copy of all songs in OUR database.
+ *
+ * NOTE: The old approach (downloading blob client-side and uploading) doesn't work
+ * in React Native because URL.createObjectURL is not available. We now use a
+ * Cloud Function that downloads from the source URL and uploads to Firebase Storage.
  */
 
-import { Platform } from 'react-native'
-import { uploadMediaFunctionURL } from '../core/firebase/config'
+import functions from '@react-native-firebase/functions'
 
 /**
- * Download audio from a URL and upload to Firebase Storage
+ * Upload audio from a URL to Firebase Storage via Cloud Function
  *
  * @param {string} audioUrl - Source audio URL (e.g., from Suno CDN)
- * @param {string} sunoId - Suno song ID (used for filename)
+ * @param {string} songId - Firebase song document ID
+ * @param {string} sunoId - Suno song ID (for filename)
+ * @param {string} userId - User ID who owns the song
  * @returns {Promise<string|null>} Firebase Storage download URL or null on failure
  */
-export const uploadAudioToFirebase = async (audioUrl, sunoId) => {
-  if (!audioUrl || !sunoId) {
-    console.error('[audioStorage] Missing audioUrl or sunoId')
+export const uploadAudioToFirebase = async (audioUrl, songId, sunoId, userId) => {
+  if (!audioUrl) {
+    console.error('[audioStorage] Missing audioUrl')
+    return null
+  }
+  if (!songId) {
+    console.error('[audioStorage] Missing songId')
+    return null
+  }
+  if (!userId) {
+    console.error('[audioStorage] Missing userId')
     return null
   }
 
   try {
-    console.log('[audioStorage] Downloading audio from:', audioUrl)
+    console.log('[audioStorage] Uploading audio via Cloud Function...')
+    console.log('[audioStorage] audioUrl:', audioUrl)
+    console.log('[audioStorage] songId:', songId)
 
-    // Step 1: Fetch the audio file from Suno
-    const response = await fetch(audioUrl)
-
-    if (!response.ok) {
-      throw new Error(`Failed to download audio: ${response.status}`)
-    }
-
-    // Get the audio as a blob
-    const audioBlob = await response.blob()
-    console.log('[audioStorage] Downloaded audio blob:', {
-      size: audioBlob.size,
-      type: audioBlob.type
+    // Call Cloud Function to download audio and upload to Firebase Storage
+    const uploadAudioFromUrl = functions().httpsCallable('uploadAudioFromUrl')
+    const result = await uploadAudioFromUrl({
+      audioUrl,
+      songId,
+      sunoId: sunoId || songId,
+      userId,
     })
 
-    // Step 2: Create form data for upload
-    const formData = new FormData()
-
-    // Create a file-like object from the blob
-    const fileName = `${sunoId}.mp3`
-
-    if (Platform.OS === 'web') {
-      // Web: Create a File object
-      const file = new File([audioBlob], fileName, { type: 'audio/mpeg' })
-      formData.append('file', file)
-    } else {
-      // React Native: Use the blob URI approach
-      // Create a temporary URI for the blob
-      const blobUri = URL.createObjectURL(audioBlob)
-
-      formData.append('file', {
-        uri: blobUri,
-        name: fileName,
-        type: 'audio/mpeg',
-      })
+    if (result.data?.success && result.data?.firebaseAudioUrl) {
+      console.log('[audioStorage] Successfully uploaded:', result.data.firebaseAudioUrl)
+      return result.data.firebaseAudioUrl
     }
 
-    console.log('[audioStorage] Uploading to Firebase Storage...')
-
-    // Step 3: Upload to Firebase Storage via Cloud Function
-    const uploadResponse = await fetch(uploadMediaFunctionURL, {
-      method: 'POST',
-      body: formData,
-      headers: Platform.select({
-        web: new Headers({
-          Accept: 'application/json',
-        }),
-        default: new Headers({
-          'Content-Type': 'multipart/form-data',
-        }),
-      }),
-    })
-
-    const jsonData = await uploadResponse.json()
-    console.log('[audioStorage] Upload response:', jsonData)
-
-    if (jsonData?.downloadURL) {
-      console.log('[audioStorage] Successfully uploaded to Firebase:', jsonData.downloadURL)
-      return jsonData.downloadURL
-    }
-
-    throw new Error('No downloadURL in response')
+    throw new Error('No firebaseAudioUrl in response')
   } catch (error) {
     console.error('[audioStorage] Error uploading audio to Firebase:', error)
     return null
@@ -96,9 +65,11 @@ export const uploadAudioToFirebase = async (audioUrl, sunoId) => {
  * Constructs the Suno CDN URL from sunoId if needed
  *
  * @param {string} sunoId - Suno song ID
+ * @param {string} songId - Firebase song document ID
+ * @param {string} userId - User ID who owns the song
  * @returns {Promise<string|null>} Firebase Storage download URL or null on failure
  */
-export const uploadAudioFromSunoId = async (sunoId) => {
+export const uploadAudioFromSunoId = async (sunoId, songId, userId) => {
   if (!sunoId) {
     console.error('[audioStorage] Missing sunoId')
     return null
@@ -106,7 +77,7 @@ export const uploadAudioFromSunoId = async (sunoId) => {
 
   // Suno CDN URL pattern
   const sunoUrl = `https://cdn1.suno.ai/${sunoId}.mp3`
-  return uploadAudioToFirebase(sunoUrl, sunoId)
+  return uploadAudioToFirebase(sunoUrl, songId, sunoId, userId)
 }
 
 export default {
