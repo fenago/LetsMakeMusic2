@@ -19,6 +19,7 @@ export { default as DebugLogsScreen } from './DebugLogsScreen/DebugLogsScreen'
 export { default as BandDetailScreen } from './BandDetailScreen/BandDetailScreen'
 export { default as BandSongsScreen } from './BandSongsScreen/BandSongsScreen'
 export { default as AddSongToBandScreen } from './AddSongToBandScreen/AddSongToBandScreen'
+export { default as AddMembersToBandScreen } from './AddMembersToBandScreen/AddMembersToBandScreen'
 
 // Song Features screens (FullPlayer expandable sections + Create menu)
 export {

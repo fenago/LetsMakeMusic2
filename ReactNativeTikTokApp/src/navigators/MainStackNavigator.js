@@ -31,6 +31,7 @@ import {
   BandDetailScreen,
   BandSongsScreen,
   AddSongToBandScreen,
+  AddMembersToBandScreen,
   // Song Features screens
   CreateMusicVideoScreen,
   ExtendSongScreen,
@@ -226,6 +227,14 @@ const MainStackNavigator = () => {
           ...TransitionPresets.ModalSlideFromBottomIOS,
         }}
         component={AddSongToBandScreen}
+      />
+      <MainStack.Screen
+        name="AddMembersToBand"
+        options={{
+          headerShown: false,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={AddMembersToBandScreen}
       />
       {/* Song Feature Screens */}
       <MainStack.Screen

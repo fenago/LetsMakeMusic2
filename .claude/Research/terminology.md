@@ -82,6 +82,69 @@ The app uses a **music venue metaphor** where:
 
 ---
 
+## Icon Mapping (Lucide React Native)
+
+Icons from `lucide-react-native` for each music-inspired term:
+
+### Navigation Icons
+
+| Term | Primary Icon | Alternatives | Import |
+|------|-------------|--------------|--------|
+| **Stage** (Feed) | `Mic2` | `Radio`, `AudioWaveform`, `Theater` | `import { Mic2 } from 'lucide-react-native'` |
+| **My Catalog** (Library) | `Library` | `Disc3`, `FolderMusic`, `Album` | `import { Library } from 'lucide-react-native'` |
+| **Explore** (Discover) | `Compass` | `Search`, `Globe`, `Telescope` | `import { Compass } from 'lucide-react-native'` |
+| **Studio** (Create) | `Sliders` | `Mic`, `Music4`, `PenTool` | `import { Sliders } from 'lucide-react-native'` |
+| **Backstage** (Profile) | `User` | `UserCircle`, `CircleUser`, `IdCard` | `import { User } from 'lucide-react-native'` |
+| **Bands** (Groups) | `Users` | `UsersRound`, `Contact2`, `Group` | `import { Users } from 'lucide-react-native'` |
+
+### Social Action Icons
+
+| Term | Primary Icon | Alternatives | Import |
+|------|-------------|--------------|--------|
+| **Encore** (Like) | `Heart` | `Star`, `Sparkles`, `ThumbsUp` | `import { Heart } from 'lucide-react-native'` |
+| **Fan** (Follow) | `UserPlus` | `Star`, `HeartHandshake` | `import { UserPlus } from 'lucide-react-native'` |
+| **Fans** (Followers) | `Users` | `Heart`, `Headphones` | `import { Users } from 'lucide-react-native'` |
+| **Share** | `Share2` | `Forward`, `Send`, `Megaphone` | `import { Share2 } from 'lucide-react-native'` |
+| **Notes** (Comments) | `MessageSquare` | `Music`, `StickyNote`, `Pencil` | `import { MessageSquare } from 'lucide-react-native'` |
+
+### Content Icons
+
+| Term | Primary Icon | Alternatives | Import |
+|------|-------------|--------------|--------|
+| **Tracks** (Posts) | `Disc3` | `Music`, `Play`, `CirclePlay` | `import { Disc3 } from 'lucide-react-native'` |
+| **Charting** (Trending) | `TrendingUp` | `BarChart3`, `ArrowUp`, `Flame` | `import { TrendingUp } from 'lucide-react-native'` |
+| **Your Mix** (For You) | `Shuffle` | `ListMusic`, `Radio`, `Sparkles` | `import { Shuffle } from 'lucide-react-native'` |
+| **Alerts** (Notifications) | `Bell` | `BellRing`, `Megaphone` | `import { Bell } from 'lucide-react-native'` |
+
+### Band Feature Icons (Recently Added)
+
+| Feature | Icon | Import |
+|---------|------|--------|
+| Band Detail | `Users` | `import { Users } from 'lucide-react-native'` |
+| Band Chat | `MessageCircle` | `import { MessageCircle } from 'lucide-react-native'` |
+| Band Members | `Users` | `import { Users } from 'lucide-react-native'` |
+| Add Member | `UserPlus` | `import { UserPlus } from 'lucide-react-native'` |
+| Band Songs | `Music` | `import { Music } from 'lucide-react-native'` |
+| Add Song | `Plus` | `import { Plus } from 'lucide-react-native'` |
+| Remove Song | `Trash2` | `import { Trash2 } from 'lucide-react-native'` |
+| Band Playlists | `ListMusic` | `import { ListMusic } from 'lucide-react-native'` |
+| Band Admin | `Crown` | `import { Crown } from 'lucide-react-native'` |
+| Create for Band | `Music` | (with pink `#ec4899` background) |
+
+### Color Palette for Band Features
+
+| Element | Color | Usage |
+|---------|-------|-------|
+| Members Icon Background | `#7c3aed20` | Purple 20% opacity |
+| Members Icon | `#7c3aed` | Purple |
+| Songs Icon Background | `#ec489920` | Pink 20% opacity |
+| Songs Icon | `#ec4899` | Pink |
+| Playlists Icon Background | `#06b6d420` | Cyan 20% opacity |
+| Playlists Icon | `#06b6d4` | Cyan |
+| Admin Crown | `colorSet.primaryForeground` | Theme primary |
+
+---
+
 ## Usage Guidelines
 
 1. **Consistency**: Always use the recommended term in UI, notifications, and messaging

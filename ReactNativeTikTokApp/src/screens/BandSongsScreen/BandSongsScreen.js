@@ -23,8 +23,8 @@ import { useCurrentUser } from '../../core/onboarding'
 const BandSongsScreen = ({ navigation, route }) => {
   const { band } = route.params || {}
   const insets = useSafeAreaInsets()
-  const { theme } = useTheme()
-  const colorSet = theme.colors[theme.appearance]
+  const { theme, appearance } = useTheme()
+  const colorSet = theme.colors[appearance]
   const currentUser = useCurrentUser()
 
   const { songs, songsLoading, removeSong } = useBandSongs(band?.id, currentUser?.id)
