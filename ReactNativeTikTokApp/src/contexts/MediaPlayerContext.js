@@ -133,8 +133,13 @@ export const MediaPlayerProvider = ({ children }) => {
   /**
    * Load and play a media item
    * @param {Object} item - Media item with id, title, audioUrl/videoUrl, thumbnailUrl, etc.
+   * @param {Object} options - Optional settings
+   * @param {boolean} options.addToQueueIfNotPresent - If true, add to queue if not already there (default: true)
+   * @param {boolean} options.skipQueueUpdate - If true, skip queue management (used internally by playQueueItem)
    */
-  const loadMedia = useCallback(async (item) => {
+  const loadMedia = useCallback(async (item, options = {}) => {
+    const { addToQueueIfNotPresent = true, skipQueueUpdate = false } = options
+
     if (!item) {
       Alert.alert('loadMedia Error', 'No item provided')
       return
@@ -250,6 +255,25 @@ export const MediaPlayerProvider = ({ children }) => {
       setMediaType(type)
       setCurrentMedia(item)
       setIsLoading(false)
+
+      // Add to queue if not already present (so playNext/playPrevious work)
+      if (!skipQueueUpdate && addToQueueIfNotPresent) {
+        setQueue(prevQueue => {
+          const existingIndex = prevQueue.findIndex(q => q.id === item.id)
+          if (existingIndex >= 0) {
+            // Song already in queue, just update queueIndex
+            console.log(`[MediaPlayerContext] Song already in queue at index ${existingIndex}`)
+            setQueueIndex(existingIndex)
+            return prevQueue
+          } else {
+            // Song not in queue - add it at the end
+            console.log(`[MediaPlayerContext] Adding song to queue at index ${prevQueue.length}`)
+            setQueueIndex(prevQueue.length) // Point to the new song
+            return [...prevQueue, item]
+          }
+        })
+      }
+
       console.log(`=== LOAD MEDIA COMPLETE (loadId: ${loadId}) ===`)
     } catch (error) {
       console.error('Error loading media:', error)
@@ -420,6 +444,40 @@ export const MediaPlayerProvider = ({ children }) => {
   }, [])
 
   /**
+   * Play a specific item from the queue by index
+   */
+  const playQueueItem = useCallback(async (index) => {
+    if (index < 0 || index >= queue.length) {
+      console.log('[MediaPlayerContext] playQueueItem - invalid index:', index)
+      return
+    }
+    console.log('[MediaPlayerContext] playQueueItem - playing index:', index)
+    setQueueIndex(index)
+    await loadMedia(queue[index], { skipQueueUpdate: true })
+  }, [queue, loadMedia])
+
+  /**
+   * Remove an item from the queue by index
+   */
+  const removeFromQueue = useCallback((index) => {
+    if (index < 0 || index >= queue.length) return
+
+    setQueue(prev => {
+      const newQueue = [...prev]
+      newQueue.splice(index, 1)
+      return newQueue
+    })
+
+    // Adjust queueIndex if needed
+    if (index < queueIndex) {
+      setQueueIndex(prev => prev - 1)
+    } else if (index === queueIndex && index >= queue.length - 1) {
+      // Removed current and it was the last item
+      setQueueIndex(prev => Math.max(0, prev - 1))
+    }
+  }, [queue.length, queueIndex])
+
+  /**
    * Play next item in queue (handles shuffle mode)
    * @returns {boolean} - true if next song was played, false if at end of queue
    */
@@ -447,13 +505,13 @@ export const MediaPlayerProvider = ({ children }) => {
     if (nextIndex < queue.length) {
       console.log('[MediaPlayerContext] playNext - playing song at index:', nextIndex)
       setQueueIndex(nextIndex)
-      await loadMedia(queue[nextIndex])
+      await loadMedia(queue[nextIndex], { skipQueueUpdate: true })
       return true
     } else if (repeatMode === 'all') {
       // Loop back to start of queue
       console.log('[MediaPlayerContext] playNext - repeat all, looping to start')
       setQueueIndex(0)
-      await loadMedia(queue[0])
+      await loadMedia(queue[0], { skipQueueUpdate: true })
       return true
     } else {
       // End of queue - don't stop, just stay on current song
@@ -478,13 +536,13 @@ export const MediaPlayerProvider = ({ children }) => {
       const prevIndex = queueIndex - 1
       console.log('[MediaPlayerContext] playPrevious - going to previous song at index:', prevIndex)
       setQueueIndex(prevIndex)
-      await loadMedia(queue[prevIndex])
+      await loadMedia(queue[prevIndex], { skipQueueUpdate: true })
     } else if (repeatMode === 'all' && queue.length > 0) {
       // Loop to end of queue
       const lastIndex = queue.length - 1
       console.log('[MediaPlayerContext] playPrevious - repeat all, looping to end at index:', lastIndex)
       setQueueIndex(lastIndex)
-      await loadMedia(queue[lastIndex])
+      await loadMedia(queue[lastIndex], { skipQueueUpdate: true })
     } else {
       // At beginning of queue, just restart current song
       console.log('[MediaPlayerContext] playPrevious - at beginning of queue, restarting current song')
@@ -571,7 +629,7 @@ export const MediaPlayerProvider = ({ children }) => {
 
     setQueue(items)
     setQueueIndex(startIndex)
-    await loadMedia(items[startIndex])
+    await loadMedia(items[startIndex], { skipQueueUpdate: true })
   }, [loadMedia])
 
   /**
@@ -701,10 +759,12 @@ export const MediaPlayerProvider = ({ children }) => {
 
     // Queue management
     addToQueue,
+    removeFromQueue,
     clearQueue,
     playNext,
     playPrevious,
     playList,
+    playQueueItem,
     setQueueIndex, // For jumping to specific position in queue
 
     // Playback mode controls

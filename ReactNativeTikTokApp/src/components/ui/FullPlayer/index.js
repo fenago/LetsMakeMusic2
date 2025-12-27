@@ -10,6 +10,8 @@ import {
   Modal,
   TouchableOpacity as RNTouchableOpacity,
   Pressable,
+  Share,
+  Alert,
 } from 'react-native'
 import BottomSheet, { BottomSheetScrollView, TouchableOpacity } from '@gorhom/bottom-sheet'
 import {
@@ -39,9 +41,19 @@ import {
   Film,
   Scissors,
   Layers,
+  Trash2,
+  Volume2,
+  Download,
+  ListPlus,
+  BarChart3,
+  Edit3,
+  Share2,
+  MessageCircle,
+  Clock,
 } from 'lucide-react-native'
 import { useNavigation } from '@react-navigation/native'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
+import EditSongModal from '../EditSongModal'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const ARTWORK_SIZE = SCREEN_WIDTH - 80
@@ -119,6 +131,11 @@ const FullPlayerBottomSheet = () => {
   const [showMusicGeneration, setShowMusicGeneration] = useState(false)
   const [showSongCover, setShowSongCover] = useState(false)
   const [showAudioProcessing, setShowAudioProcessing] = useState(false)
+  const [showAnalytics, setShowAnalytics] = useState(false)
+  const [showShareOptions, setShowShareOptions] = useState(false)
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false)
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false)
+  const [showEditSongModal, setShowEditSongModal] = useState(false)
 
   const navigation = useNavigation()
 
@@ -134,6 +151,8 @@ const FullPlayerBottomSheet = () => {
     playPrevious,
     queue,
     queueIndex,
+    playQueueItem,
+    removeFromQueue,
     // Shared like state from context
     isLiked: isLikedFn,
     toggleLike,
@@ -190,6 +209,47 @@ const FullPlayerBottomSheet = () => {
     navigation.navigate(screenName, { song: currentMedia })
   }, [navigation, hideFullPlayer, currentMedia])
 
+  // Handle native share
+  const handleShare = useCallback(async () => {
+    try {
+      const songTitle = currentMedia.title || currentMedia.label || currentMedia.name || 'a song'
+      const artistName = currentMedia.artist || currentMedia.author?.stageName || 'Unknown Artist'
+      const shareUrl = currentMedia.shareUrl || currentMedia.audioUrl || ''
+
+      await Share.share({
+        message: `Check out "${songTitle}" by ${artistName} on Let's Make Music! ${shareUrl}`,
+        title: songTitle,
+      })
+    } catch (error) {
+      console.error('Error sharing:', error)
+    }
+  }, [currentMedia])
+
+  // Handle share to feed with visibility check
+  const handleShareToFeed = useCallback(() => {
+    // Check if song is public (visibility can be 'public', true, or undefined defaults to public)
+    const isPublic = currentMedia.visibility === 'public' ||
+                     currentMedia.isPublic === true ||
+                     (currentMedia.visibility === undefined && currentMedia.isPublic === undefined)
+
+    if (!isPublic) {
+      Alert.alert(
+        'Private Song',
+        'This song is set to private and cannot be shared to the feed. To share it, go to Edit Song and change the visibility to public.',
+        [
+          { text: 'OK', style: 'cancel' },
+          {
+            text: 'Edit Song',
+            onPress: () => setShowEditSongModal(true)
+          }
+        ]
+      )
+      return
+    }
+
+    navigateToFeature('ShareSongToFeed')
+  }, [currentMedia, navigateToFeature])
+
   // Don't render if no media or wrong type
   if (mediaType !== 'audio' || !currentMedia) {
     return null
@@ -198,9 +258,6 @@ const FullPlayerBottomSheet = () => {
   const thumbnailUrl = currentMedia.thumbnailUrl || currentMedia.imageUrl || currentMedia.coverUrl || currentMedia.profilePictureURL
   const hasNext = queueIndex < queue.length - 1
   const hasPrevious = queueIndex > 0 || position > 3000
-
-  // Get next songs in queue for display
-  const nextSongs = queue.slice(queueIndex + 1, queueIndex + 4)
 
   const styles = getStyles(isDark)
 
@@ -226,7 +283,7 @@ const FullPlayerBottomSheet = () => {
           <Text style={styles.headerTitle} numberOfLines={1}>
             Now Playing
           </Text>
-          <TouchableOpacity style={styles.headerButton}>
+          <TouchableOpacity style={styles.headerButton} onPress={() => setShowOptionsMenu(true)}>
             <MoreHorizontal size={24} color={isDark ? '#ffffff' : '#151723'} strokeWidth={2} />
           </TouchableOpacity>
         </View>
@@ -242,7 +299,7 @@ const FullPlayerBottomSheet = () => {
           )}
         </View>
 
-        {/* Track Info with Favorite Button */}
+        {/* Track Info with Action Buttons */}
         <View style={styles.trackInfo}>
           <View style={styles.trackInfoText}>
             <Text style={styles.title} numberOfLines={2}>
@@ -252,19 +309,49 @@ const FullPlayerBottomSheet = () => {
               {currentMedia.artist || currentMedia.author?.stageName || currentMedia.subLabel || currentMedia.description || currentMedia.author?.firstName || 'Unknown Artist'}
             </Text>
           </View>
-          <RNTouchableOpacity
-            style={[styles.favoriteButton, isLikeLoading && styles.likeLoading]}
-            onPress={handleLikePress}
-            disabled={isLikeLoading}
-            activeOpacity={0.6}
-          >
-            <Heart
-              size={26}
-              color={isLiked ? '#ef4444' : (isDark ? '#888888' : '#888888')}
-              fill={isLiked ? '#ef4444' : 'transparent'}
-              strokeWidth={2}
-            />
-          </RNTouchableOpacity>
+          <View style={styles.trackActionButtons}>
+            <RNTouchableOpacity
+              style={styles.trackActionButton}
+              onPress={() => {
+                // TODO: Implement add to playlist
+                console.log('Add to playlist pressed')
+              }}
+              activeOpacity={0.6}
+            >
+              <ListPlus
+                size={24}
+                color={isDark ? '#888888' : '#888888'}
+                strokeWidth={2}
+              />
+            </RNTouchableOpacity>
+            <RNTouchableOpacity
+              style={styles.trackActionButton}
+              onPress={() => {
+                // TODO: Implement download
+                console.log('Download pressed')
+              }}
+              activeOpacity={0.6}
+            >
+              <Download
+                size={24}
+                color={isDark ? '#888888' : '#888888'}
+                strokeWidth={2}
+              />
+            </RNTouchableOpacity>
+            <RNTouchableOpacity
+              style={[styles.trackActionButton, isLikeLoading && styles.likeLoading]}
+              onPress={handleLikePress}
+              disabled={isLikeLoading}
+              activeOpacity={0.6}
+            >
+              <Heart
+                size={24}
+                color={isLiked ? '#ef4444' : (isDark ? '#888888' : '#888888')}
+                fill={isLiked ? '#ef4444' : 'transparent'}
+                strokeWidth={2}
+              />
+            </RNTouchableOpacity>
+          </View>
         </View>
 
         {/* Progress Bar - Separate component to isolate position updates */}
@@ -371,6 +458,118 @@ const FullPlayerBottomSheet = () => {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Options Menu Modal */}
+        <Modal
+          visible={showOptionsMenu}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setShowOptionsMenu(false)}
+        >
+          <Pressable
+            style={styles.optionsModalOverlay}
+            onPress={() => setShowOptionsMenu(false)}
+          >
+            <View style={styles.optionsModalContent}>
+              <View style={styles.optionsModalHeader}>
+                <Text style={styles.optionsModalTitle}>Options</Text>
+                <Pressable
+                  style={styles.optionsModalCloseButton}
+                  onPress={() => setShowOptionsMenu(false)}
+                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                >
+                  <X size={20} color={isDark ? '#ffffff' : '#151723'} strokeWidth={2.5} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={styles.optionsModalScroll} showsVerticalScrollIndicator={false}>
+                {/* Analytics */}
+                <TouchableOpacity
+                  style={styles.optionsMenuItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false)
+                    setShowAnalyticsModal(true)
+                  }}
+                >
+                  <BarChart3 size={22} color="#10b981" strokeWidth={2} />
+                  <Text style={styles.optionsMenuText}>View Analytics</Text>
+                </TouchableOpacity>
+
+                {/* Edit Song (includes details and rights) */}
+                <TouchableOpacity
+                  style={styles.optionsMenuItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false)
+                    setShowEditSongModal(true)
+                  }}
+                >
+                  <Edit3 size={22} color="#6366f1" strokeWidth={2} />
+                  <Text style={styles.optionsMenuText}>Edit Song</Text>
+                </TouchableOpacity>
+
+                {/* Share (native share dialog) */}
+                <TouchableOpacity
+                  style={styles.optionsMenuItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false)
+                    handleShare()
+                  }}
+                >
+                  <Share2 size={22} color="#ec4899" strokeWidth={2} />
+                  <Text style={styles.optionsMenuText}>Share</Text>
+                </TouchableOpacity>
+
+                {/* Share with User */}
+                <TouchableOpacity
+                  style={styles.optionsMenuItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false)
+                    navigateToFeature('Friends')
+                  }}
+                >
+                  <User size={22} color="#ec4899" strokeWidth={2} />
+                  <Text style={styles.optionsMenuText}>Share with User</Text>
+                </TouchableOpacity>
+
+                {/* Share to Feed */}
+                <TouchableOpacity
+                  style={styles.optionsMenuItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false)
+                    handleShareToFeed()
+                  }}
+                >
+                  <Music size={22} color="#ec4899" strokeWidth={2} />
+                  <Text style={styles.optionsMenuText}>Share to Feed</Text>
+                </TouchableOpacity>
+
+                {/* Download */}
+                <TouchableOpacity
+                  style={styles.optionsMenuItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false)
+                    console.log('Download pressed')
+                  }}
+                >
+                  <Download size={22} color="#22c55e" strokeWidth={2} />
+                  <Text style={styles.optionsMenuText}>Download Song</Text>
+                </TouchableOpacity>
+
+                {/* Add to Playlist */}
+                <TouchableOpacity
+                  style={styles.optionsMenuItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false)
+                    console.log('Add to playlist pressed')
+                  }}
+                >
+                  <ListPlus size={22} color="#3875e8" strokeWidth={2} />
+                  <Text style={styles.optionsMenuText}>Add to Playlist</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </Pressable>
+        </Modal>
 
         {/* Full Lyrics Modal */}
         <Modal
@@ -506,8 +705,79 @@ const FullPlayerBottomSheet = () => {
           </View>
         </Modal>
 
-        {/* Next in Queue Section */}
-        {nextSongs.length > 0 && (
+        {/* Analytics Modal */}
+        <Modal
+          visible={showAnalyticsModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowAnalyticsModal(false)}
+        >
+          <View style={styles.analyticsModalContainer}>
+            <View style={styles.analyticsModalHeader}>
+              <Text style={styles.analyticsModalTitle}>Song Analytics</Text>
+              <Pressable
+                style={styles.analyticsModalCloseButton}
+                onPress={() => setShowAnalyticsModal(false)}
+                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              >
+                <X size={22} color={isDark ? '#ffffff' : '#151723'} strokeWidth={2.5} />
+              </Pressable>
+            </View>
+            <Text style={styles.analyticsModalTrackName} numberOfLines={1}>
+              {currentMedia.title || currentMedia.label || currentMedia.name || 'Unknown Track'}
+            </Text>
+
+            <ScrollView style={styles.analyticsModalScroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.analyticsModalGrid}>
+                <View style={styles.analyticsModalItem}>
+                  <Play size={28} color="#3875e8" strokeWidth={2} />
+                  <Text style={styles.analyticsModalValue}>{currentMedia.playCount || 0}</Text>
+                  <Text style={styles.analyticsModalLabel}>Total Plays</Text>
+                </View>
+                <View style={styles.analyticsModalItem}>
+                  <Heart size={28} color="#ef4444" strokeWidth={2} />
+                  <Text style={styles.analyticsModalValue}>{currentMedia.likeCount || 0}</Text>
+                  <Text style={styles.analyticsModalLabel}>Likes</Text>
+                </View>
+                <View style={styles.analyticsModalItem}>
+                  <MessageCircle size={28} color="#8b5cf6" strokeWidth={2} />
+                  <Text style={styles.analyticsModalValue}>{currentMedia.commentCount || 0}</Text>
+                  <Text style={styles.analyticsModalLabel}>Comments</Text>
+                </View>
+                <View style={styles.analyticsModalItem}>
+                  <Clock size={28} color="#f59e0b" strokeWidth={2} />
+                  <Text style={styles.analyticsModalValue}>
+                    {currentMedia.totalPlayTime ? Math.floor(currentMedia.totalPlayTime / 60) : 0}
+                  </Text>
+                  <Text style={styles.analyticsModalLabel}>Mins Played</Text>
+                </View>
+                <View style={styles.analyticsModalItem}>
+                  <Share2 size={28} color="#06b6d4" strokeWidth={2} />
+                  <Text style={styles.analyticsModalValue}>{currentMedia.shareCount || 0}</Text>
+                  <Text style={styles.analyticsModalLabel}>Shares</Text>
+                </View>
+                <View style={styles.analyticsModalItem}>
+                  <Download size={28} color="#22c55e" strokeWidth={2} />
+                  <Text style={styles.analyticsModalValue}>{currentMedia.downloadCount || 0}</Text>
+                  <Text style={styles.analyticsModalLabel}>Downloads</Text>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </Modal>
+
+        {/* Edit Song Modal */}
+        <EditSongModal
+          visible={showEditSongModal}
+          song={currentMedia}
+          onClose={() => setShowEditSongModal(false)}
+          onSongUpdated={(updatedSong) => {
+            console.log('Song updated:', updatedSong)
+          }}
+        />
+
+        {/* Queue Section - Shows full queue with currently playing indicator */}
+        {queue.length > 0 && (
           <View style={styles.section}>
             <TouchableOpacity
               style={styles.sectionHeader}
@@ -515,8 +785,8 @@ const FullPlayerBottomSheet = () => {
               onPress={() => setShowQueue(!showQueue)}
             >
               <View style={styles.sectionHeaderLeft}>
-                <Text style={styles.sectionTitle}>Next in queue</Text>
-                <Text style={styles.queueCount}>{queue.length - queueIndex - 1} songs</Text>
+                <Text style={styles.sectionTitle}>Queue</Text>
+                <Text style={styles.queueCount}>{queue.length} songs</Text>
               </View>
               {showQueue ? (
                 <ChevronUp size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
@@ -526,34 +796,193 @@ const FullPlayerBottomSheet = () => {
             </TouchableOpacity>
             {showQueue && (
               <View style={styles.queueList}>
-                {nextSongs.map((song, index) => (
-                  <View key={song.id || index} style={styles.queueItem}>
-                    <View style={styles.queueItemThumbnail}>
-                      {(song.thumbnailUrl || song.imageUrl || song.coverUrl) ? (
-                        <Image source={{ uri: song.thumbnailUrl || song.imageUrl || song.coverUrl }} style={styles.queueThumbnail} />
-                      ) : (
-                        <View style={[styles.queueThumbnail, styles.queuePlaceholder]}>
-                          <Music size={20} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={1.5} />
-                        </View>
+                {queue.map((song, index) => {
+                  const isCurrentlyPlaying = index === queueIndex
+                  return (
+                    <Pressable
+                      key={song.id || index}
+                      style={[
+                        styles.queueItem,
+                        isCurrentlyPlaying && styles.queueItemPlaying
+                      ]}
+                      onPress={() => !isCurrentlyPlaying && playQueueItem(index)}
+                    >
+                      {/* Queue position number or playing indicator */}
+                      <View style={styles.queueItemNumber}>
+                        {isCurrentlyPlaying ? (
+                          <Volume2 size={16} color="#3875e8" strokeWidth={2} />
+                        ) : (
+                          <Text style={styles.queueNumberText}>{index + 1}</Text>
+                        )}
+                      </View>
+                      <View style={styles.queueItemThumbnail}>
+                        {(song.thumbnailUrl || song.imageUrl || song.coverUrl) ? (
+                          <Image source={{ uri: song.thumbnailUrl || song.imageUrl || song.coverUrl }} style={styles.queueThumbnail} />
+                        ) : (
+                          <View style={[styles.queueThumbnail, styles.queuePlaceholder]}>
+                            <Music size={20} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={1.5} />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.queueItemInfo}>
+                        <Text
+                          style={[
+                            styles.queueItemTitle,
+                            isCurrentlyPlaying && styles.queueItemTitlePlaying
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {song.title || song.label || song.name || 'Unknown Track'}
+                        </Text>
+                        <Text style={styles.queueItemArtist} numberOfLines={1}>
+                          {song.artist || song.subLabel || song.description || 'Unknown Artist'}
+                        </Text>
+                      </View>
+                      {!isCurrentlyPlaying && (
+                        <TouchableOpacity
+                          style={styles.queueItemRemove}
+                          onPress={() => removeFromQueue(index)}
+                        >
+                          <Trash2 size={16} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+                        </TouchableOpacity>
                       )}
-                    </View>
-                    <View style={styles.queueItemInfo}>
-                      <Text style={styles.queueItemTitle} numberOfLines={1}>
-                        {song.title || song.label || song.name || 'Unknown Track'}
-                      </Text>
-                      <Text style={styles.queueItemArtist} numberOfLines={1}>
-                        {song.artist || song.subLabel || song.description || 'Unknown Artist'}
-                      </Text>
-                    </View>
-                    <TouchableOpacity style={styles.queueItemMenu}>
-                      <MoreHorizontal size={18} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+                    </Pressable>
+                  )
+                })}
               </View>
             )}
           </View>
         )}
+
+        {/* Analytics Section */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            activeOpacity={0.7}
+            onPress={() => setShowAnalytics(!showAnalytics)}
+          >
+            <View style={styles.sectionHeaderLeft}>
+              <BarChart3 size={20} color="#10b981" strokeWidth={2} />
+              <Text style={styles.sectionTitle}>Analytics</Text>
+            </View>
+            {showAnalytics ? (
+              <ChevronUp size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            ) : (
+              <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
+          {showAnalytics && (
+            <View style={styles.analyticsContainer}>
+              <View style={styles.analyticsRow}>
+                <View style={styles.analyticsItem}>
+                  <Play size={20} color="#3875e8" strokeWidth={2} />
+                  <Text style={styles.analyticsValue}>{currentMedia.playCount || 0}</Text>
+                  <Text style={styles.analyticsLabel}>Plays</Text>
+                </View>
+                <View style={styles.analyticsItem}>
+                  <Heart size={20} color="#ef4444" strokeWidth={2} />
+                  <Text style={styles.analyticsValue}>{currentMedia.likeCount || 0}</Text>
+                  <Text style={styles.analyticsLabel}>Likes</Text>
+                </View>
+                <View style={styles.analyticsItem}>
+                  <MessageCircle size={20} color="#8b5cf6" strokeWidth={2} />
+                  <Text style={styles.analyticsValue}>{currentMedia.commentCount || 0}</Text>
+                  <Text style={styles.analyticsLabel}>Comments</Text>
+                </View>
+              </View>
+              <View style={styles.analyticsRow}>
+                <View style={styles.analyticsItem}>
+                  <Clock size={20} color="#f59e0b" strokeWidth={2} />
+                  <Text style={styles.analyticsValue}>
+                    {currentMedia.totalPlayTime ? Math.floor(currentMedia.totalPlayTime / 60) : 0}
+                  </Text>
+                  <Text style={styles.analyticsLabel}>Mins Played</Text>
+                </View>
+                <View style={styles.analyticsItem}>
+                  <Share2 size={20} color="#06b6d4" strokeWidth={2} />
+                  <Text style={styles.analyticsValue}>{currentMedia.shareCount || 0}</Text>
+                  <Text style={styles.analyticsLabel}>Shares</Text>
+                </View>
+                <View style={styles.analyticsItem}>
+                  <Download size={20} color="#22c55e" strokeWidth={2} />
+                  <Text style={styles.analyticsValue}>{currentMedia.downloadCount || 0}</Text>
+                  <Text style={styles.analyticsLabel}>Downloads</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Edit Song Section - Opens modal directly */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            activeOpacity={0.7}
+            onPress={() => setShowEditSongModal(true)}
+          >
+            <View style={styles.sectionHeaderLeft}>
+              <Edit3 size={20} color="#6366f1" strokeWidth={2} />
+              <Text style={styles.sectionTitle}>Edit Song</Text>
+            </View>
+            <ChevronRight size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+          </TouchableOpacity>
+          <Text style={styles.sectionSubtext}>
+            Edit title, style, visibility, and rights
+          </Text>
+        </View>
+
+        {/* Share Section */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            activeOpacity={0.7}
+            onPress={() => setShowShareOptions(!showShareOptions)}
+          >
+            <View style={styles.sectionHeaderLeft}>
+              <Share2 size={20} color="#ec4899" strokeWidth={2} />
+              <Text style={styles.sectionTitle}>Share</Text>
+            </View>
+            {showShareOptions ? (
+              <ChevronUp size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            ) : (
+              <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
+          {showShareOptions && (
+            <View style={styles.actionsList}>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={handleShare}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Share2 size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Share</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => navigateToFeature('Friends')}
+              >
+                <View style={styles.actionItemLeft}>
+                  <User size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Share with user</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={handleShareToFeed}
+              >
+                <View style={styles.actionItemLeft}>
+                  <Music size={20} color={isDark ? '#c5c5c5' : '#666666'} strokeWidth={1.5} />
+                  <Text style={styles.actionItemText}>Share to feed</Text>
+                </View>
+                <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
         {/* About the Artist Section */}
         <View style={styles.section}>
@@ -878,6 +1307,17 @@ const getStyles = (isDark) => StyleSheet.create({
   favoriteIcon: {
     fontSize: 28,
   },
+  trackActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  trackActionButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   favoriteIconActive: {
     transform: [{ scale: 1.1 }],
   },
@@ -985,6 +1425,11 @@ const getStyles = (isDark) => StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: isDark ? '#ffffff' : '#151723',
+  },
+  sectionSubtext: {
+    fontSize: 13,
+    color: isDark ? '#888888' : '#999999',
+    marginTop: -4,
   },
   sectionToggle: {
     fontSize: 14,
@@ -1175,6 +1620,32 @@ const getStyles = (isDark) => StyleSheet.create({
     fontSize: 18,
     color: isDark ? '#c5c5c5' : '#7e7e7e',
   },
+  queueItemNumber: {
+    width: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  queueNumberText: {
+    fontSize: 14,
+    color: isDark ? '#888888' : '#999999',
+    fontWeight: '500',
+  },
+  queueItemPlaying: {
+    backgroundColor: isDark ? 'rgba(56, 117, 232, 0.15)' : 'rgba(56, 117, 232, 0.1)',
+    borderRadius: 8,
+    marginHorizontal: -8,
+    paddingHorizontal: 8,
+  },
+  queueItemTitlePlaying: {
+    color: '#3875e8',
+    fontWeight: '600',
+  },
+  queueItemRemove: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   artistSection: {
     backgroundColor: isDark ? '#2c2c2e' : '#f5f5f5',
     borderRadius: 12,
@@ -1218,6 +1689,86 @@ const getStyles = (isDark) => StyleSheet.create({
     lineHeight: 20,
     color: isDark ? '#c5c5c5' : '#666666',
   },
+  // Analytics styles
+  analyticsContainer: {
+    backgroundColor: isDark ? '#2c2c2e' : '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+  },
+  analyticsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+  },
+  analyticsItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  analyticsValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: isDark ? '#ffffff' : '#151723',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  analyticsLabel: {
+    fontSize: 12,
+    color: isDark ? '#c5c5c5' : '#7e7e7e',
+  },
+  // Options modal styles
+  optionsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optionsModalContent: {
+    backgroundColor: isDark ? '#2c2c2e' : '#ffffff',
+    borderRadius: 16,
+    width: '85%',
+    maxHeight: '70%',
+    paddingBottom: 16,
+  },
+  optionsModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: isDark ? '#444444' : '#e0e0e0',
+  },
+  optionsModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: isDark ? '#ffffff' : '#151723',
+  },
+  optionsModalCloseButton: {
+    position: 'absolute',
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: isDark ? '#444444' : '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optionsModalScroll: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+  },
+  optionsMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  optionsMenuText: {
+    fontSize: 16,
+    color: isDark ? '#ffffff' : '#151723',
+    fontWeight: '500',
+  },
   // Action list styles for new sections
   actionsList: {
     backgroundColor: isDark ? '#2c2c2e' : '#f5f5f5',
@@ -1242,6 +1793,74 @@ const getStyles = (isDark) => StyleSheet.create({
     fontSize: 15,
     color: isDark ? '#ffffff' : '#151723',
     flex: 1,
+  },
+  // Analytics Modal styles
+  analyticsModalContainer: {
+    flex: 1,
+    backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+    paddingTop: 20,
+  },
+  analyticsModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: isDark ? '#333333' : '#e0e0e0',
+  },
+  analyticsModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: isDark ? '#ffffff' : '#151723',
+  },
+  analyticsModalCloseButton: {
+    position: 'absolute',
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: isDark ? '#333333' : '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  analyticsModalTrackName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: isDark ? '#c5c5c5' : '#7e7e7e',
+    textAlign: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  analyticsModalScroll: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  analyticsModalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingTop: 20,
+  },
+  analyticsModalItem: {
+    width: '48%',
+    backgroundColor: isDark ? '#2c2c2e' : '#f5f5f5',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  analyticsModalValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: isDark ? '#ffffff' : '#151723',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  analyticsModalLabel: {
+    fontSize: 14,
+    color: isDark ? '#c5c5c5' : '#7e7e7e',
+    fontWeight: '500',
   },
 })
 
