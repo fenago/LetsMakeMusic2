@@ -12,7 +12,7 @@ function IMProfileSettings(props) {
   const config = useConfig()
   const authManager = useProfileAuth()
   const { localized } = useTranslations()
-  const { theme, appearance } = useTheme()
+  const { theme, appearance, themePreference, setAppearance } = useTheme()
   const styles = dynamicStyles(theme, appearance)
 
   const currentUser = useCurrentUser()
@@ -66,8 +66,44 @@ function IMProfileSettings(props) {
     </TouchableOpacity>
   )
 
+  const themeOptions = [
+    { key: 'system', label: 'System' },
+    { key: 'light', label: 'Light' },
+    { key: 'dark', label: 'Dark' },
+  ]
+
+  const renderThemeOption = (option) => {
+    const isSelected = themePreference === option.key
+    return (
+      <TouchableOpacity
+        key={option.key}
+        style={[
+          styles.themeOptionContainer,
+          isSelected && styles.themeOptionSelected,
+        ]}
+        onPress={() => setAppearance(option.key)}>
+        <Text
+          style={[
+            styles.themeOptionText,
+            isSelected && styles.themeOptionTextSelected,
+          ]}>
+          {option.label}
+        </Text>
+      </TouchableOpacity>
+    )
+  }
+
   return (
     <View style={styles.container}>
+      <View style={styles.settingsTitleContainer}>
+        <Text style={styles.settingsTitle}>{'APPEARANCE'}</Text>
+      </View>
+      <View style={styles.settingsTypesContainer}>
+        <View style={styles.themeOptionsRow}>
+          {themeOptions.map(renderThemeOption)}
+        </View>
+      </View>
+
       <View style={styles.settingsTitleContainer}>
         <Text style={styles.settingsTitle}>{'GENERAL'}</Text>
       </View>

@@ -69,6 +69,39 @@ const dynamicStyles = (theme, colorScheme) => {
     placeholderTextColor: {
       color: colorSet.hairline,
     },
+
+    // Theme selector styles
+    themeOptionsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-evenly',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 10,
+    },
+    themeOptionContainer: {
+      flex: 1,
+      marginHorizontal: 5,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colorSet.grey3,
+      backgroundColor: colorSet.primaryBackground,
+      alignItems: 'center',
+    },
+    themeOptionSelected: {
+      borderColor: '#1F979E', // Brand Vibrant Teal
+      backgroundColor: colorScheme === 'dark' ? '#1E1E1E' : '#E0F2F1',
+    },
+    themeOptionText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colorSet.secondaryText,
+    },
+    themeOptionTextSelected: {
+      color: '#1F979E', // Brand Vibrant Teal
+      fontWeight: '600',
+    },
   })
 }
 
