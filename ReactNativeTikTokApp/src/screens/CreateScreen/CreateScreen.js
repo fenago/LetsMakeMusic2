@@ -87,6 +87,7 @@ import {
 } from '../../services/sunoApi'
 import { saveSong } from '../../services/songsService'
 import { uploadAudioToFirebase } from '../../services/audioStorageService'
+import { addSongToBand } from '../../services/bandsService'
 import { DEFAULT_SONG_RIGHTS } from '../../constants/songRights'
 import functions from '@react-native-firebase/functions'
 import { logInfo, logSuccess, logError, logWarn } from '../../services/debugLogService'
@@ -134,9 +135,12 @@ const SONG_MODES = {
  * Video mode -> Navigate to existing CameraScreen
  * Song mode -> Show song creation UI with Simple/Custom modes
  */
-export default function CreateScreen({ navigation }) {
+export default function CreateScreen({ navigation, route }) {
   const currentUser = useCurrentUser()
   const { loadMedia } = useMediaPlayer()
+
+  // Band context - if coming from a band, we'll save the song to the band too
+  const { band } = route?.params || {}
 
   // Main create mode: video or song
   const [createMode, setCreateMode] = useState(CREATE_MODES.SONG)
@@ -387,6 +391,18 @@ export default function CreateScreen({ navigation }) {
               savedSongs.push({ ...savedSong, timestampedLyrics })
               console.log(`Song ${i + 1} saved to Firebase:`, savedSong.id)
 
+              // If creating for a band, also add the song to band's shared songs
+              if (band?.id && savedSong.id) {
+                try {
+                  setGenerationStatus(`Adding song ${i + 1} to band...`)
+                  await addSongToBand(band.id, savedSong, currentUser.id)
+                  console.log(`Song ${i + 1} added to band:`, band.id)
+                } catch (bandError) {
+                  console.warn(`Could not add song ${i + 1} to band:`, bandError)
+                  // Don't fail the whole process - song is still saved to user's library
+                }
+              }
+
               // Now backup audio to Firebase Storage via Cloud Function
               // This runs async - Cloud Function will update the song doc with firebaseAudioUrl
               const audioSourceUrl = song.audio_url || song.stream_url
@@ -541,6 +557,7 @@ export default function CreateScreen({ navigation }) {
     loadMedia,
     isPublic,
     songRights,
+    band,
   ])
 
   // Character count helpers - dynamic based on model
@@ -640,6 +657,18 @@ export default function CreateScreen({ navigation }) {
           {/* Song Mode Content */}
           {createMode === CREATE_MODES.SONG && (
             <>
+              {/* Band Context Banner */}
+              {band && (
+                <View style={styles.bandBanner}>
+                  <Text style={styles.bandBannerText}>
+                    Creating song for: <Text style={styles.bandBannerName}>{band.name}</Text>
+                  </Text>
+                  <Text style={styles.bandBannerSubtext}>
+                    This song will be added to your band's shared songs
+                  </Text>
+                </View>
+              )}
+
               {/* Simple / Custom Toggle */}
               <View style={styles.songModeToggleContainer}>
                 <TouchableOpacity
@@ -1662,5 +1691,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  // Band banner styles
+  bandBanner: {
+    backgroundColor: '#7c3aed20',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#7c3aed40',
+  },
+  bandBannerText: {
+    color: '#fff',
+    fontSize: 15,
+    textAlign: 'center',
+  },
+  bandBannerName: {
+    color: '#7c3aed',
+    fontWeight: '700',
+  },
+  bandBannerSubtext: {
+    color: '#888',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 4,
   },
 })

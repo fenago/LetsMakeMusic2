@@ -24,8 +24,8 @@ import { subscribeToUserSongs } from '../../services/songsService'
 const AddSongToBandScreen = ({ navigation, route }) => {
   const { band } = route.params || {}
   const insets = useSafeAreaInsets()
-  const { theme } = useTheme()
-  const colorSet = theme.colors[theme.appearance]
+  const { theme, appearance } = useTheme()
+  const colorSet = theme.colors[appearance]
   const currentUser = useCurrentUser()
 
   const [userSongs, setUserSongs] = useState([])
@@ -141,9 +141,9 @@ const AddSongToBandScreen = ({ navigation, route }) => {
       </Text>
       <TouchableOpacity
         style={[styles.createButton, { backgroundColor: colorSet.primaryForeground }]}
-        onPress={() => navigation.navigate('Create')}>
+        onPress={() => navigation.navigate('Create', { band })}>
         <Plus size={18} color="#fff" />
-        <Text style={styles.createButtonText}>Create Song</Text>
+        <Text style={styles.createButtonText}>Create Song for Band</Text>
       </TouchableOpacity>
     </View>
   )

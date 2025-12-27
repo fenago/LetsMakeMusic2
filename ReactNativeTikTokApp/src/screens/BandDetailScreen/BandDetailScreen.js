@@ -78,6 +78,12 @@ const BandDetailScreen = ({ navigation, route }) => {
     navigation.navigate('AddSongToBand', { band })
   }, [navigation, band])
 
+  const handleCreateSong = useCallback(() => {
+    // Navigate to Create screen with band context
+    // The Create screen will handle saving the song to the band
+    navigation.navigate('Create', { band })
+  }, [navigation, band])
+
   const handleViewAllMembers = useCallback(() => {
     navigation.navigate('ViewGroupMembers', { channel: band })
   }, [navigation, band])
@@ -212,6 +218,15 @@ const BandDetailScreen = ({ navigation, route }) => {
             onPress={handleAddSong}>
             <Plus size={20} color={colorSet.primaryText} />
             <Text style={[styles.actionButtonText, { color: colorSet.primaryText }]}>Add Song</Text>
+          </TouchableOpacity>
+        </View>
+        {/* Create Song Button - Full Width */}
+        <View style={styles.createSongButtonContainer}>
+          <TouchableOpacity
+            style={[styles.createSongButton, { backgroundColor: '#ec4899' }]}
+            onPress={handleCreateSong}>
+            <Music size={20} color="#fff" />
+            <Text style={styles.actionButtonText}>Create New Song for Band</Text>
           </TouchableOpacity>
         </View>
 
@@ -391,7 +406,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     gap: 12,
+    marginBottom: 12,
+  },
+  createSongButtonContainer: {
+    paddingHorizontal: 16,
     marginBottom: 24,
+  },
+  createSongButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 8,
   },
   actionButton: {
     flex: 1,
