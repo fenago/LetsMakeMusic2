@@ -265,7 +265,7 @@ export default function Profile(props) {
             style={styles.userFollowersText}>
             <Text style={styles.userFollowersTextNumber}>{followingCount}</Text>
             <Text style={styles.userFollowersTextDesc}>
-              {localized('Following')}
+              {localized('My Artists')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -273,13 +273,13 @@ export default function Profile(props) {
             style={styles.userFollowersText}>
             <Text style={styles.userFollowersTextNumber}>{followersCount}</Text>
             <Text style={styles.userFollowersTextDesc}>
-              {localized('Followers')}
+              {localized('Fans')}
             </Text>
           </TouchableOpacity>
           <View style={styles.userFollowersText}>
             <Text style={styles.userFollowersTextNumber}>{reactionsCount}</Text>
             <Text style={styles.userFollowersTextDesc}>
-              {localized('Likes')}
+              {localized('Encores')}
             </Text>
           </View>
         </View>

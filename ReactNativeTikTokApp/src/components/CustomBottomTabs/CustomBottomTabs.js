@@ -8,6 +8,7 @@ export default function BottomTabs({
   state,
   navigation,
   tabIcons,
+  tabLabels,
   colorTitle,
   colorIcon,
 }) {
@@ -42,6 +43,7 @@ export default function BottomTabs({
         key={route.key || index + ''}
         route={route}
         tabIcons={tabIcons}
+        tabLabels={tabLabels}
         focus={state.index === index}
         routeName={route.name}
         onPress={onTabItemPress}

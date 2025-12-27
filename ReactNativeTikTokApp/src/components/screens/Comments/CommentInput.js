@@ -67,7 +67,7 @@ function CommentInput(props) {
         <BottomSheetTextInput
           ref={textInputRef}
           underlineColorAndroid="transparent"
-          placeholder={localized('Add a comment to this video')}
+          placeholder={localized('Leave a note on this track')}
           placeholderTextColor={theme.colors[appearance].secondaryText}
           value={value}
           onChangeText={onChangeText}

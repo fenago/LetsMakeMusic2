@@ -22,7 +22,19 @@ export const useSocialGraphFriends = userID => {
 
   const subscribeToFriends = userID => {
     return subscribeToFriendsAPI(userID, newFriends => {
-      setFriends(deduplicatedFriends(newFriends))
+      // Flatten nested user data - mutual_users_live stores {id, user: {...}, createdAt}
+      // but components expect direct properties like item.firstName, item.profilePictureURL
+      const flattenedFriends = (newFriends || []).map(friend => {
+        if (friend.user) {
+          return {
+            ...friend.user,
+            id: friend.id || friend.user.id,
+            createdAt: friend.createdAt,
+          }
+        }
+        return friend
+      })
+      setFriends(deduplicatedFriends(flattenedFriends))
     })
   }
 
@@ -39,7 +51,18 @@ export const useSocialGraphFriends = userID => {
       pagination.current.exhausted = true
     }
     pagination.current.page += 1
-    setFriends(deduplicatedFriends(newFriends))
+    // Flatten nested user data for consistency
+    const flattenedFriends = (newFriends || []).map(friend => {
+      if (friend.user) {
+        return {
+          ...friend.user,
+          id: friend.id || friend.user.id,
+          createdAt: friend.createdAt,
+        }
+      }
+      return friend
+    })
+    setFriends(deduplicatedFriends(flattenedFriends))
   }
 
   const deduplicatedFriends = newFriends => {

@@ -62,7 +62,7 @@ export const ConfigProvider = ({ children }) => {
           icon: require('../assets/icons/friends-unfilled.png'),
           title: localized('Music Circles'),
           description: localized(
-            'Create groups with your crew. Collaborate on tracks, share works in progress, and remix together.',
+            'Start bands with your crew. Collaborate on tracks, share works in progress, and remix together.',
           ),
         },
         {
@@ -80,6 +80,16 @@ export const ConfigProvider = ({ children }) => {
           ),
         },
       ],
+    },
+    // Tab display labels - maps route names to music-centric terminology
+    tabLabels: {
+      Feed: localized('Stage'),
+      Discover: localized('Explore'),
+      Library: localized('My Catalog'),
+      Create: localized('Studio'),
+      Profile: localized('Backstage'),
+      Inbox: localized('Messages'),
+      Friends: localized('Artists'),
     },
     tabIcons: {
       Feed: {
@@ -110,27 +120,27 @@ export const ConfigProvider = ({ children }) => {
     drawerMenu: {
       upperMenu: [
         {
-          title: localized('Home'),
+          title: localized('Stage'),
           icon: theme.icons.homeUnfilled,
           navigationPath: 'Feed',
         },
         {
-          title: localized('Discover'),
+          title: localized('Explore'),
           icon: theme.icons.search,
           navigationPath: 'Discover',
         },
         {
-          title: localized('Chat'),
+          title: localized('Messages'),
           icon: theme.icons.commentUnfilled,
           navigationPath: 'Chat',
         },
         {
-          title: localized('Friends'),
+          title: localized('Artists'),
           icon: theme.icons.friendsUnfilled,
           navigationPath: 'Friends',
         },
         {
-          title: localized('Profile'),
+          title: localized('Backstage'),
           icon: theme.icons.search,
           navigationPath: 'Profile',
         },
@@ -163,12 +173,12 @@ export const ConfigProvider = ({ children }) => {
         placeholder: 'Last Name',
       },
       {
-        displayName: localized('Username'),
+        displayName: localized('Stage Name'),
         type: 'default',
         editable: true,
         regex: regexForNames,
         key: 'username',
-        placeholder: 'Username',
+        placeholder: 'Your Stage Name (this is your public identity)',
         autoCapitalize: 'none',
       },
     ],
@@ -190,12 +200,12 @@ export const ConfigProvider = ({ children }) => {
         placeholder: 'Last Name',
       },
       {
-        displayName: localized('Username'),
+        displayName: localized('Stage Name'),
         type: 'default',
         editable: true,
         regex: regexForNames,
         key: 'username',
-        placeholder: 'Username',
+        placeholder: 'Your Stage Name (this is your public identity)',
         autoCapitalize: 'none',
       },
       {
@@ -228,7 +238,7 @@ export const ConfigProvider = ({ children }) => {
               type: 'text',
               editable: true,
               key: 'stageName',
-              placeholder: 'Your artist/stage name',
+              placeholder: 'Your Stage Name',
             },
             {
               displayName: localized('Bio'),
@@ -253,14 +263,6 @@ export const ConfigProvider = ({ children }) => {
               regex: regexForNames,
               key: 'lastName',
               placeholder: 'Your last name',
-            },
-            {
-              displayName: localized('Username'),
-              type: 'text',
-              editable: false,
-              regex: regexForNames,
-              key: 'username',
-              placeholder: 'Your username',
             },
           ],
         },

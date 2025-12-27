@@ -10,7 +10,7 @@ import {
   IMBlockedUsersScreen,
 } from '../core/profile'
 import { IMAllFriendsScreen } from '../core/socialgraph/friendships'
-import { IMChatScreen, IMViewGroupMembersScreen } from '../core/chat'
+import { IMChatScreen, IMViewGroupMembersScreen, IMCreateGroupScreen } from '../core/chat'
 import { IMNotificationScreen } from '../core/notifications'
 import {
   CustomFeedScreen,
@@ -28,6 +28,9 @@ import {
   VideosScreen,
   ShareSongToFeedScreen,
   DebugLogsScreen,
+  BandDetailScreen,
+  BandSongsScreen,
+  AddSongToBandScreen,
   // Song Features screens
   CreateMusicVideoScreen,
   ExtendSongScreen,
@@ -176,6 +179,7 @@ const MainStackNavigator = () => {
         component={NewPostScreen}
       />
       <MainStack.Screen name="PersonalChat" component={IMChatScreen} />
+      <MainStack.Screen name="CreateGroup" component={IMCreateGroupScreen} />
       <MainStack.Screen
         name="ViewGroupMembers"
         component={IMViewGroupMembersScreen}
@@ -199,6 +203,29 @@ const MainStackNavigator = () => {
           headerShown: false,
         }}
         component={DebugLogsScreen}
+      />
+      {/* Band Screens */}
+      <MainStack.Screen
+        name="BandDetail"
+        options={{
+          headerShown: false,
+        }}
+        component={BandDetailScreen}
+      />
+      <MainStack.Screen
+        name="BandSongs"
+        options={{
+          headerShown: false,
+        }}
+        component={BandSongsScreen}
+      />
+      <MainStack.Screen
+        name="AddSongToBand"
+        options={{
+          headerShown: false,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={AddSongToBandScreen}
       />
       {/* Song Feature Screens */}
       <MainStack.Screen

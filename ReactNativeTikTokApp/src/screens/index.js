@@ -16,6 +16,9 @@ export { default as AboutUsScreen } from './AboutUsScreen/AboutUsScreen'
 export { default as VideosScreen } from './VideosScreen/VideosScreen'
 export { default as ShareSongToFeedScreen } from './ShareSongToFeedScreen/ShareSongToFeedScreen'
 export { default as DebugLogsScreen } from './DebugLogsScreen/DebugLogsScreen'
+export { default as BandDetailScreen } from './BandDetailScreen/BandDetailScreen'
+export { default as BandSongsScreen } from './BandSongsScreen/BandSongsScreen'
+export { default as AddSongToBandScreen } from './AddSongToBandScreen/AddSongToBandScreen'
 
 // Song Features screens (FullPlayer expandable sections + Create menu)
 export {

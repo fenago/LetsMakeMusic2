@@ -316,15 +316,15 @@ const FeedItem = props => {
     }
   }, [isFocused])
 
-  const moreArray = useRef([localized('Share Post')])
+  const moreArray = useRef([localized('Share Track')])
   const isUserAuthor = video.authorID === user.id
 
   useEffect(() => {
     if (isUserAuthor) {
-      moreArray.current.push(localized('Delete Post'))
+      moreArray.current.push(localized('Delete Track'))
     } else {
       moreArray.current.push(localized('Block User'))
-      moreArray.current.push(localized('Report Post'))
+      moreArray.current.push(localized('Report Track'))
     }
 
     moreArray.current.push(localized('Cancel'))
@@ -336,7 +336,7 @@ const FeedItem = props => {
         title: localized('More'),
         options: moreArray.current,
         cancelButtonIndex: moreArray.current.length - 1,
-        destructiveButtonIndex: moreArray.current.indexOf('Delete Post'),
+        destructiveButtonIndex: moreArray.current.indexOf('Delete Track'),
       },
       onMoreDialogDone,
     )
@@ -344,18 +344,18 @@ const FeedItem = props => {
 
   const onMoreDialogDone = useCallback(
     indx => {
-      if (indx === moreArray.current.indexOf(localized('Share Post'))) {
+      if (indx === moreArray.current.indexOf(localized('Share Track'))) {
         onSharePost(video)
       }
 
       if (
-        indx === moreArray.current.indexOf(localized('Report Post')) ||
+        indx === moreArray.current.indexOf(localized('Report Track')) ||
         indx === moreArray.current.indexOf(localized('Block User'))
       ) {
         onUserReport(video, moreArray.current[indx])
       }
 
-      if (index === moreArray.current.indexOf(localized('Delete Post'))) {
+      if (index === moreArray.current.indexOf(localized('Delete Track'))) {
         onDeletePost(video)
       }
     },
@@ -618,11 +618,11 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
         } else if (selectedOption === localized('Save to Library')) {
           Alert.alert('Coming Soon', 'Library save feature will be available soon!', [{ text: 'OK' }])
         } else if (selectedOption === localized('Report')) {
-          onUserReport(video, 'Report Post')
+          onUserReport(video, 'Report Track')
         } else if (selectedOption === localized('Delete')) {
           Alert.alert(
-            'Delete Post',
-            'Are you sure you want to delete this post?',
+            'Delete Track',
+            'Are you sure you want to delete this track?',
             [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Delete', style: 'destructive', onPress: () => onDeletePost(video) }

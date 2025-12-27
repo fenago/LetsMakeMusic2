@@ -13,11 +13,13 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeInDown } from 'react-native-reanimated'
-import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users } from 'lucide-react-native'
 import { useTheme, useTranslations } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserSongs, deleteSong } from '../../services/songsService'
 import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
+import { useBands } from '../../hooks/useBands'
+import { BandCard } from '../../components'
 import EditSongModal from '../../components/ui/EditSongModal'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -61,6 +63,7 @@ const LibraryScreen = ({ navigation }) => {
   const [isYourSongsExpanded, setIsYourSongsExpanded] = useState(true)
   const [isYourPlaylistsExpanded, setIsYourPlaylistsExpanded] = useState(true)
   const [isLikedSongsExpanded, setIsLikedSongsExpanded] = useState(true)
+  const [isYourBandsExpanded, setIsYourBandsExpanded] = useState(true)
 
   // Toggle handlers using useCallback to prevent re-creation
   const toggleRecentlyPlayed = useCallback(() => {
@@ -78,6 +81,9 @@ const LibraryScreen = ({ navigation }) => {
   const toggleLikedSongs = useCallback(() => {
     setIsLikedSongsExpanded(prev => !prev)
   }, [])
+  const toggleYourBands = useCallback(() => {
+    setIsYourBandsExpanded(prev => !prev)
+  }, [])
 
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false)
@@ -90,6 +96,9 @@ const LibraryScreen = ({ navigation }) => {
 
   // Get user ID (handle both .id and .userID property names)
   const userId = currentUser?.id || currentUser?.userID
+
+  // Subscribe to user's bands
+  const { bands, bandsLoading, bandsCount } = useBands(userId)
 
   // Handle like button press - uses shared context
   const handleLikePress = async (song) => {
@@ -768,6 +777,114 @@ const LibraryScreen = ({ navigation }) => {
     )
   }
 
+  // Handle band card press - navigate to band detail
+  const handleBandPress = (band) => {
+    navigation.navigate('BandDetail', { band })
+  }
+
+  // Handle create band button
+  const handleCreateBand = () => {
+    navigation.navigate('CreateGroup', { isBand: true })
+  }
+
+  // Render band list item (compact row for list view)
+  const renderBandListItem = (band, index) => {
+    const members = band.participants || []
+    const memberCount = members.length
+    return (
+      <TouchableOpacity
+        key={band.id}
+        style={styles.listItem}
+        onPress={() => handleBandPress(band)}
+        activeOpacity={0.7}>
+        <View style={styles.listItemImageContainer}>
+          {band.bandImageUrl || band.imageUrl ? (
+            <Image
+              source={{ uri: band.bandImageUrl || band.imageUrl }}
+              style={styles.listItemImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.listItemImagePlaceholder, { backgroundColor: '#7c3aed' }]}>
+              <Users size={20} color="#fff" />
+            </View>
+          )}
+        </View>
+        <View style={styles.listItemInfo}>
+          <Text
+            style={[styles.listItemTitle, { color: colorSet.primaryText }]}
+            numberOfLines={1}>
+            {band.name || 'Unnamed Band'}
+          </Text>
+          <Text
+            style={[styles.listItemSubtitle, { color: colorSet.secondaryText }]}
+            numberOfLines={1}>
+            {memberCount} {memberCount === 1 ? 'member' : 'members'}
+          </Text>
+        </View>
+        <View style={styles.listItemActions}>
+          <TouchableOpacity
+            style={styles.listActionButton}
+            onPress={() => handleBandPress(band)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <ChevronDown size={18} color={colorSet.secondaryText} style={{ transform: [{ rotate: '-90deg' }] }} />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    )
+  }
+
+  // Render Your Bands section
+  const renderYourBandsSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Your Bands"
+        icon={Users}
+        iconColor="#7c3aed"
+        isExpanded={isYourBandsExpanded}
+        onToggle={toggleYourBands}
+        count={bandsCount}
+        showAddButton
+        onAdd={handleCreateBand}
+      />
+      {isYourBandsExpanded && (
+        bandsLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : bands.length > 0 ? (
+          viewMode === 'list' ? (
+            <View style={styles.listContainer}>
+              {bands.map((band, index) => renderBandListItem(band, index))}
+            </View>
+          ) : (
+            <FlatList
+              data={bands}
+              renderItem={({ item }) => (
+                <BandCard
+                  band={item}
+                  onPress={handleBandPress}
+                  size={140}
+                />
+              )}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalListContainer}
+              ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+            />
+          )
+        ) : (
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Start a band to collaborate with other artists
+            </Text>
+          </View>
+        )
+      )}
+    </View>
+  )
+
   return (
     <View
       style={[
@@ -785,19 +902,12 @@ const LibraryScreen = ({ navigation }) => {
 
         {/* All collapsible sections */}
         {renderYourSongsSection()}
+        {renderYourBandsSection()}
         {renderLikedSongsSection()}
         {renderYourPlaylistsSection()}
         {renderRecentlyPlayedSection()}
         {renderRecommendedSection()}
       </ScrollView>
-
-      {/* FAB - New Playlist (positioned above mini player) */}
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colorSet.primaryForeground }]}
-        onPress={handleNewPlaylist}>
-        <ListMusic size={20} color="#fff" style={{ marginRight: 8 }} />
-        <Text style={styles.fabText}>New Playlist</Text>
-      </TouchableOpacity>
 
       {/* Edit Song Modal - Shared Component */}
       <EditSongModal
@@ -1135,32 +1245,6 @@ const styles = StyleSheet.create({
   createButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 100,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  fabIcon: {
-    width: 20,
-    height: 20,
-    tintColor: '#fff',
-    marginRight: 8,
-  },
-  fabText: {
-    color: '#fff',
-    fontSize: 14,
     fontWeight: '600',
   },
 })

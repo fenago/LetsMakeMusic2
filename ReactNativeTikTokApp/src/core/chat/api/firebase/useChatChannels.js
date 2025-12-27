@@ -72,8 +72,8 @@ export const useChatChannels = () => {
     )
   }
 
-  const createChannel = async (creator, otherParticipants, name, isAdmin) => {
-    return await createChannelAPI(creator, otherParticipants, name, isAdmin)
+  const createChannel = async (creator, otherParticipants, name, isAdmin, isBand = false) => {
+    return await createChannelAPI(creator, otherParticipants, name, isAdmin, isBand)
   }
 
   const markUserAsTypingInChannel = async (channelID, userID) => {

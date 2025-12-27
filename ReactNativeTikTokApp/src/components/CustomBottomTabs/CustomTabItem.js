@@ -8,6 +8,7 @@ function TabItem({
   onPress,
   focus,
   tabIcons,
+  tabLabels,
   routeName,
   isAddPhoto,
   isTransparentTab,
@@ -56,7 +57,7 @@ function TabItem({
           focus && styles.titleFocused,
           isVideoOverlay && isTransparentTab && { color: '#F5F5F5' },
         ]}>
-        {routeName}
+        {tabLabels?.[routeName] || routeName}
       </Text>
     </TouchableOpacity>
   )

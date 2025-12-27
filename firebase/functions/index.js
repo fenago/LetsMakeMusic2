@@ -415,6 +415,82 @@ exports.backfillCommentCounts = functions.https.onRequest(async (req, res) => {
   }
 })
 
+// Migrate existing users: sync stageName with username
+// Stage Name = Username (they should always be the same)
+exports.syncStageNamesHTTP = functions.https.onRequest(async (req, res) => {
+  const db = admin.firestore()
+  const { dryRun = 'true' } = req.query
+  const isDryRun = dryRun !== 'false'
+
+  try {
+    const usersSnapshot = await db.collection('users').get()
+    const results = {
+      updated: [],
+      skipped: [],
+      alreadySynced: [],
+    }
+
+    for (const userDoc of usersSnapshot.docs) {
+      const data = userDoc.data()
+      const userId = userDoc.id
+      const username = data.username || ''
+      const currentStageName = data.stageName
+
+      // If stageName already matches username, skip
+      if (currentStageName === username) {
+        results.alreadySynced.push({
+          userId,
+          username,
+          stageName: currentStageName,
+        })
+        continue
+      }
+
+      // If no username, skip (can't set stageName without username)
+      if (!username) {
+        results.skipped.push({
+          userId,
+          reason: 'No username set',
+          firstName: data.firstName || '',
+          email: data.email || '',
+        })
+        continue
+      }
+
+      // Update stageName to match username
+      if (!isDryRun) {
+        await db.collection('users').doc(userId).update({
+          stageName: username,
+        })
+      }
+
+      results.updated.push({
+        userId,
+        username,
+        oldStageName: currentStageName || '(none)',
+        newStageName: username,
+      })
+    }
+
+    res.json({
+      success: true,
+      dryRun: isDryRun,
+      message: isDryRun
+        ? 'Dry run - no changes made. Set dryRun=false to apply.'
+        : 'Stage names synced with usernames!',
+      totalUsers: usersSnapshot.size,
+      summary: {
+        updated: results.updated.length,
+        alreadySynced: results.alreadySynced.length,
+        skipped: results.skipped.length,
+      },
+      details: results,
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message, stack: error.stack })
+  }
+})
+
 // Diagnostic function to check songs for video generation readiness
 exports.diagnoseSongsForVideo = functions.https.onRequest(async (req, res) => {
   const { userId, limit = 20 } = req.query

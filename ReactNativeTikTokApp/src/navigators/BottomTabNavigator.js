@@ -27,6 +27,7 @@ const BottomTabNavigator = () => {
       tabBar={({ state, route, navigation }) => (
         <CustomBottomTabs
           tabIcons={config.tabIcons}
+          tabLabels={config.tabLabels}
           route={route}
           state={state}
           navigation={navigation}

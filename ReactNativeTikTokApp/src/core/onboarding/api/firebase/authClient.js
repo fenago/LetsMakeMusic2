@@ -92,13 +92,15 @@ export const registerWithEmail = (userDetails, appIdentifier) => {
         const timestamp = getUnixTimeStamp()
         const uid = response.user.uid
 
+        const normalizedUsername = (username || '')?.toLowerCase()
         const data = {
           id: uid,
           userID: uid, // legacy reasons
           email,
           firstName: firstName || '',
           lastName: lastName || '',
-          username: (username || '')?.toLowerCase(),
+          username: normalizedUsername,
+          stageName: normalizedUsername, // Stage Name = Username (synced)
           phone: phone || '',
           profilePictureURL,
           location: location || '',
@@ -404,12 +406,14 @@ export const registerWithPhoneNumber = (
 
         const timestamp = getUnixTimeStamp()
         const uid = response.user.uid
+        const normalizedUsername = (username || '')?.toLowerCase()
         const data = {
           id: uid,
           userID: uid, // legacy reasons
           firstName: firstName || '',
           lastName: lastName || '',
-          username: (username || '')?.toLowerCase(),
+          username: normalizedUsername,
+          stageName: normalizedUsername, // Stage Name = Username (synced)
           phone,
           profilePictureURL,
           location: location || '',

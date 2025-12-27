@@ -251,7 +251,7 @@ const ProfileScreen = props => {
 
   const onFollowersButtonPress = () => {
     navigation.push('AllFriends', {
-      title: localized('Followers'),
+      title: localized('Fans'),
       otherUser: otherUser ?? currentUser,
       type: 'inbound',
       followEnabled: true,
@@ -267,7 +267,7 @@ const ProfileScreen = props => {
 
   const onFollowingButtonPress = () => {
     navigation.push('AllFriends', {
-      title: localized('Following'),
+      title: localized('My Artists'),
       otherUser: otherUser ?? currentUser,
       type: 'outbound',
       followEnabled: true,
@@ -279,11 +279,11 @@ const ProfileScreen = props => {
     : actionButtonType
   const mainButtonTitle =
     actionType === 'settings'
-      ? localized('Profile Settings')
+      ? localized('Backstage Settings')
       : actionType === 'message'
       ? localized('Send Message')
       : actionType === 'add'
-      ? localized('Follow')
+      ? localized('Become a Fan')
       : null
 
   const pullToRefreshConfig = {

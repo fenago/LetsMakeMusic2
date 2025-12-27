@@ -559,7 +559,7 @@ export default function CreateScreen({ navigation }) {
           <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
             <Text style={styles.closeText}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create</Text>
+          <Text style={styles.headerTitle}>Studio</Text>
           <View style={styles.closeButton} />
         </View>
 

@@ -36,7 +36,7 @@ function IMCreateGroupComponent(props) {
           imageStyle={styles.photo}
           participants={[item]}
         />
-        <Text style={styles.name}>{item.firstName}</Text>
+        <Text style={styles.name}>{item.stageName || item.username || item.firstName || 'Artist'}</Text>
       </View>
       <View style={styles.addFlexContainer}>
         {item.checked && (
@@ -48,9 +48,9 @@ function IMCreateGroupComponent(props) {
   )
 
   const emptyStateConfig = {
-    title: localized("You can't create groups"),
+    title: localized("You can't start bands"),
     description: localized(
-      "You don't have enough friends to create groups. Add at least 2 friends to be able to create groups.",
+      "You don't have enough artist connections to start a band. Connect with at least 2 artists to start a band.",
     ),
     callToAction: localized('Go back'),
     onPress: onEmptyStatePress,
@@ -79,8 +79,8 @@ function IMCreateGroupComponent(props) {
       )}
       <DialogInput
         isDialogVisible={isNameDialogVisible}
-        title={localized('Type group name')}
-        hintInput="Group Name"
+        title={localized('Name your band')}
+        hintInput="Band Name"
         textInputProps={{ selectTextOnFocus: true }}
         submitText="OK"
         submitInput={inputText => {

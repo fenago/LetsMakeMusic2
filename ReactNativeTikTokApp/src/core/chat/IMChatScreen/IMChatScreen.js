@@ -91,18 +91,18 @@ const IMChatScreen = memo(props => {
 
   const groupOptionsActionSheet = useMemo(() => {
     return {
-      title: localized('Group Settings'),
+      title: localized('Band Settings'),
       options: [
         localized('View Members'),
-        localized('Rename Group'),
-        localized('Leave Group'),
+        localized('Rename Band'),
+        localized('Leave Band'),
       ],
     }
   }, [])
 
   const groupSettingsActionSheet = useMemo(() => {
     return {
-      title: localized('Group Settings'),
+      title: localized('Band Settings'),
       options: [...groupOptionsActionSheet.options, localized('Cancel')],
       cancelButtonIndex: 3,
     }
@@ -110,10 +110,10 @@ const IMChatScreen = memo(props => {
 
   const adminGroupSettingsActionSheet = useMemo(() => {
     return {
-      title: localized('Group Settings'),
+      title: localized('Band Settings'),
       options: [
         ...groupOptionsActionSheet.options,
-        localized('Delete Group'),
+        localized('Delete Band'),
         localized('Cancel'),
       ],
       cancelButtonIndex: 4,

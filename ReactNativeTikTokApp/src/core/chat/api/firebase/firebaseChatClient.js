@@ -36,6 +36,7 @@ export const createChannel = async (
   otherParticipants,
   name,
   isAdmin = false,
+  isBand = false,
 ) => {
   var channelID = uuid()
   const id1 = creator.id
@@ -60,6 +61,13 @@ export const createChannel = async (
 
   if (isAdmin) {
     data['admins'] = [creator?.id]
+  }
+
+  // Mark as a band (collaboration hub with shared songs/playlists)
+  if (isBand) {
+    data['isBand'] = true
+    data['bandImageUrl'] = null
+    data['bandDescription'] = ''
   }
   const instance = ChatFunctions().createChannel
   try {

@@ -98,6 +98,25 @@ export default function IMEditProfileScreen(props) {
     })
 
     if (allFieldsAreValid) {
+      // If stageName was changed, sync it to username (they should always match)
+      if (newUser.stageName && newUser.stageName !== currentUser.stageName) {
+        const normalizedStageName = newUser.stageName.toLowerCase()
+
+        // Check if new stageName/username is unique
+        const { checkUniqueUsername } = require('../../../onboarding/api/firebase/authClient')
+        const usernameCheck = await checkUniqueUsername(normalizedStageName)
+
+        // Allow if it's the same as current username or if it's unique
+        if (usernameCheck?.taken && normalizedStageName !== currentUser.username) {
+          alert(localized('This Stage Name is already taken. Please choose another.'))
+          return
+        }
+
+        // Sync stageName to username
+        newUser.username = normalizedStageName
+        newUser.stageName = normalizedStageName
+      }
+
       await updateUser(currentUser.id, newUser)
 
       // Sync profile changes to all user's existing songs (stageName, bio, profilePictureURL)

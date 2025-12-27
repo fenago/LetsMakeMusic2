@@ -19,7 +19,7 @@ const CommentsScreen = props => {
   const { comments, commentsLoading, loadMoreComments, subscribeToComments } =
     useComments()
 
-  const commentCountHeader = `${comments?.length} comment${
+  const commentCountHeader = `${comments?.length} note${
     comments?.length > 1 ? 's' : ''
   }`
 

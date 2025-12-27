@@ -116,9 +116,9 @@ const DiscoverScreen = props => {
   }
 
   const emptyStateConfig = {
-    title: localized('No Discover Posts'),
+    title: localized('No Tracks to Explore'),
     description: localized(
-      'There are currently no posts from people that you are not following. Posts from non-followings will show up here.',
+      'There are currently no tracks from artists you are not following. Tracks from new artists will show up here.',
     ),
   }
 
