@@ -5,7 +5,7 @@
  * access to band chat and collaborative features.
  */
 
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Image,
   FlatList,
   StyleSheet,
+  Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -25,6 +26,10 @@ import {
   Plus,
   MoreHorizontal,
   Crown,
+  Image as ImageIcon,
+  Sparkles,
+  Palette,
+  Camera,
 } from 'lucide-react-native'
 import { useTheme } from '../../core/dopebase'
 import { useBandSongs } from '../../hooks/useBandSongs'
@@ -94,9 +99,63 @@ const BandDetailScreen = ({ navigation, route }) => {
   }, [])
 
   const handleMoreOptions = useCallback(() => {
-    // Show band settings/options
-    console.log('[BandDetailScreen] More options pressed')
-  }, [navigation, band])
+    if (!isAdmin) {
+      Alert.alert('Not Authorized', 'Only band admins can change band settings.')
+      return
+    }
+
+    Alert.alert(
+      'Band Options',
+      'What would you like to do?',
+      [
+        {
+          text: 'Change Band Image',
+          onPress: () => {
+            Alert.alert(
+              'Change Band Image',
+              'Choose how you want to update the band image',
+              [
+                {
+                  text: 'Your Artwork',
+                  onPress: () => {
+                    navigation.navigate('ArtworkStudio', {
+                      selectMode: true,
+                      bandId: band?.id,
+                      onSelect: (artwork) => {
+                        // The artwork will be applied via the artworkService
+                        Alert.alert('Success', 'Band image updated!')
+                      },
+                    })
+                  },
+                },
+                {
+                  text: 'Create with AI',
+                  onPress: () => {
+                    navigation.navigate('ArtworkStudio', {
+                      selectMode: true,
+                      bandId: band?.id,
+                      openGenerator: true,
+                      onSelect: (artwork) => {
+                        Alert.alert('Success', 'Band image updated!')
+                      },
+                    })
+                  },
+                },
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                },
+              ]
+            )
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    )
+  }, [navigation, band, isAdmin])
 
   // Render member avatar with admin crown
   const renderMember = ({ item, index }) => {
@@ -178,11 +237,14 @@ const BandDetailScreen = ({ navigation, route }) => {
         contentContainerStyle={styles.scrollContent}>
         {/* Band Hero Section */}
         <View style={styles.heroSection}>
-          <View
+          <TouchableOpacity
             style={[
               styles.bandCoverContainer,
               { backgroundColor: colorSet.secondaryBackground },
-            ]}>
+            ]}
+            onPress={isAdmin ? handleMoreOptions : undefined}
+            activeOpacity={isAdmin ? 0.8 : 1}
+          >
             {bandCoverImage ? (
               <Image
                 source={{ uri: bandCoverImage }}
@@ -191,7 +253,13 @@ const BandDetailScreen = ({ navigation, route }) => {
             ) : (
               <Users size={60} color={colorSet.secondaryText} />
             )}
-          </View>
+            {isAdmin && (
+              <View style={[styles.editCoverOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+                <Camera size={24} color="#fff" />
+                <Text style={styles.editCoverText}>Change</Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <Text style={[styles.bandName, { color: colorSet.primaryText }]}>
             {band?.name || 'Unnamed Band'}
           </Text>
@@ -385,6 +453,22 @@ const styles = StyleSheet.create({
   bandCover: {
     width: '100%',
     height: '100%',
+  },
+  editCoverOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  editCoverText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   bandName: {
     fontSize: 26,

@@ -89,6 +89,8 @@ import { saveSong } from '../../services/songsService'
 import { uploadAudioToFirebase } from '../../services/audioStorageService'
 import { addSongToBand } from '../../services/bandsService'
 import { DEFAULT_SONG_RIGHTS } from '../../constants/songRights'
+import VoicePicker from '../../components/ui/VoicePicker'
+import { incrementVoiceUsage } from '../../services/artistVoiceService'
 import functions from '@react-native-firebase/functions'
 import { logInfo, logSuccess, logError, logWarn } from '../../services/debugLogService'
 
@@ -155,6 +157,7 @@ export default function CreateScreen({ navigation, route }) {
   const [title, setTitle] = useState('')
   const [style, setStyle] = useState('')
   const [lyrics, setLyrics] = useState('')
+  const [selectedVoice, setSelectedVoice] = useState(null) // Artist Voice for Custom Mode
 
   // Shared fields
   const [instrumental, setInstrumental] = useState(false)
@@ -267,6 +270,8 @@ export default function CreateScreen({ navigation, route }) {
           instrumental,
           model: selectedModel,
           ...advancedOptions,
+          // Artist Voice - only works with Custom Mode
+          personaId: selectedVoice?.personaId || null,
         })
       }
 
@@ -423,6 +428,13 @@ export default function CreateScreen({ navigation, route }) {
           }
         }
 
+        // Increment Artist Voice usage count if one was used
+        if (selectedVoice?.id && currentUser?.id && savedSongs.length > 0) {
+          incrementVoiceUsage(currentUser.id, selectedVoice.id)
+            .then(() => console.log('[CreateScreen] Voice usage incremented:', selectedVoice.id))
+            .catch(err => console.warn('[CreateScreen] Could not increment voice usage:', err))
+        }
+
         // Auto-share to feed if user has enabled this setting
         logInfo('Checking auto-share setting', {
           setting: currentUser?.auto_share_to_feed,
@@ -551,6 +563,7 @@ export default function CreateScreen({ navigation, route }) {
     vocalGender,
     styleWeight,
     weirdnessConstraint,
+    selectedVoice,
     currentUser,
     isGenerating,
     navigation,
@@ -784,6 +797,21 @@ export default function CreateScreen({ navigation, route }) {
                       {lyrics.length}/{lyricsLimit}
                     </Text>
                   </View>
+
+                  {/* Synthetic Singer Picker */}
+                  {!instrumental && (
+                    <View style={styles.formSection}>
+                      <Text style={styles.label}>Synthetic Singer (Optional)</Text>
+                      <Text style={styles.sublabel}>
+                        Apply a saved vocal style to this song
+                      </Text>
+                      <VoicePicker
+                        selectedVoice={selectedVoice}
+                        onSelect={setSelectedVoice}
+                        disabled={isGenerating}
+                      />
+                    </View>
+                  )}
                 </>
               )}
 

@@ -24,6 +24,15 @@ export { default as CreatePlaylistScreen } from './CreatePlaylistScreen/CreatePl
 export { default as PlaylistDetailScreen } from './PlaylistDetailScreen/PlaylistDetailScreen'
 export { default as AddSongToPlaylistScreen } from './AddSongToPlaylistScreen/AddSongToPlaylistScreen'
 
+// Integration Settings screens
+export { default as GeminiKeySettingsScreen } from './GeminiKeySettingsScreen/GeminiKeySettingsScreen'
+
+// Artwork Studio screens
+export { default as ArtworkStudioScreen } from './ArtworkStudioScreen/ArtworkStudioScreen'
+export { default as ArtworkDetailScreen } from './ArtworkDetailScreen/ArtworkDetailScreen'
+export { default as SelectSongForArtworkScreen } from './SelectSongForArtworkScreen/SelectSongForArtworkScreen'
+export { default as SelectBandForArtworkScreen } from './SelectBandForArtworkScreen/SelectBandForArtworkScreen'
+
 // Song Features screens (FullPlayer expandable sections + Create menu)
 export {
   CreateMusicVideoScreen,
@@ -38,4 +47,5 @@ export {
   StemSongScreen,
   CreateLyricsScreen,
   BuildBeatsScreen,
+  CreateArtistVoiceScreen,
 } from './SongFeatures'

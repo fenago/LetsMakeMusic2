@@ -13,7 +13,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeInDown } from 'react-native-reanimated'
-import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users, ImageIcon, Mic } from 'lucide-react-native'
 import { useTheme, useTranslations } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserSongs, deleteSong } from '../../services/songsService'
@@ -22,7 +22,10 @@ import { useBands } from '../../hooks/useBands'
 import { useRecentlyPlayed } from '../../hooks/useRecentlyPlayed'
 import { usePlaylists } from '../../hooks/usePlaylists'
 import { useRecommendations } from '../../hooks/useRecommendations'
+import { useArtwork } from '../../hooks/useArtwork'
+import { useArtistVoices } from '../../hooks/useArtistVoices'
 import { BandCard } from '../../components'
+import VoiceCard from '../../components/ui/VoiceCard'
 import PlaylistCard from '../../components/ui/PlaylistCard'
 import EditSongModal from '../../components/ui/EditSongModal'
 
@@ -68,6 +71,8 @@ const LibraryScreen = ({ navigation }) => {
   const [isYourPlaylistsExpanded, setIsYourPlaylistsExpanded] = useState(true)
   const [isLikedSongsExpanded, setIsLikedSongsExpanded] = useState(true)
   const [isYourBandsExpanded, setIsYourBandsExpanded] = useState(true)
+  const [isYourArtworkExpanded, setIsYourArtworkExpanded] = useState(true)
+  const [isYourVoicesExpanded, setIsYourVoicesExpanded] = useState(true)
 
   // Toggle handlers using useCallback to prevent re-creation
   const toggleRecentlyPlayed = useCallback(() => {
@@ -87,6 +92,12 @@ const LibraryScreen = ({ navigation }) => {
   }, [])
   const toggleYourBands = useCallback(() => {
     setIsYourBandsExpanded(prev => !prev)
+  }, [])
+  const toggleYourArtwork = useCallback(() => {
+    setIsYourArtworkExpanded(prev => !prev)
+  }, [])
+  const toggleYourVoices = useCallback(() => {
+    setIsYourVoicesExpanded(prev => !prev)
   }, [])
 
   // Edit modal state
@@ -109,6 +120,16 @@ const LibraryScreen = ({ navigation }) => {
 
   // Subscribe to user's playlists
   const { playlists, playlistsLoading, playlistsCount } = usePlaylists(userId)
+
+  // Subscribe to user's artwork
+  const { artwork, artworkLoading, artworkCount } = useArtwork(userId, {
+    id: currentUser?.id,
+    stageName: currentUser?.firstName || currentUser?.stageName || 'Unknown',
+    profilePictureURL: currentUser?.profilePictureURL,
+  })
+
+  // Subscribe to user's Artist Voices
+  const { voices, voicesLoading, voicesCount } = useArtistVoices(userId)
 
   // Get recommendations (will be fetched once songs are loaded)
   const likedSongsList = songs.filter((song) => isLikedFn(song.id))
@@ -232,6 +253,27 @@ const LibraryScreen = ({ navigation }) => {
     )
   }
 
+  // Handle creating Synthetic Singer from a song
+  const handleCreateArtistVoice = (song) => {
+    // Navigate to CreateArtistVoice screen with full song data including owner
+    navigation.navigate('CreateArtistVoice', {
+      song: {
+        id: song.id,
+        title: song.title,
+        imageUrl: song.imageUrl,
+        audioUrl: getPlayableUrl(song),
+        sunoId: song.sunoId,
+        style: song.style,
+        // Include owner information for permission check
+        userId: song.userId || song.authorID || song.ownerId,
+        authorID: song.authorID,
+        author: song.author,
+        // Include task ID for Suno API
+        taskId: song.taskId || song.task_id,
+      },
+    })
+  }
+
   // Long press handler - shows options menu
   const handleSongLongPress = (song) => {
     const options = [
@@ -266,6 +308,10 @@ const LibraryScreen = ({ navigation }) => {
             })
             Alert.alert('Added to Queue', `"${song.title || 'Untitled'}" has been added to your queue.`)
           },
+        },
+        {
+          text: 'Create Synthetic Singer',
+          onPress: () => handleCreateArtistVoice(song),
         }
       )
     }
@@ -1144,6 +1190,170 @@ const LibraryScreen = ({ navigation }) => {
     </View>
   )
 
+  // Handle artwork press - navigate to detail
+  const handleArtworkPress = (artworkItem) => {
+    navigation.navigate('ArtworkDetail', { artworkId: artworkItem.id })
+  }
+
+  // Handle navigate to Artwork Studio
+  const handleGoToArtworkStudio = () => {
+    navigation.navigate('ArtworkStudio')
+  }
+
+  // Render artwork item (horizontal scroll style)
+  const renderArtworkItem = ({ item: artworkItem, index }) => {
+    const imageUrl = artworkItem?.thumbnailUrl || artworkItem?.imageUrl
+    const isGenerated = artworkItem?.source === 'generated'
+
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(index * 50).springify()}
+        style={styles.gridItem}>
+        <TouchableOpacity
+          onPress={() => handleArtworkPress(artworkItem)}
+          activeOpacity={0.8}>
+          <View style={styles.imageContainer}>
+            {imageUrl ? (
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.songImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.songImagePlaceholder,
+                  { backgroundColor: colorSet.grey3 },
+                ]}>
+                <ImageIcon size={32} color={colorSet.grey9} />
+              </View>
+            )}
+            {/* Source badge */}
+            <View style={[
+              styles.artworkBadge,
+              { backgroundColor: isGenerated ? 'rgba(147, 51, 234, 0.9)' : 'rgba(16, 185, 129, 0.9)' }
+            ]}>
+              {isGenerated ? (
+                <Sparkles size={10} color="#fff" />
+              ) : (
+                <ImageIcon size={10} color="#fff" />
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
+        <View style={styles.songInfoRow}>
+          <TouchableOpacity
+            style={styles.songTextContainer}
+            onPress={() => handleArtworkPress(artworkItem)}
+            activeOpacity={0.7}>
+            <Text
+              style={[styles.songTitle, { color: colorSet.primaryText }]}
+              numberOfLines={1}>
+              {artworkItem.prompt || (artworkItem.photographer ? `by ${artworkItem.photographer}` : 'Untitled')}
+            </Text>
+            <Text
+              style={[styles.songDescription, { color: colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {artworkItem.style || (isGenerated ? 'AI Created' : 'Stock Photo')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    )
+  }
+
+  // Render Your Artwork section
+  const renderYourArtworkSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Your Artwork"
+        icon={ImageIcon}
+        iconColor="#ec4899"
+        isExpanded={isYourArtworkExpanded}
+        onToggle={toggleYourArtwork}
+        count={artworkCount}
+        showAddButton
+        onAdd={handleGoToArtworkStudio}
+      />
+      {isYourArtworkExpanded && (
+        artworkLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : artwork.length > 0 ? (
+          <FlatList
+            data={artwork.slice(0, 10)} // Show first 10 in preview
+            renderItem={renderArtworkItem}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContainer}
+            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+            ListFooterComponent={artwork.length > 10 ? (
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                onPress={handleGoToArtworkStudio}>
+                <Text style={[styles.seeAllText, { color: colorSet.primaryForeground }]}>
+                  See All ({artworkCount})
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          />
+        ) : (
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Create AI artwork or browse stock photos
+            </Text>
+          </View>
+        )
+      )}
+    </View>
+  )
+
+  // Handle voice deletion from VoiceCard
+  const handleVoiceDelete = useCallback((voiceId) => {
+    // VoiceCard handles the actual deletion, this is just for UI refresh
+    console.log('[LibraryScreen] Voice deleted:', voiceId)
+    // The useArtistVoices hook will automatically update via Firebase subscription
+  }, [])
+
+  // Render Your Voices section
+  const renderYourVoicesSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Synthetic Singers"
+        icon={Mic}
+        iconColor="#6366F1"
+        isExpanded={isYourVoicesExpanded}
+        onToggle={toggleYourVoices}
+        count={voicesCount}
+      />
+      {isYourVoicesExpanded && (
+        voicesLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : voices.length > 0 ? (
+          <View style={styles.voicesListContainer}>
+            {voices.map((voice) => (
+              <VoiceCard
+                key={voice.id}
+                voice={voice}
+                onDelete={handleVoiceDelete}
+              />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Long-press any song to create your Synthetic Singer
+            </Text>
+          </View>
+        )
+      )}
+    </View>
+  )
+
   return (
     <View
       style={[
@@ -1162,6 +1372,8 @@ const LibraryScreen = ({ navigation }) => {
         {/* All collapsible sections */}
         {renderYourSongsSection()}
         {renderYourBandsSection()}
+        {renderYourVoicesSection()}
+        {renderYourArtworkSection()}
         {renderLikedSongsSection()}
         {renderYourPlaylistsSection()}
         {renderRecentlyPlayedSection()}
@@ -1527,6 +1739,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  artworkBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  seeAllButton: {
+    width: 100,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: 12,
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  voicesListContainer: {
+    paddingHorizontal: 16,
   },
 })
 

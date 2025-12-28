@@ -36,6 +36,13 @@ import {
   CreatePlaylistScreen,
   PlaylistDetailScreen,
   AddSongToPlaylistScreen,
+  // Integration Settings screens
+  GeminiKeySettingsScreen,
+  // Artwork Studio screens
+  ArtworkStudioScreen,
+  ArtworkDetailScreen,
+  SelectSongForArtworkScreen,
+  SelectBandForArtworkScreen,
   // Song Features screens
   CreateMusicVideoScreen,
   ExtendSongScreen,
@@ -49,6 +56,7 @@ import {
   StemSongScreen,
   CreateLyricsScreen,
   BuildBeatsScreen,
+  CreateArtistVoiceScreen,
 } from '../screens'
 // import { Camera, NewPost, ComposerSongs } from '../components';
 import { InnerFriendsSearchNavigator } from './InnerStackNavigators'
@@ -208,6 +216,45 @@ const MainStackNavigator = () => {
           headerShown: false,
         }}
         component={DebugLogsScreen}
+      />
+      {/* Integration Settings Screens */}
+      <MainStack.Screen
+        name="GeminiKeySettings"
+        options={{
+          headerShown: false,
+        }}
+        component={GeminiKeySettingsScreen}
+      />
+      {/* Artwork Studio Screens */}
+      <MainStack.Screen
+        name="ArtworkStudio"
+        options={{
+          headerShown: false,
+        }}
+        component={ArtworkStudioScreen}
+      />
+      <MainStack.Screen
+        name="ArtworkDetail"
+        options={{
+          headerShown: false,
+        }}
+        component={ArtworkDetailScreen}
+      />
+      <MainStack.Screen
+        name="SelectSongForArtwork"
+        options={{
+          headerShown: false,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={SelectSongForArtworkScreen}
+      />
+      <MainStack.Screen
+        name="SelectBandForArtwork"
+        options={{
+          headerShown: false,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={SelectBandForArtworkScreen}
       />
       {/* Band Screens */}
       <MainStack.Screen
@@ -384,6 +431,14 @@ const MainStackNavigator = () => {
           ...TransitionPresets.ModalSlideFromBottomIOS,
         }}
         component={BuildBeatsScreen}
+      />
+      <MainStack.Screen
+        name="CreateArtistVoice"
+        options={{
+          headerShown: false,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={CreateArtistVoiceScreen}
       />
     </MainStack.Navigator>
   )

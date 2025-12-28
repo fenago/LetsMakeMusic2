@@ -53,8 +53,8 @@ export const DEFAULT_SONG_RIGHTS = {
   // Sampling - Can others sample this in new songs?
   allowSampling: false,
 
-  // Voice Persona - Can others train a voice persona from this?
-  allowPersonaCreation: false,
+  // Synthetic Singer - Can others create a Synthetic Singer from this song?
+  allowArtistVoice: false,
 
   // Video Creation - Can others pair this with their videos?
   allowVideoCreation: true,
@@ -111,9 +111,9 @@ export const RIGHTS_DESCRIPTIONS = {
     label: 'Allow Sampling',
     description: 'Others can sample parts of this song in new compositions',
   },
-  allowPersonaCreation: {
-    label: 'Allow Persona Creation',
-    description: 'Others can train a voice persona from this song',
+  allowArtistVoice: {
+    label: 'Allow Synthetic Singer',
+    description: 'Others can create a Synthetic Singer from this song',
   },
   allowVideoCreation: {
     label: 'Allow Video Creation',
@@ -151,7 +151,7 @@ export const RIGHTS_CATEGORIES = {
       'allowLyricsUse',
       'allowReinterpret',
       'allowSampling',
-      'allowPersonaCreation',
+      'allowArtistVoice',
       'allowVideoCreation',
     ],
   },
@@ -222,7 +222,8 @@ export const canUserPerformAction = (song, currentUserId, action) => {
     lyricsUse: 'allowLyricsUse',
     reinterpret: 'allowReinterpret',
     sampling: 'allowSampling',
-    personaCreation: 'allowPersonaCreation',
+    artistVoice: 'allowArtistVoice',
+    personaCreation: 'allowArtistVoice', // Legacy alias
     videoCreation: 'allowVideoCreation',
     commercialUse: 'allowCommercialUse',
     tip: 'allowTipping',
@@ -236,8 +237,16 @@ export const canUserPerformAction = (song, currentUserId, action) => {
 
   // Check the right in the song's rights object, falling back to defaults
   const rights = song.rights || {}
-  const hasRight = rights[rightField] !== undefined
-    ? rights[rightField]
+
+  // Handle backward compatibility for allowArtistVoice (was allowPersonaCreation)
+  let rightValue = rights[rightField]
+  if (rightField === 'allowArtistVoice' && rightValue === undefined) {
+    // Check legacy field name
+    rightValue = rights.allowPersonaCreation
+  }
+
+  const hasRight = rightValue !== undefined
+    ? rightValue
     : DEFAULT_SONG_RIGHTS[rightField]
 
   return hasRight

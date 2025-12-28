@@ -13,6 +13,7 @@ import {
 import { useColorScheme } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { deleteSong } from '../../../services/songsService'
+import { canCreateVoiceFromSong } from '../../../services/artistVoiceService'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 import {
   DEFAULT_SONG_RIGHTS,
@@ -147,6 +148,11 @@ const SongActionMenu = ({
     navigation.navigate('ShareSongToFeed', { song })
   }, [song, navigation, onClose])
 
+  const handleCreateArtistVoice = useCallback(() => {
+    onClose?.()
+    navigation.navigate('CreateArtistVoice', { song })
+  }, [song, navigation, onClose])
+
   const handleDelete = useCallback(() => {
     Alert.alert(
       'Delete Song',
@@ -224,6 +230,21 @@ const SongActionMenu = ({
       show: !!song?.author?.id || !!song?.userId,
     },
   ]
+
+  // Check Synthetic Singer eligibility (available to owner and non-owners if rights allow)
+  const voiceEligibility = canCreateVoiceFromSong(song, currentUserId)
+  if (voiceEligibility.eligible) {
+    // Add Synthetic Singer action with expiration info
+    const daysLabel = voiceEligibility.daysRemaining
+      ? ` (${voiceEligibility.daysRemaining} days left)`
+      : ''
+    actions.push({
+      id: 'createArtistVoice',
+      label: `Create Synthetic Singer${daysLabel}`,
+      icon: '🎤',
+      onPress: handleCreateArtistVoice,
+    })
+  }
 
   // Owner-only actions
   if (isOwner) {
@@ -454,18 +475,15 @@ const SongActionMenu = ({
                 </View>
               </View>
               <View style={styles.rightsRow}>
-                <Text style={styles.rightsLabel}>Create Persona</Text>
-                <View style={styles.rightsValueContainer}>
-                  <Text style={[
-                    styles.rightsValue,
-                    (song.rights?.allowPersonaCreation ?? DEFAULT_SONG_RIGHTS.allowPersonaCreation)
-                      ? styles.rightsEnabled
-                      : styles.rightsDisabled
-                  ]}>
-                    {(song.rights?.allowPersonaCreation ?? DEFAULT_SONG_RIGHTS.allowPersonaCreation) ? 'Allowed' : 'Disabled'}
-                  </Text>
-                  <Text style={styles.comingSoonBadge}>Coming Soon</Text>
-                </View>
+                <Text style={styles.rightsLabel}>Synthetic Singer</Text>
+                <Text style={[
+                  styles.rightsValue,
+                  (song.rights?.allowArtistVoice ?? song.rights?.allowPersonaCreation ?? DEFAULT_SONG_RIGHTS.allowArtistVoice)
+                    ? styles.rightsEnabled
+                    : styles.rightsDisabled
+                ]}>
+                  {(song.rights?.allowArtistVoice ?? song.rights?.allowPersonaCreation ?? DEFAULT_SONG_RIGHTS.allowArtistVoice) ? 'Allowed' : 'Disabled'}
+                </Text>
               </View>
               <View style={styles.rightsRow}>
                 <Text style={styles.rightsLabel}>Video Creation</Text>

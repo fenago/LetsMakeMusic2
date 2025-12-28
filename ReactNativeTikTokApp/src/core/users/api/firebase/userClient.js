@@ -56,3 +56,35 @@ export const updateOnlineStatus = async (userID, isOnline) => {
     return { error }
   }
 }
+
+/**
+ * Update user integrations (API keys, connected services)
+ * Uses set with merge to properly handle nested fields and create if needed
+ * @param {string} userID - The user's ID
+ * @param {object} integrations - The integrations object to merge (e.g., { gemini: { apiKey: '...' } })
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export const updateUserIntegrations = async (userID, integrations) => {
+  try {
+    console.log('[userClient] Updating integrations for user:', userID, integrations)
+
+    // Use set with merge to handle both new and existing documents/fields
+    await usersRef.doc(userID).set(
+      {
+        integrations: integrations,
+        lastOnlineTimestamp: getUnixTimeStamp(),
+      },
+      { merge: true }
+    )
+
+    // Verify the save worked
+    const updatedDoc = await usersRef.doc(userID).get()
+    const userData = updatedDoc.data()
+    console.log('[userClient] Verified integrations after save:', userData?.integrations)
+
+    return { success: true }
+  } catch (error) {
+    console.log('Error updating user integrations:', error)
+    return { success: false, error: error.message }
+  }
+}

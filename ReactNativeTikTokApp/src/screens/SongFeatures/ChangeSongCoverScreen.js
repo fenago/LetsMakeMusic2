@@ -11,13 +11,14 @@ import {
   Alert,
   ScrollView,
 } from 'react-native'
-import { ChevronLeft, Upload, Camera, ImageIcon, Check } from 'lucide-react-native'
+import { ChevronLeft, Upload, Camera, ImageIcon, Check, Sparkles, Palette } from 'lucide-react-native'
 import * as ImagePicker from 'expo-image-picker'
 
 import { useCurrentUser } from '../../core/onboarding'
 import { updateSong, getSong } from '../../services/songsService'
 import firebaseStorage from '../../core/media/api/firebase/storage'
 import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
+import { applyArtworkToSong } from '../../services/artworkService'
 
 export default function ChangeSongCoverScreen({ navigation, route }) {
   const song = route.params?.song
@@ -86,6 +87,45 @@ export default function ChangeSongCoverScreen({ navigation, route }) {
       console.error('Error taking photo:', error)
       Alert.alert('Error', 'Failed to take photo. Please try again.')
     }
+  }
+
+  // Navigate to Artwork Studio to select from user's artwork collection
+  const selectFromArtwork = () => {
+    navigation.navigate('ArtworkStudio', {
+      selectMode: true,
+      songId: song?.id,
+      onSelect: async (artwork) => {
+        // Artwork was selected and applied via artworkService
+        // The navigation will go back automatically
+        setIsSuccess(true)
+
+        // Update the current media if this song is playing
+        if (currentMedia?.id === song.id && artwork?.imageUrl) {
+          loadMedia({
+            ...currentMedia,
+            imageUrl: artwork.imageUrl,
+          })
+        }
+      },
+    })
+  }
+
+  // Navigate to create new AI artwork
+  const createNewArtwork = () => {
+    navigation.navigate('ArtworkStudio', {
+      selectMode: true,
+      songId: song?.id,
+      openGenerator: true, // Signal to open AI generator modal
+      onSelect: async (artwork) => {
+        setIsSuccess(true)
+        if (currentMedia?.id === song.id && artwork?.imageUrl) {
+          loadMedia({
+            ...currentMedia,
+            imageUrl: artwork.imageUrl,
+          })
+        }
+      },
+    })
   }
 
   const uploadAndSave = async () => {
@@ -263,6 +303,43 @@ export default function ChangeSongCoverScreen({ navigation, route }) {
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
+          {/* Artwork Collection Options */}
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={selectFromArtwork}
+            disabled={isUploading}
+          >
+            <View style={[styles.actionIconContainer, { backgroundColor: '#9333ea20' }]}>
+              <Palette size={24} color="#9333ea" strokeWidth={2} />
+            </View>
+            <View style={styles.actionTextContainer}>
+              <Text style={styles.actionButtonText}>Your Artwork</Text>
+              <Text style={styles.actionSubtext}>Select from your collection</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={createNewArtwork}
+            disabled={isUploading}
+          >
+            <View style={[styles.actionIconContainer, { backgroundColor: '#ec489920' }]}>
+              <Sparkles size={24} color="#ec4899" strokeWidth={2} />
+            </View>
+            <View style={styles.actionTextContainer}>
+              <Text style={styles.actionButtonText}>Create with AI</Text>
+              <Text style={styles.actionSubtext}>Generate new artwork</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or upload</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Traditional Upload Options */}
           <TouchableOpacity
             style={styles.actionButton}
             onPress={pickFromLibrary}
@@ -426,10 +503,33 @@ const getStyles = (isDark) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  actionTextContainer: {
+    flex: 1,
+  },
   actionButtonText: {
     fontSize: 16,
     fontWeight: '500',
     color: isDark ? '#ffffff' : '#151723',
+  },
+  actionSubtext: {
+    fontSize: 12,
+    color: isDark ? '#888888' : '#9ca3af',
+    marginTop: 2,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: isDark ? '#333333' : '#e5e7eb',
+  },
+  dividerText: {
+    fontSize: 12,
+    color: isDark ? '#666666' : '#9ca3af',
+    paddingHorizontal: 12,
   },
   uploadButton: {
     flexDirection: 'row',

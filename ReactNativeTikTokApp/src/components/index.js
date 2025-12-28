@@ -20,3 +20,8 @@ export { default as SongDetailCard } from './ui/SongDetailCard'
 export { default as AlbumCard } from './ui/AlbumCard'
 export { default as ArtistCard } from './ui/ArtistCard'
 export { default as BandCard } from './ui/BandCard'
+
+// Artwork Studio components
+export { default as ArtworkCard } from './ui/ArtworkCard'
+export { default as ArtworkGeneratorModal } from './ui/ArtworkGeneratorModal'
+export { default as StockMediaBrowser } from './ui/StockMediaBrowser'

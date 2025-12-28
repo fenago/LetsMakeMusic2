@@ -29,7 +29,7 @@ Expert in Suno API (sunoapi.org) for ALL AI music generation, audio processing, 
 | `/api/v1/generate/upload-cover` | POST | Reinterpret audio in new styles | 🔄 Planned |
 | `/api/v1/generate/upload-extend` | POST | Extend uploaded audio | 🔄 Planned |
 | `/api/v1/generate/replace-section` | POST | Modify specific time segments | 🔄 Planned |
-| `/api/v1/generate/generate-persona` | POST | Create unique musical identity | 🔄 Planned |
+| `/api/v1/generate/generate-persona` | POST | Create unique musical identity (Artist Voice) | ✅ Implemented |
 | `/api/v1/suno/cover/generate` | POST | Generate music covers | 🔄 Planned |
 
 ### Vocals & Instruments Endpoints

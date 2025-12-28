@@ -886,6 +886,211 @@ export const pollForVideoCompletion = async (taskId, maxAttempts = 120, interval
   throw new Error('Video generation timed out after 10 minutes')
 }
 
+/**
+ * Generate a Persona (Synthetic Singer) from an existing song
+ * Creates a reusable vocal/style identity that can be applied to future songs
+ *
+ * IMPORTANT: The source song must:
+ * - Be complete (status = SUCCESS)
+ * - Have been generated with Model V4 or higher
+ * - Still exist on Suno servers (within 15-day retention period)
+ * - Not already have a persona created from it (one persona per audioId)
+ *
+ * @param {object} params - Persona generation parameters
+ * @param {string} params.taskId - The task ID from the original song generation
+ * @param {string} params.audioId - The Suno audio ID (sunoId from our database)
+ * @param {string} params.name - Name for the Synthetic Singer (max 50 chars)
+ * @param {string} params.description - Description of the voice style (max 200 chars)
+ * @returns {Promise<object>} Persona data including personaId
+ */
+export const generatePersona = async ({
+  taskId,
+  audioId,
+  name,
+  description = '',
+}) => {
+  try {
+    console.log('[sunoApi] ========== GENERATE PERSONA (SYNTHETIC SINGER) START ==========')
+    console.log('[sunoApi] Params:', { taskId, audioId, name, description })
+
+    if (!taskId) {
+      throw new Error('taskId is required to create a Synthetic Singer')
+    }
+    if (!audioId) {
+      throw new Error('audioId is required to create a Synthetic Singer')
+    }
+    if (!name || !name.trim()) {
+      throw new Error('A name is required for the Synthetic Singer')
+    }
+
+    // Validate audioId format - Suno IDs are typically UUIDs
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const isValidAudioUUID = uuidRegex.test(audioId)
+    console.log('[sunoApi] audioId UUID validation:', {
+      audioId,
+      isValidUUID: isValidAudioUUID,
+    })
+    if (!isValidAudioUUID) {
+      console.warn('[sunoApi] ⚠️ WARNING: audioId does NOT match UUID format!')
+    }
+
+    // Check credits first
+    try {
+      const quota = await getQuota()
+      console.log('[sunoApi] Credit check for persona:', quota?.data)
+      if (quota?.data?.remainingCredits !== undefined && quota.data.remainingCredits < 10) {
+        throw new Error('Insufficient credits. Please add more credits to continue.')
+      }
+    } catch (quotaError) {
+      console.warn('[sunoApi] Could not check quota:', quotaError.message)
+    }
+
+    const body = {
+      taskId,
+      audioId,
+      name: name.trim().substring(0, 50),
+      description: (description || '').trim().substring(0, 200),
+      callBackUrl: CALLBACK_URL,
+    }
+
+    console.log('[sunoApi] Persona request body:', JSON.stringify(body, null, 2))
+
+    const response = await fetch(`${SUNO_API_BASE}/generate/generate-persona`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUNO_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    })
+
+    console.log('[sunoApi] Persona response status:', response.status)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[sunoApi] Persona generation HTTP error:', errorText)
+      throw new Error(`Suno API error: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    console.log('[sunoApi] Persona generation response:', JSON.stringify(data, null, 2))
+
+    if (data.code !== 200) {
+      const errorMsg = data.msg || 'Synthetic Singer creation failed'
+
+      // Handle specific error cases
+      if (errorMsg.toLowerCase().includes('already exists') || errorMsg.toLowerCase().includes('persona exists')) {
+        throw new Error('A Synthetic Singer has already been created from this song. Each song can only create one voice.')
+      }
+      if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('expired')) {
+        throw new Error('This song has expired on Suno servers. Synthetic Singers must be created within 15 days of song generation.')
+      }
+      if (errorMsg.toLowerCase().includes('model') || errorMsg.toLowerCase().includes('v3')) {
+        throw new Error('Synthetic Singers can only be created from songs generated with Model V4 or higher.')
+      }
+      if (errorMsg.toLowerCase().includes('not complete') || errorMsg.toLowerCase().includes('pending')) {
+        throw new Error('The song must be fully generated before creating a Synthetic Singer. Please wait for the song to complete.')
+      }
+
+      throw new Error(`Synthetic Singer creation failed: ${errorMsg}`)
+    }
+
+    // Extract the personaId from the response
+    const personaId = data.data?.personaId || data.data?.persona_id
+    if (!personaId) {
+      console.error('[sunoApi] No personaId in response:', data)
+      throw new Error('Synthetic Singer was created but no ID was returned. Please try again.')
+    }
+
+    console.log('[sunoApi] Synthetic Singer created successfully! personaId:', personaId)
+
+    return {
+      personaId,
+      name: body.name,
+      description: body.description,
+      sourceTaskId: taskId,
+      sourceAudioId: audioId,
+      status: 'complete',
+    }
+  } catch (error) {
+    console.error('[sunoApi] Error generating persona (Synthetic Singer):', error)
+    throw error
+  }
+}
+
+/**
+ * Check if a song is eligible to create a Synthetic Singer
+ * Must be V4+ model, complete, and within 15-day window
+ *
+ * @param {object} song - The song object from our database
+ * @returns {object} Eligibility status and reason
+ */
+export const checkArtistVoiceEligibility = (song) => {
+  // Check if song has required fields
+  if (!song) {
+    return { eligible: false, reason: 'Song not found' }
+  }
+
+  // Check if already has a persona
+  if (song.personaId || song.artistVoiceId) {
+    return { eligible: false, reason: 'Synthetic Singer already created from this song', alreadyCreated: true }
+  }
+
+  // Check model version - must be V4 or higher
+  // Suno's generatePersona API only works with songs from chirp-v4 or later models
+  const modelName = song.model_name || song.modelName || song.model || ''
+  const modelVersion = modelName.toUpperCase().replace(/[^V0-9]/g, '')
+  const versionNumber = parseFloat(modelVersion.replace('V', '')) || 0
+
+  if (versionNumber < 4) {
+    return {
+      eligible: false,
+      reason: 'Synthetic Singers require songs generated with Model V4 or higher',
+      modelIssue: true,
+    }
+  }
+
+  // Check if song has required Suno IDs
+  if (!song.sunoId && !song.suno_id && !song.audioId) {
+    return { eligible: false, reason: 'Song is missing Suno audio ID' }
+  }
+  if (!song.taskId && !song.task_id && !song.sunoTaskId) {
+    return { eligible: false, reason: 'Song is missing Suno task ID' }
+  }
+
+  // Check 15-day expiration window
+  const createdAt = song.createdAt?.toDate?.() || song.createdAt || song.create_time
+  if (createdAt) {
+    const createdDate = new Date(createdAt)
+    const now = new Date()
+    const daysSinceCreation = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24))
+
+    if (daysSinceCreation >= 15) {
+      return {
+        eligible: false,
+        reason: 'This song has expired on Suno servers (15-day limit)',
+        expired: true,
+        daysAgo: daysSinceCreation,
+      }
+    }
+
+    // Return days remaining for UI display
+    const daysRemaining = 15 - daysSinceCreation
+    return {
+      eligible: true,
+      daysRemaining,
+      reason: `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left to create Synthetic Singer`,
+    }
+  }
+
+  // If no creation date, assume eligible but warn
+  return {
+    eligible: true,
+    daysRemaining: null,
+    reason: 'Eligible (creation date unknown)',
+  }
+}
+
 export default {
   generateSongSimple,
   generateSongCustom,
@@ -898,6 +1103,8 @@ export default {
   getVideoGenerationStatus,
   getExistingVideoByAudioId,
   pollForVideoCompletion,
+  generatePersona,
+  checkArtistVoiceEligibility,
   MODEL_VERSIONS,
   DEFAULT_MODEL,
 }

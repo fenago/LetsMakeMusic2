@@ -41,6 +41,9 @@ function IMProfileSettings(props) {
     } else if (routeName === 'DebugLogs') {
       // Direct navigation for Debug Logs screen
       navigation.navigate('DebugLogs')
+    } else if (routeName === 'GeminiKeySettings') {
+      // Direct navigation for Gemini API Key settings
+      navigation.navigate('GeminiKeySettings')
     } else {
       navigation.navigate(lastScreenTitle + routeName, {
         form,
@@ -102,6 +105,17 @@ function IMProfileSettings(props) {
         <View style={styles.themeOptionsRow}>
           {themeOptions.map(renderThemeOption)}
         </View>
+      </View>
+
+      <View style={styles.settingsTitleContainer}>
+        <Text style={styles.settingsTitle}>{'INTEGRATIONS'}</Text>
+      </View>
+      <View style={styles.settingsTypesContainer}>
+        {renderSettingsType({
+          type: 'Gemini API Key',
+          routeName: 'GeminiKeySettings',
+          screenTitle: localized('Gemini API Key'),
+        })}
       </View>
 
       <View style={styles.settingsTitleContainer}>

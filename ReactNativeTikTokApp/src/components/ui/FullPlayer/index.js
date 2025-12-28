@@ -12,8 +12,11 @@ import {
   Pressable,
   Share,
   Alert,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native'
 import BottomSheet, { BottomSheetScrollView, TouchableOpacity } from '@gorhom/bottom-sheet'
+import * as FileSystem from 'expo-file-system/legacy'
 import {
   ChevronDown,
   MoreHorizontal,
@@ -45,6 +48,8 @@ import {
   Volume2,
   Download,
   ListPlus,
+  Plus,
+  ListMusic,
   BarChart3,
   Edit3,
   Share2,
@@ -53,6 +58,8 @@ import {
 } from 'lucide-react-native'
 import { useNavigation } from '@react-navigation/native'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
+import { useCurrentUser } from '../../../core/onboarding'
+import { usePlaylists } from '../../../hooks/usePlaylists'
 import EditSongModal from '../EditSongModal'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -136,8 +143,14 @@ const FullPlayerBottomSheet = () => {
   const [showOptionsMenu, setShowOptionsMenu] = useState(false)
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false)
   const [showEditSongModal, setShowEditSongModal] = useState(false)
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(0)
 
   const navigation = useNavigation()
+  const currentUser = useCurrentUser()
+  const userId = currentUser?.id || currentUser?.userID
+  const { playlists, playlistsLoading, addSongToPlaylist } = usePlaylists(userId)
 
   const {
     mediaType,
@@ -207,6 +220,119 @@ const FullPlayerBottomSheet = () => {
   const navigateToFeature = useCallback((screenName) => {
     hideFullPlayer()
     navigation.navigate(screenName, { song: currentMedia })
+  }, [navigation, hideFullPlayer, currentMedia])
+
+  // Handle download
+  const handleDownload = useCallback(async () => {
+    if (!currentMedia?.audioUrl) {
+      Alert.alert('Download Error', 'No audio file available to download.')
+      return
+    }
+
+    if (isDownloading) {
+      return
+    }
+
+    setIsDownloading(true)
+    setDownloadProgress(0)
+
+    try {
+      // Create filename from song title
+      const songTitle = (currentMedia.title || currentMedia.label || currentMedia.name || 'song')
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .substring(0, 50)
+      const timestamp = Date.now()
+      const filename = `${songTitle}_${timestamp}.mp3`
+      const fileUri = `${FileSystem.documentDirectory}${filename}`
+
+      // Download the file with progress tracking
+      const downloadResumable = FileSystem.createDownloadResumable(
+        currentMedia.audioUrl,
+        fileUri,
+        {},
+        (downloadProgress) => {
+          const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite
+          setDownloadProgress(Math.round(progress * 100))
+        }
+      )
+
+      const result = await downloadResumable.downloadAsync()
+
+      if (result?.uri) {
+        // Offer to share/save the downloaded file
+        Alert.alert(
+          'Download Complete',
+          `"${currentMedia.title || 'Song'}" has been downloaded. Would you like to share it?`,
+          [
+            {
+              text: 'Share',
+              onPress: async () => {
+                try {
+                  await Share.share({
+                    url: result.uri,
+                    title: currentMedia.title || 'Song',
+                  })
+                } catch (shareError) {
+                  console.log('[FullPlayer] Share cancelled or failed:', shareError)
+                }
+              },
+            },
+            {
+              text: 'Done',
+              style: 'cancel',
+            },
+          ]
+        )
+      } else {
+        throw new Error('Download failed')
+      }
+    } catch (error) {
+      console.error('[FullPlayer] Download error:', error)
+      Alert.alert('Download Failed', error.message || 'Unable to download the song. Please try again.')
+    } finally {
+      setIsDownloading(false)
+      setDownloadProgress(0)
+    }
+  }, [currentMedia, isDownloading])
+
+  // Handle add to playlist
+  const handleAddToPlaylist = useCallback(async (playlistId, playlistName) => {
+    if (!currentMedia?.id) {
+      Alert.alert('Error', 'No song selected.')
+      return
+    }
+
+    try {
+      const result = await addSongToPlaylist(playlistId, currentMedia)
+
+      if (result.alreadyExists) {
+        Alert.alert('Already in Playlist', `This song is already in "${playlistName}".`)
+      } else if (result.success) {
+        Alert.alert('Added to Playlist', `"${currentMedia.title || 'Song'}" has been added to "${playlistName}".`)
+        setShowPlaylistModal(false)
+      } else {
+        Alert.alert('Error', result.error || 'Failed to add song to playlist.')
+      }
+    } catch (error) {
+      console.error('[FullPlayer] Add to playlist error:', error)
+      Alert.alert('Error', error.message || 'Failed to add song to playlist.')
+    }
+  }, [currentMedia, addSongToPlaylist])
+
+  // Open playlist selection modal
+  const openPlaylistModal = useCallback(() => {
+    if (!userId) {
+      Alert.alert('Sign In Required', 'Please sign in to add songs to playlists.')
+      return
+    }
+    setShowPlaylistModal(true)
+  }, [userId])
+
+  // Navigate to create playlist screen
+  const handleCreatePlaylist = useCallback(() => {
+    setShowPlaylistModal(false)
+    hideFullPlayer()
+    navigation.navigate('CreatePlaylist', { songToAdd: currentMedia })
   }, [navigation, hideFullPlayer, currentMedia])
 
   // Handle native share
@@ -312,10 +438,7 @@ const FullPlayerBottomSheet = () => {
           <View style={styles.trackActionButtons}>
             <RNTouchableOpacity
               style={styles.trackActionButton}
-              onPress={() => {
-                // TODO: Implement add to playlist
-                console.log('Add to playlist pressed')
-              }}
+              onPress={openPlaylistModal}
               activeOpacity={0.6}
             >
               <ListPlus
@@ -325,18 +448,22 @@ const FullPlayerBottomSheet = () => {
               />
             </RNTouchableOpacity>
             <RNTouchableOpacity
-              style={styles.trackActionButton}
-              onPress={() => {
-                // TODO: Implement download
-                console.log('Download pressed')
-              }}
+              style={[styles.trackActionButton, isDownloading && styles.downloadingButton]}
+              onPress={handleDownload}
+              disabled={isDownloading}
               activeOpacity={0.6}
             >
-              <Download
-                size={24}
-                color={isDark ? '#888888' : '#888888'}
-                strokeWidth={2}
-              />
+              {isDownloading ? (
+                <View style={styles.downloadProgressContainer}>
+                  <ActivityIndicator size="small" color={isDark ? '#888888' : '#888888'} />
+                </View>
+              ) : (
+                <Download
+                  size={24}
+                  color={isDark ? '#888888' : '#888888'}
+                  strokeWidth={2}
+                />
+              )}
             </RNTouchableOpacity>
             <RNTouchableOpacity
               style={[styles.trackActionButton, isLikeLoading && styles.likeLoading]}
@@ -545,14 +672,21 @@ const FullPlayerBottomSheet = () => {
 
                 {/* Download */}
                 <TouchableOpacity
-                  style={styles.optionsMenuItem}
+                  style={[styles.optionsMenuItem, isDownloading && styles.optionsMenuItemDisabled]}
                   onPress={() => {
                     setShowOptionsMenu(false)
-                    console.log('Download pressed')
+                    handleDownload()
                   }}
+                  disabled={isDownloading}
                 >
-                  <Download size={22} color="#22c55e" strokeWidth={2} />
-                  <Text style={styles.optionsMenuText}>Download Song</Text>
+                  {isDownloading ? (
+                    <ActivityIndicator size="small" color="#22c55e" />
+                  ) : (
+                    <Download size={22} color="#22c55e" strokeWidth={2} />
+                  )}
+                  <Text style={styles.optionsMenuText}>
+                    {isDownloading ? `Downloading ${downloadProgress}%` : 'Download Song'}
+                  </Text>
                 </TouchableOpacity>
 
                 {/* Add to Playlist */}
@@ -560,7 +694,7 @@ const FullPlayerBottomSheet = () => {
                   style={styles.optionsMenuItem}
                   onPress={() => {
                     setShowOptionsMenu(false)
-                    console.log('Add to playlist pressed')
+                    openPlaylistModal()
                   }}
                 >
                   <ListPlus size={22} color="#3875e8" strokeWidth={2} />
@@ -775,6 +909,113 @@ const FullPlayerBottomSheet = () => {
             console.log('Song updated:', updatedSong)
           }}
         />
+
+        {/* Playlist Selection Modal */}
+        <Modal
+          visible={showPlaylistModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowPlaylistModal(false)}
+        >
+          <View style={styles.playlistModalOverlay}>
+            <View style={styles.playlistModalContent}>
+              {/* Modal Header */}
+              <View style={styles.playlistModalHeader}>
+                <Text style={styles.playlistModalTitle}>Add to Playlist</Text>
+                <Pressable
+                  style={styles.playlistModalCloseButton}
+                  onPress={() => setShowPlaylistModal(false)}
+                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                >
+                  <X size={24} color={isDark ? '#ffffff' : '#151723'} strokeWidth={2} />
+                </Pressable>
+              </View>
+
+              {/* Song Info */}
+              <View style={styles.playlistModalSongInfo}>
+                {currentMedia?.imageUrl ? (
+                  <Image source={{ uri: currentMedia.imageUrl }} style={styles.playlistModalSongImage} />
+                ) : (
+                  <View style={[styles.playlistModalSongImage, styles.playlistModalSongImagePlaceholder]}>
+                    <Music size={24} color="#888888" />
+                  </View>
+                )}
+                <View style={styles.playlistModalSongDetails}>
+                  <Text style={styles.playlistModalSongTitle} numberOfLines={1}>
+                    {currentMedia?.title || currentMedia?.label || 'Unknown Track'}
+                  </Text>
+                  <Text style={styles.playlistModalSongArtist} numberOfLines={1}>
+                    {currentMedia?.artist || currentMedia?.author?.stageName || 'Unknown Artist'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Create New Playlist Button */}
+              <TouchableOpacity
+                style={styles.playlistModalCreateButton}
+                onPress={handleCreatePlaylist}
+              >
+                <View style={styles.playlistModalCreateIcon}>
+                  <Plus size={24} color="#3875e8" strokeWidth={2} />
+                </View>
+                <Text style={styles.playlistModalCreateText}>Create New Playlist</Text>
+              </TouchableOpacity>
+
+              {/* Divider */}
+              <View style={styles.playlistModalDivider}>
+                <Text style={styles.playlistModalDividerText}>Your Playlists</Text>
+              </View>
+
+              {/* Playlists List */}
+              {playlistsLoading ? (
+                <View style={styles.playlistModalLoading}>
+                  <ActivityIndicator size="large" color="#3875e8" />
+                </View>
+              ) : playlists.length === 0 ? (
+                <View style={styles.playlistModalEmpty}>
+                  <ListMusic size={48} color="#888888" strokeWidth={1.5} />
+                  <Text style={styles.playlistModalEmptyTitle}>No Playlists Yet</Text>
+                  <Text style={styles.playlistModalEmptyText}>
+                    Create your first playlist to start organizing your music.
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={playlists}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.playlistModalItem}
+                      onPress={() => handleAddToPlaylist(item.id, item.name)}
+                    >
+                      {item.coverImageUrl ? (
+                        <Image
+                          source={{ uri: item.coverImageUrl }}
+                          style={styles.playlistModalItemImage}
+                        />
+                      ) : (
+                        <View style={[styles.playlistModalItemImage, styles.playlistModalItemImagePlaceholder]}>
+                          <ListMusic size={20} color="#888888" />
+                        </View>
+                      )}
+                      <View style={styles.playlistModalItemInfo}>
+                        <Text style={styles.playlistModalItemName} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        <Text style={styles.playlistModalItemCount}>
+                          {item.songCount || 0} songs
+                        </Text>
+                      </View>
+                      <Plus size={20} color="#888888" strokeWidth={2} />
+                    </TouchableOpacity>
+                  )}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.playlistModalList}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
 
         {/* Queue Section - Shows full queue with currently playing indicator */}
         {queue.length > 0 && (
@@ -1861,6 +2102,178 @@ const getStyles = (isDark) => StyleSheet.create({
     fontSize: 14,
     color: isDark ? '#c5c5c5' : '#7e7e7e',
     fontWeight: '500',
+  },
+  // Download button styles
+  downloadingButton: {
+    opacity: 0.6,
+  },
+  downloadProgressContainer: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optionsMenuItemDisabled: {
+    opacity: 0.5,
+  },
+  // Playlist Modal styles
+  playlistModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  playlistModalContent: {
+    backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 34,
+  },
+  playlistModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: isDark ? '#333333' : '#e0e0e0',
+  },
+  playlistModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: isDark ? '#ffffff' : '#151723',
+  },
+  playlistModalCloseButton: {
+    position: 'absolute',
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: isDark ? '#333333' : '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playlistModalSongInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: isDark ? '#333333' : '#e0e0e0',
+  },
+  playlistModalSongImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+  },
+  playlistModalSongImagePlaceholder: {
+    backgroundColor: isDark ? '#333333' : '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playlistModalSongDetails: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  playlistModalSongTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: isDark ? '#ffffff' : '#151723',
+    marginBottom: 4,
+  },
+  playlistModalSongArtist: {
+    fontSize: 14,
+    color: isDark ? '#c5c5c5' : '#7e7e7e',
+  },
+  playlistModalCreateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: isDark ? '#333333' : '#e0e0e0',
+  },
+  playlistModalCreateIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: isDark ? '#333333' : '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  playlistModalCreateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3875e8',
+  },
+  playlistModalDivider: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  playlistModalDividerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: isDark ? '#888888' : '#888888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  playlistModalLoading: {
+    paddingVertical: 48,
+    alignItems: 'center',
+  },
+  playlistModalEmpty: {
+    paddingVertical: 48,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+  },
+  playlistModalEmptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: isDark ? '#ffffff' : '#151723',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  playlistModalEmptyText: {
+    fontSize: 14,
+    color: isDark ? '#c5c5c5' : '#7e7e7e',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  playlistModalList: {
+    paddingHorizontal: 8,
+  },
+  playlistModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  playlistModalItemImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+  },
+  playlistModalItemImagePlaceholder: {
+    backgroundColor: isDark ? '#333333' : '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playlistModalItemInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  playlistModalItemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: isDark ? '#ffffff' : '#151723',
+    marginBottom: 3,
+  },
+  playlistModalItemCount: {
+    fontSize: 13,
+    color: isDark ? '#888888' : '#888888',
   },
 })
 
