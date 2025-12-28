@@ -1038,17 +1038,37 @@ export const checkArtistVoiceEligibility = (song) => {
 
   // Check model version - must be V4 or higher
   // Suno's generatePersona API only works with songs from chirp-v4 or later models
-  const modelName = song.model_name || song.modelName || song.model || ''
+  const modelName = song.model_name || song.modelName || song.model || song.sunoModelName || ''
   const modelVersion = modelName.toUpperCase().replace(/[^V0-9]/g, '')
   const versionNumber = parseFloat(modelVersion.replace('V', '')) || 0
 
-  if (versionNumber < 4) {
+  // Debug logging
+  console.log('[checkArtistVoiceEligibility] Model check:', {
+    songId: song.id,
+    model_name: song.model_name,
+    modelName: song.modelName,
+    model: song.model,
+    sunoModelName: song.sunoModelName,
+    parsed: modelName,
+    versionNumber,
+  })
+
+  // If no model info exists but song has valid Suno IDs, assume it's V4+
+  // (Songs created after V4 release that just didn't store the model field)
+  const hasValidSunoIds = (song.sunoId || song.suno_id || song.audioId) &&
+                          (song.taskId || song.task_id || song.sunoTaskId)
+
+  if (versionNumber < 4 && versionNumber > 0) {
+    // Explicitly marked as older model
     return {
       eligible: false,
       reason: 'Synthetic Singers require songs generated with Model V4 or higher',
       modelIssue: true,
     }
   }
+
+  // If versionNumber is 0 (no model info) but has valid Suno IDs, assume eligible
+  // This handles legacy songs that didn't store model version
 
   // Check if song has required Suno IDs
   if (!song.sunoId && !song.suno_id && !song.audioId) {

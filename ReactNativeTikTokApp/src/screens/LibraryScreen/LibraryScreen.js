@@ -4,13 +4,14 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
+  Image as RNImage,
   StyleSheet,
   Dimensions,
   ActivityIndicator,
   FlatList,
   Alert,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users, ImageIcon, Mic } from 'lucide-react-native'
@@ -394,7 +395,7 @@ const LibraryScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.searchButton}
           onPress={() => navigation.navigate('Discover')}>
-          <Image
+          <RNImage
             source={theme.icons.search}
             style={[styles.searchIcon, { tintColor: colorSet.primaryText }]}
           />
@@ -518,6 +519,8 @@ const LibraryScreen = ({ navigation }) => {
 
   const renderSongItem = ({ item: song, index }) => {
     const isPlayable = isSongPlayable(song)
+    // Use thumbnailUrl if available, fall back to imageUrl
+    const displayImageUrl = song.thumbnailUrl || song.imageUrl
 
     return (
       <Animated.View
@@ -530,11 +533,13 @@ const LibraryScreen = ({ navigation }) => {
           delayLongPress={500}
           activeOpacity={0.8}>
           <View style={[styles.imageContainer, !isPlayable && styles.unplayableImageContainer]}>
-            {song.imageUrl ? (
+            {displayImageUrl ? (
               <Image
-                source={{ uri: song.imageUrl }}
+                source={{ uri: displayImageUrl }}
                 style={[styles.songImage, !isPlayable && styles.unplayableImage]}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
               />
             ) : (
               <View
@@ -542,7 +547,7 @@ const LibraryScreen = ({ navigation }) => {
                   styles.songImagePlaceholder,
                   { backgroundColor: colorSet.grey3 },
                 ]}>
-                <Image
+                <RNImage
                   source={theme.icons.musicalNotes}
                   style={[styles.placeholderIcon, { tintColor: colorSet.grey9 }]}
                 />
@@ -617,7 +622,7 @@ const LibraryScreen = ({ navigation }) => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Image
+      <RNImage
         source={theme.icons.musicalNotes}
         style={[styles.emptyIcon, { tintColor: colorSet.grey9 }]}
       />
@@ -658,6 +663,8 @@ const LibraryScreen = ({ navigation }) => {
 
   // Render recently played item (horizontal scroll style)
   const renderRecentlyPlayedItem = ({ item: song, index }) => {
+    // Use thumbnailUrl if available, fall back to imageUrl
+    const displayImageUrl = song.thumbnailUrl || song.imageUrl
     return (
       <Animated.View
         entering={FadeInDown.delay(index * 50).springify()}
@@ -666,11 +673,13 @@ const LibraryScreen = ({ navigation }) => {
           onPress={() => handleSongPress(song)}
           activeOpacity={0.8}>
           <View style={styles.imageContainer}>
-            {song.imageUrl ? (
+            {displayImageUrl ? (
               <Image
-                source={{ uri: song.imageUrl }}
+                source={{ uri: displayImageUrl }}
                 style={styles.songImage}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
               />
             ) : (
               <View
@@ -678,7 +687,7 @@ const LibraryScreen = ({ navigation }) => {
                   styles.songImagePlaceholder,
                   { backgroundColor: colorSet.grey3 },
                 ]}>
-                <Image
+                <RNImage
                   source={theme.icons.musicalNotes}
                   style={[styles.placeholderIcon, { tintColor: colorSet.grey9 }]}
                 />
@@ -750,6 +759,8 @@ const LibraryScreen = ({ navigation }) => {
 
   // Render recommendation item (horizontal scroll style)
   const renderRecommendationItem = ({ item: song, index }) => {
+    // Use thumbnailUrl if available, fall back to imageUrl
+    const displayImageUrl = song.thumbnailUrl || song.imageUrl
     return (
       <Animated.View
         entering={FadeInDown.delay(index * 50).springify()}
@@ -758,11 +769,13 @@ const LibraryScreen = ({ navigation }) => {
           onPress={() => handleSongPress(song)}
           activeOpacity={0.8}>
           <View style={styles.imageContainer}>
-            {song.imageUrl ? (
+            {displayImageUrl ? (
               <Image
-                source={{ uri: song.imageUrl }}
+                source={{ uri: displayImageUrl }}
                 style={styles.songImage}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
               />
             ) : (
               <View
@@ -770,7 +783,7 @@ const LibraryScreen = ({ navigation }) => {
                   styles.songImagePlaceholder,
                   { backgroundColor: colorSet.grey3 },
                 ]}>
-                <Image
+                <RNImage
                   source={theme.icons.musicalNotes}
                   style={[styles.placeholderIcon, { tintColor: colorSet.grey9 }]}
                 />
@@ -876,6 +889,8 @@ const LibraryScreen = ({ navigation }) => {
   // Render list view item (compact row)
   const renderListItem = ({ item: song, index }) => {
     const isPlayable = isSongPlayable(song)
+    // Use thumbnailUrl if available, fall back to imageUrl
+    const displayImageUrl = song.thumbnailUrl || song.imageUrl
     return (
       <TouchableOpacity
         key={song.id}
@@ -885,11 +900,13 @@ const LibraryScreen = ({ navigation }) => {
         delayLongPress={500}
         activeOpacity={0.7}>
         <View style={styles.listItemImageContainer}>
-          {song.imageUrl ? (
+          {displayImageUrl ? (
             <Image
-              source={{ uri: song.imageUrl }}
+              source={{ uri: displayImageUrl }}
               style={styles.listItemImage}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
             />
           ) : (
             <View style={[styles.listItemImagePlaceholder, { backgroundColor: colorSet.grey3 }]}>
@@ -1039,6 +1056,8 @@ const LibraryScreen = ({ navigation }) => {
   // Render playlist list item (compact row for list view)
   const renderPlaylistListItem = (playlist, index) => {
     const songCount = playlist.songCount || 0
+    // Use thumbnailUrl if available, fall back to coverImageUrl
+    const displayImageUrl = playlist.thumbnailUrl || playlist.coverImageUrl
     return (
       <TouchableOpacity
         key={playlist.id}
@@ -1046,11 +1065,13 @@ const LibraryScreen = ({ navigation }) => {
         onPress={() => handlePlaylistPress(playlist)}
         activeOpacity={0.7}>
         <View style={styles.listItemImageContainer}>
-          {playlist.coverImageUrl ? (
+          {displayImageUrl ? (
             <Image
-              source={{ uri: playlist.coverImageUrl }}
+              source={{ uri: displayImageUrl }}
               style={styles.listItemImage}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
             />
           ) : (
             <View style={[styles.listItemImagePlaceholder, { backgroundColor: '#8b5cf6' }]}>
@@ -1096,6 +1117,8 @@ const LibraryScreen = ({ navigation }) => {
   const renderBandListItem = (band, index) => {
     const members = band.participants || []
     const memberCount = members.length
+    // Use thumbnailUrl if available, fall back to bandImageUrl or imageUrl
+    const displayImageUrl = band.thumbnailUrl || band.bandImageUrl || band.imageUrl
     return (
       <TouchableOpacity
         key={band.id}
@@ -1103,11 +1126,13 @@ const LibraryScreen = ({ navigation }) => {
         onPress={() => handleBandPress(band)}
         activeOpacity={0.7}>
         <View style={styles.listItemImageContainer}>
-          {band.bandImageUrl || band.imageUrl ? (
+          {displayImageUrl ? (
             <Image
-              source={{ uri: band.bandImageUrl || band.imageUrl }}
+              source={{ uri: displayImageUrl }}
               style={styles.listItemImage}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
             />
           ) : (
             <View style={[styles.listItemImagePlaceholder, { backgroundColor: '#7c3aed' }]}>
@@ -1217,7 +1242,9 @@ const LibraryScreen = ({ navigation }) => {
               <Image
                 source={{ uri: imageUrl }}
                 style={styles.songImage}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
               />
             ) : (
               <View
