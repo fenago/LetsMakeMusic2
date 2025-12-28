@@ -13,7 +13,7 @@ export const userRecentlyPlayedRef = (userId) =>
   db.collection('users').doc(userId).collection('recentlyPlayed')
 
 // Constants
-const MAX_RECENT_ENTRIES = 50 // Maximum entries to keep
+const MAX_RECENT_ENTRIES = 12 // Maximum entries to keep
 const DEDUPE_WINDOW_MS = 5 * 60 * 1000 // 5 minutes - don't re-add same song within this window
 
 /**
@@ -34,24 +34,44 @@ const DEDUPE_WINDOW_MS = 5 * 60 * 1000 // 5 minutes - don't re-add same song wit
  * @returns {Promise<Object>} Result with success status
  */
 export const logRecentlyPlayed = async (userId, songData) => {
+  console.log('[RecentlyPlayed] logRecentlyPlayed called with:', {
+    userId: userId || 'MISSING',
+    songId: songData?.id || 'MISSING',
+    songTitle: songData?.title || 'MISSING',
+  })
+
   if (!userId || !songData?.id) {
-    console.log('[RecentlyPlayed] Missing userId or songData.id')
+    console.log('[RecentlyPlayed] ❌ Missing userId or songData.id:', {
+      hasUserId: !!userId,
+      hasSongId: !!songData?.id,
+    })
     return { success: false, error: 'Missing required data' }
   }
 
   try {
+    console.log('[RecentlyPlayed] ✅ Data validation passed, proceeding to log...')
     const now = ffirestore.FieldValue.serverTimestamp()
     const nowMs = Date.now()
     const recentRef = userRecentlyPlayedRef(userId)
+    console.log('[RecentlyPlayed] Firestore ref path:', `users/${userId}/recentlyPlayed`)
 
     // Check if this song was played recently (within dedupe window)
-    const existingQuery = await recentRef
-      .where('songId', '==', songData.id)
-      .orderBy('playedAt', 'desc')
-      .limit(1)
-      .get()
+    // Note: This query requires a composite index (songId + playedAt)
+    // If the index doesn't exist yet, we skip deduplication and just add a new entry
+    let existingQuery = null
+    try {
+      existingQuery = await recentRef
+        .where('songId', '==', songData.id)
+        .orderBy('playedAt', 'desc')
+        .limit(1)
+        .get()
+    } catch (indexError) {
+      // Composite index might not exist - log a warning and proceed without deduplication
+      console.warn('[RecentlyPlayed] Index query failed (composite index may be needed):', indexError.message)
+      // Check Firestore console for link to create index automatically
+    }
 
-    if (!existingQuery.empty) {
+    if (existingQuery && !existingQuery.empty) {
       const lastPlay = existingQuery.docs[0]
       const lastPlayData = lastPlay.data()
       const lastPlayTime = lastPlayData.playedAt?.toMillis?.() || 0
@@ -77,15 +97,19 @@ export const logRecentlyPlayed = async (userId, songData) => {
       playedAt: now,
     }
 
-    console.log('[RecentlyPlayed] Logging play:', entryData.title)
-    await recentRef.add(entryData)
+    console.log('[RecentlyPlayed] 📝 Writing to Firestore:', {
+      title: entryData.title,
+      songId: entryData.songId,
+    })
+    const docRef = await recentRef.add(entryData)
+    console.log('[RecentlyPlayed] ✅ Successfully wrote doc:', docRef.id)
 
     // Cleanup old entries if over the limit (async, don't await)
     cleanupOldEntries(userId).catch(err =>
       console.warn('[RecentlyPlayed] Cleanup error:', err)
     )
 
-    return { success: true }
+    return { success: true, docId: docRef.id }
   } catch (error) {
     console.error('[RecentlyPlayed] Error logging play:', error)
     return { success: false, error: error.message }
@@ -130,32 +154,60 @@ const cleanupOldEntries = async (userId) => {
  * @param {number} limit - Max songs to fetch (default 20)
  * @returns {Function} Unsubscribe function
  */
-export const subscribeToRecentlyPlayed = (userId, callback, limit = 20) => {
+export const subscribeToRecentlyPlayed = (userId, callback, limitCount = 20) => {
+  console.log('[RecentlyPlayed] 🔔 subscribeToRecentlyPlayed called:', {
+    userId: userId || 'MISSING',
+    limitCount,
+  })
+
   if (!userId) {
-    console.log('[RecentlyPlayed] No userId for subscription')
+    console.log('[RecentlyPlayed] ❌ No userId for subscription')
     callback([])
     return () => {}
   }
 
-  console.log('[RecentlyPlayed] Subscribing for user:', userId)
+  console.log('[RecentlyPlayed] ✅ Setting up subscription for user:', userId, 'limit:', limitCount)
+  console.log('[RecentlyPlayed] Firestore path:', `users/${userId}/recentlyPlayed`)
 
-  return userRecentlyPlayedRef(userId)
-    .orderBy('playedAt', 'desc')
-    .limit(limit)
-    .onSnapshot(
-      (querySnapshot) => {
-        const songs = querySnapshot?.docs?.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        })) || []
-        console.log('[RecentlyPlayed] Fetched', songs.length, 'recently played songs')
-        callback(songs)
-      },
-      (error) => {
-        console.error('[RecentlyPlayed] Subscription error:', error)
-        callback([])
-      }
-    )
+  try {
+    return userRecentlyPlayedRef(userId)
+      .orderBy('playedAt', 'desc')
+      .limit(limitCount)
+      .onSnapshot(
+        (querySnapshot) => {
+          const songs = querySnapshot?.docs?.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          })) || []
+          console.log('[RecentlyPlayed] Fetched', songs.length, 'recently played songs')
+          callback(songs)
+        },
+        (error) => {
+          console.error('[RecentlyPlayed] Subscription error:', error)
+          // If index error, try without ordering as fallback
+          if (error.message?.includes('index')) {
+            console.log('[RecentlyPlayed] Trying fallback query without ordering')
+            userRecentlyPlayedRef(userId)
+              .limit(limitCount)
+              .get()
+              .then(snapshot => {
+                const songs = snapshot?.docs?.map(doc => ({
+                  id: doc.id,
+                  ...doc.data(),
+                })) || []
+                callback(songs)
+              })
+              .catch(() => callback([]))
+          } else {
+            callback([])
+          }
+        }
+      )
+  } catch (error) {
+    console.error('[RecentlyPlayed] Failed to create subscription:', error)
+    callback([])
+    return () => {}
+  }
 }
 
 /**

@@ -332,7 +332,7 @@ const LibraryScreen = ({ navigation }) => {
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={[styles.headerTitle, { color: colorSet.primaryText }]}>
-        {localized('Library')}
+        {localized('My Catalog')}
       </Text>
       <View style={styles.headerActions}>
         {/* View mode toggle */}
@@ -938,23 +938,35 @@ const LibraryScreen = ({ navigation }) => {
           <View style={styles.sectionLoading}>
             <ActivityIndicator size="small" color={colorSet.primaryForeground} />
           </View>
+        ) : playlists.length > 0 ? (
+          viewMode === 'list' ? (
+            <View style={styles.listContainer}>
+              {playlists.map((playlist, index) => renderPlaylistListItem(playlist, index))}
+            </View>
+          ) : (
+            <FlatList
+              data={[{ isCreateNew: true }, ...playlists]}
+              renderItem={({ item }) => (
+                <PlaylistCard
+                  playlist={item.isCreateNew ? null : item}
+                  onPress={item.isCreateNew ? handleNewPlaylist : handlePlaylistPress}
+                  isCreateNew={item.isCreateNew}
+                  size={140}
+                />
+              )}
+              keyExtractor={(item) => item.isCreateNew ? 'create-new' : item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalListContainer}
+              ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+            />
+          )
         ) : (
-          <FlatList
-            data={[{ isCreateNew: true }, ...playlists]}
-            renderItem={({ item }) => (
-              <PlaylistCard
-                playlist={item.isCreateNew ? null : item}
-                onPress={item.isCreateNew ? handleNewPlaylist : handlePlaylistPress}
-                isCreateNew={item.isCreateNew}
-                size={140}
-              />
-            )}
-            keyExtractor={(item) => item.isCreateNew ? 'create-new' : item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalListContainer}
-            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
-          />
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Create your first playlist
+            </Text>
+          </View>
         )
       )}
     </View>
@@ -975,6 +987,52 @@ const LibraryScreen = ({ navigation }) => {
         />
         {isLikedSongsExpanded && renderSongList(likedSongs, 'Songs you like will appear here')}
       </View>
+    )
+  }
+
+  // Render playlist list item (compact row for list view)
+  const renderPlaylistListItem = (playlist, index) => {
+    const songCount = playlist.songCount || 0
+    return (
+      <TouchableOpacity
+        key={playlist.id}
+        style={styles.listItem}
+        onPress={() => handlePlaylistPress(playlist)}
+        activeOpacity={0.7}>
+        <View style={styles.listItemImageContainer}>
+          {playlist.coverImageUrl ? (
+            <Image
+              source={{ uri: playlist.coverImageUrl }}
+              style={styles.listItemImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.listItemImagePlaceholder, { backgroundColor: '#8b5cf6' }]}>
+              <ListMusic size={20} color="#fff" />
+            </View>
+          )}
+        </View>
+        <View style={styles.listItemInfo}>
+          <Text
+            style={[styles.listItemTitle, { color: colorSet.primaryText }]}
+            numberOfLines={1}>
+            {playlist.name || 'Unnamed Playlist'}
+          </Text>
+          <Text
+            style={[styles.listItemSubtitle, { color: colorSet.secondaryText }]}
+            numberOfLines={1}>
+            {songCount} {songCount === 1 ? 'song' : 'songs'}
+          </Text>
+        </View>
+        <View style={styles.listItemActions}>
+          <TouchableOpacity
+            style={styles.listActionButton}
+            onPress={() => handlePlaylistPress(playlist)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <ChevronDown size={18} color={colorSet.secondaryText} style={{ transform: [{ rotate: '-90deg' }] }} />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     )
   }
 

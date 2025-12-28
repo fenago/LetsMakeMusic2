@@ -50,11 +50,11 @@ export const usePlaylists = (userId) => {
    * Create a new playlist
    */
   const handleCreatePlaylist = useCallback(
-    async (name, description = '') => {
+    async (name, description = '', coverImageUrl = null) => {
       if (!userId) return { success: false, error: 'Not logged in' }
 
       try {
-        const result = await createPlaylist(userId, { name, description })
+        const result = await createPlaylist(userId, { name, description, coverImageUrl })
         return { success: true, playlist: result }
       } catch (error) {
         console.error('[usePlaylists] Error creating playlist:', error)

@@ -13,7 +13,8 @@ import {
   Image,
   ScrollView,
 } from 'react-native'
-import { Check, Music, Plus, Search, X } from 'lucide-react-native'
+import { Check, Music, Plus, Search, X, Camera, ImageIcon } from 'lucide-react-native'
+import * as ImagePicker from 'expo-image-picker'
 import { useTheme } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { usePlaylists } from '../../hooks/usePlaylists'
@@ -21,6 +22,7 @@ import { subscribeToUserSongs } from '../../services/songsService'
 import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore'
 import { db } from '../../core/firebase/config'
+import firebaseStorage from '../../core/media/api/firebase/storage'
 
 const MAX_SONGS_TO_SHOW = 50
 
@@ -42,6 +44,8 @@ const CreatePlaylistScreen = (props) => {
   const [selectedSongs, setSelectedSongs] = useState([])
   const [showSongPicker, setShowSongPicker] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [coverImage, setCoverImage] = useState(null)
+  const [uploadingCover, setUploadingCover] = useState(false)
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -165,6 +169,51 @@ const CreatePlaylistScreen = (props) => {
     })
   }, [])
 
+  const pickCoverImage = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      })
+
+      if (!result.canceled && result.assets?.[0]) {
+        setCoverImage(result.assets[0])
+      }
+    } catch (error) {
+      console.error('[CreatePlaylist] Error picking image:', error)
+      Alert.alert('Error', 'Failed to select image. Please try again.')
+    }
+  }, [])
+
+  const takeCoverPhoto = useCallback(async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync()
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Camera permission is needed to take photos.')
+        return
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      })
+
+      if (!result.canceled && result.assets?.[0]) {
+        setCoverImage(result.assets[0])
+      }
+    } catch (error) {
+      console.error('[CreatePlaylist] Error taking photo:', error)
+      Alert.alert('Error', 'Failed to take photo. Please try again.')
+    }
+  }, [])
+
+  const removeCoverImage = useCallback(() => {
+    setCoverImage(null)
+  }, [])
+
   const handleCreate = async () => {
     if (!name.trim()) {
       Alert.alert('Required', 'Please enter a playlist name')
@@ -179,7 +228,30 @@ const CreatePlaylistScreen = (props) => {
     setLoading(true)
 
     try {
-      const result = await createPlaylist(name.trim(), description.trim())
+      let coverImageUrl = null
+
+      // Upload cover image if selected
+      if (coverImage) {
+        setUploadingCover(true)
+        try {
+          const uploadResult = await firebaseStorage.processAndUploadMediaFile({
+            uri: coverImage.uri,
+            type: 'image/jpeg',
+            fileName: `playlist-cover-${Date.now()}.jpg`,
+          })
+
+          if (uploadResult.downloadURL) {
+            coverImageUrl = uploadResult.downloadURL
+            console.log('[CreatePlaylist] Cover image uploaded:', coverImageUrl.substring(0, 60))
+          }
+        } catch (uploadError) {
+          console.error('[CreatePlaylist] Cover upload failed:', uploadError)
+          // Continue without cover - don't fail the whole operation
+        }
+        setUploadingCover(false)
+      }
+
+      const result = await createPlaylist(name.trim(), description.trim(), coverImageUrl)
 
       if (result.success) {
         // If songs were selected, add them to the playlist
@@ -209,6 +281,7 @@ const CreatePlaylistScreen = (props) => {
       Alert.alert('Error', 'Something went wrong. Please try again.')
     } finally {
       setLoading(false)
+      setUploadingCover(false)
     }
   }
 
@@ -259,6 +332,47 @@ const CreatePlaylistScreen = (props) => {
         nestedScrollEnabled={true}
       >
         <View style={styles.form}>
+          {/* Cover Image Section */}
+          <View style={styles.coverSection}>
+            <Text style={styles.label}>Cover Image (optional)</Text>
+            <View style={styles.coverContainer}>
+              {coverImage ? (
+                <View style={styles.coverPreviewContainer}>
+                  <Image source={{ uri: coverImage.uri }} style={styles.coverPreview} />
+                  <TouchableOpacity
+                    style={styles.removeCoverButton}
+                    onPress={removeCoverImage}
+                  >
+                    <X size={16} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={[styles.coverPlaceholder, { backgroundColor: colorSet.secondaryBackground }]}>
+                  <ImageIcon size={32} color={colorSet.secondaryText} />
+                </View>
+              )}
+              <View style={styles.coverActions}>
+                <TouchableOpacity
+                  style={[styles.coverActionButton, { backgroundColor: colorSet.secondaryBackground }]}
+                  onPress={pickCoverImage}
+                >
+                  <ImageIcon size={18} color={colorSet.primaryText} />
+                  <Text style={[styles.coverActionText, { color: colorSet.primaryText }]}>Library</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.coverActionButton, { backgroundColor: colorSet.secondaryBackground }]}
+                  onPress={takeCoverPhoto}
+                >
+                  <Camera size={18} color={colorSet.primaryText} />
+                  <Text style={[styles.coverActionText, { color: colorSet.primaryText }]}>Camera</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <Text style={[styles.coverHint, { color: colorSet.secondaryText }]}>
+              If no cover is selected, the first song's cover will be used.
+            </Text>
+          </View>
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Playlist Name</Text>
             <TextInput
@@ -374,7 +488,12 @@ const CreatePlaylistScreen = (props) => {
             activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <View style={styles.loadingContent}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.createButtonText}>
+                  {uploadingCover ? 'Uploading cover...' : 'Creating...'}
+                </Text>
+              </View>
             ) : (
               <Text style={styles.createButtonText}>
                 Create Playlist{selectedSongs.length > 0 ? ` with ${selectedSongs.length} Songs` : ''}
@@ -398,6 +517,61 @@ const getStyles = (colorSet) =>
     },
     form: {
       padding: 20,
+    },
+    coverSection: {
+      marginBottom: 24,
+    },
+    coverContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      marginTop: 8,
+    },
+    coverPreviewContainer: {
+      position: 'relative',
+    },
+    coverPreview: {
+      width: 100,
+      height: 100,
+      borderRadius: 10,
+    },
+    coverPlaceholder: {
+      width: 100,
+      height: 100,
+      borderRadius: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    removeCoverButton: {
+      position: 'absolute',
+      top: -8,
+      right: -8,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: '#ef4444',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    coverActions: {
+      flex: 1,
+      gap: 10,
+    },
+    coverActionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 10,
+      gap: 8,
+    },
+    coverActionText: {
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    coverHint: {
+      fontSize: 12,
+      marginTop: 10,
     },
     inputGroup: {
       marginBottom: 24,
@@ -558,6 +732,11 @@ const getStyles = (colorSet) =>
       color: '#fff',
       fontSize: 16,
       fontWeight: '600',
+    },
+    loadingContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
     },
   })
 

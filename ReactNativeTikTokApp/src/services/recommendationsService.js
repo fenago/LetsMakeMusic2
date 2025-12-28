@@ -9,14 +9,6 @@
  * 5. Return top results
  */
 
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  limit,
-  orderBy,
-} from 'firebase/firestore'
 import { db } from '../core/firebase/config'
 
 // Weights for scoring
@@ -109,24 +101,20 @@ export const getRecommendationsForUser = async (
 
     console.log('[Recommendations] Excluding', excludeIds.size, 'songs')
 
-    // Query songs from Firestore
-    // Note: Firestore doesn't support OR queries well, so we fetch more and filter
-    const songsRef = collection(db, 'songs')
-
+    // Query songs from Firestore using React Native Firebase
     let candidateSongs = []
 
     // Strategy 1: If user has preferred styles, query by popularity within those styles
     if (preferredStyles.length > 0) {
       // Query songs ordered by playCount (most popular first)
-      const popularQuery = query(
-        songsRef,
-        where('isPublic', '==', true),
-        orderBy('playCount', 'desc'),
-        limit(100)
-      )
-
       try {
-        const snapshot = await getDocs(popularQuery)
+        const snapshot = await db
+          .collection('songs')
+          .where('isPublic', '==', true)
+          .orderBy('playCount', 'desc')
+          .limit(100)
+          .get()
+
         snapshot.forEach((doc) => {
           const song = { id: doc.id, ...doc.data() }
           candidateSongs.push(song)
@@ -134,42 +122,50 @@ export const getRecommendationsForUser = async (
       } catch (error) {
         console.warn('[Recommendations] Error querying by playCount:', error)
         // Fallback: query without orderBy
-        const fallbackQuery = query(
-          songsRef,
-          where('isPublic', '==', true),
-          limit(100)
-        )
-        const snapshot = await getDocs(fallbackQuery)
-        snapshot.forEach((doc) => {
-          const song = { id: doc.id, ...doc.data() }
-          candidateSongs.push(song)
-        })
+        try {
+          const snapshot = await db
+            .collection('songs')
+            .where('isPublic', '==', true)
+            .limit(100)
+            .get()
+
+          snapshot.forEach((doc) => {
+            const song = { id: doc.id, ...doc.data() }
+            candidateSongs.push(song)
+          })
+        } catch (fallbackError) {
+          console.warn('[Recommendations] Fallback query also failed:', fallbackError)
+        }
       }
     } else {
       // No preferences yet - just get popular songs
       try {
-        const popularQuery = query(
-          songsRef,
-          where('isPublic', '==', true),
-          orderBy('playCount', 'desc'),
-          limit(50)
-        )
-        const snapshot = await getDocs(popularQuery)
+        const snapshot = await db
+          .collection('songs')
+          .where('isPublic', '==', true)
+          .orderBy('playCount', 'desc')
+          .limit(50)
+          .get()
+
         snapshot.forEach((doc) => {
           candidateSongs.push({ id: doc.id, ...doc.data() })
         })
       } catch (error) {
         console.warn('[Recommendations] Error querying popular songs:', error)
         // Fallback without ordering
-        const fallbackQuery = query(
-          songsRef,
-          where('isPublic', '==', true),
-          limit(50)
-        )
-        const snapshot = await getDocs(fallbackQuery)
-        snapshot.forEach((doc) => {
-          candidateSongs.push({ id: doc.id, ...doc.data() })
-        })
+        try {
+          const snapshot = await db
+            .collection('songs')
+            .where('isPublic', '==', true)
+            .limit(50)
+            .get()
+
+          snapshot.forEach((doc) => {
+            candidateSongs.push({ id: doc.id, ...doc.data() })
+          })
+        } catch (fallbackError) {
+          console.warn('[Recommendations] Fallback query also failed:', fallbackError)
+        }
       }
     }
 
@@ -233,16 +229,13 @@ export const getRecommendationsForUser = async (
  */
 export const getTrendingSongs = async (resultLimit = 10) => {
   try {
-    const songsRef = collection(db, 'songs')
+    const snapshot = await db
+      .collection('songs')
+      .where('isPublic', '==', true)
+      .orderBy('playCount', 'desc')
+      .limit(resultLimit)
+      .get()
 
-    const trendingQuery = query(
-      songsRef,
-      where('isPublic', '==', true),
-      orderBy('playCount', 'desc'),
-      limit(resultLimit)
-    )
-
-    const snapshot = await getDocs(trendingQuery)
     const songs = []
 
     snapshot.forEach((doc) => {
@@ -271,18 +264,15 @@ export const getSongsByStyle = async (style, resultLimit = 20) => {
   try {
     if (!style) return []
 
-    const songsRef = collection(db, 'songs')
-
     // Note: Firestore doesn't support contains for strings,
     // so we'll fetch and filter client-side
-    const songsQuery = query(
-      songsRef,
-      where('isPublic', '==', true),
-      orderBy('playCount', 'desc'),
-      limit(100)
-    )
+    const snapshot = await db
+      .collection('songs')
+      .where('isPublic', '==', true)
+      .orderBy('playCount', 'desc')
+      .limit(100)
+      .get()
 
-    const snapshot = await getDocs(songsQuery)
     const songs = []
 
     snapshot.forEach((doc) => {

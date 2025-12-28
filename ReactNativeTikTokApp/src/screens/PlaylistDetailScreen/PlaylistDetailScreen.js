@@ -23,6 +23,9 @@ import {
   Play,
   MoreVertical,
   Pencil,
+  SkipBack,
+  SkipForward,
+  Shuffle,
 } from 'lucide-react-native'
 import { useTheme, ActivityIndicator } from '../../core/dopebase'
 import { usePlaylist, usePlaylists } from '../../hooks/usePlaylists'
@@ -39,7 +42,7 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
 
   const { playlist, playlistLoading, songs } = usePlaylist(userId, playlistId)
   const { removeSongFromPlaylist, deletePlaylist } = usePlaylists(userId)
-  const { loadMedia, setQueue } = useMediaPlayer()
+  const { playList, playNext, playPrevious, currentMedia, isPlaying } = useMediaPlayer()
 
   const handleGoBack = useCallback(() => {
     navigation.goBack()
@@ -54,7 +57,7 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
 
   const handlePlaySong = useCallback(
     (song, index) => {
-      // Transform playlist songs to player format and set queue
+      // Transform playlist songs to player format
       const queueSongs = songs.map((s) => ({
         id: s.songId,
         title: s.title,
@@ -64,17 +67,49 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
         duration: s.duration,
       }))
 
-      // Set the queue and play from the selected index
-      setQueue(queueSongs, index)
-      loadMedia(queueSongs[index])
+      // Play the list starting from the selected index
+      playList(queueSongs, index)
     },
-    [songs, loadMedia, setQueue]
+    [songs, playList]
   )
 
   const handlePlayAll = useCallback(() => {
     if (songs.length === 0) return
     handlePlaySong(songs[0], 0)
   }, [songs, handlePlaySong])
+
+  // Check if current song is from this playlist
+  const isPlayingFromThisPlaylist = currentMedia && songs.some(s => s.songId === currentMedia.id)
+
+  // Handle skip previous
+  const handleSkipPrevious = useCallback(() => {
+    if (playPrevious) {
+      playPrevious()
+    }
+  }, [playPrevious])
+
+  // Handle skip next
+  const handleSkipNext = useCallback(() => {
+    if (playNext) {
+      playNext()
+    }
+  }, [playNext])
+
+  // Handle shuffle play
+  const handleShufflePlay = useCallback(() => {
+    if (songs.length === 0) return
+    // Shuffle the songs array and play from first
+    const shuffled = [...songs].sort(() => Math.random() - 0.5)
+    const queueSongs = shuffled.map((s) => ({
+      id: s.songId,
+      title: s.title,
+      imageUrl: s.imageUrl,
+      artist: s.artist,
+      audioUrl: s.audioUrl,
+      duration: s.duration,
+    }))
+    playList(queueSongs, 0)
+  }, [songs, playList])
 
   const handleRemoveSong = useCallback(
     async (song) => {
@@ -205,15 +240,51 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
         {songs.length} {songs.length === 1 ? 'song' : 'songs'}
       </Text>
 
-      {/* Play All Button */}
+      {/* Playback Controls */}
       {songs.length > 0 && (
-        <TouchableOpacity
-          style={[styles.playAllButton, { backgroundColor: colorSet.primaryForeground }]}
-          onPress={handlePlayAll}
-        >
-          <Play size={20} color="#fff" fill="#fff" />
-          <Text style={styles.playAllText}>Play All</Text>
-        </TouchableOpacity>
+        <View style={styles.playbackControls}>
+          {/* Shuffle Button */}
+          <TouchableOpacity
+            style={[styles.controlButton, { backgroundColor: colorSet.secondaryBackground }]}
+            onPress={handleShufflePlay}
+          >
+            <Shuffle size={20} color={colorSet.primaryText} />
+          </TouchableOpacity>
+
+          {/* Skip Previous */}
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              { backgroundColor: colorSet.secondaryBackground },
+              !isPlayingFromThisPlaylist && styles.controlButtonDisabled,
+            ]}
+            onPress={handleSkipPrevious}
+            disabled={!isPlayingFromThisPlaylist}
+          >
+            <SkipBack size={22} color={isPlayingFromThisPlaylist ? colorSet.primaryText : colorSet.grey6} fill={isPlayingFromThisPlaylist ? colorSet.primaryText : colorSet.grey6} />
+          </TouchableOpacity>
+
+          {/* Play All Button */}
+          <TouchableOpacity
+            style={[styles.playAllButton, { backgroundColor: colorSet.primaryForeground }]}
+            onPress={handlePlayAll}
+          >
+            <Play size={24} color="#fff" fill="#fff" />
+          </TouchableOpacity>
+
+          {/* Skip Next */}
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              { backgroundColor: colorSet.secondaryBackground },
+              !isPlayingFromThisPlaylist && styles.controlButtonDisabled,
+            ]}
+            onPress={handleSkipNext}
+            disabled={!isPlayingFromThisPlaylist}
+          >
+            <SkipForward size={22} color={isPlayingFromThisPlaylist ? colorSet.primaryText : colorSet.grey6} fill={isPlayingFromThisPlaylist ? colorSet.primaryText : colorSet.grey6} />
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   )
@@ -365,15 +436,30 @@ const styles = StyleSheet.create({
   },
   songCount: {
     fontSize: 14,
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  playAllButton: {
+  playbackControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 28,
-    gap: 10,
+    justifyContent: 'center',
+    gap: 16,
+  },
+  controlButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  controlButtonDisabled: {
+    opacity: 0.5,
+  },
+  playAllButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   playAllText: {
     color: '#fff',

@@ -252,12 +252,29 @@ export const MediaPlayerProvider = ({ children }) => {
           )
 
           // Log to recently played history
+          console.log('[MediaPlayerContext] 📊 Recently Played check:', {
+            hasUserId: !!userId,
+            userId: userId || 'NULL',
+            itemId: item.id,
+            itemTitle: item.title,
+          })
           if (userId) {
             console.log('=== LOGGING TO RECENTLY PLAYED for user:', userId, '===')
-            logRecentlyPlayed(userId, item).catch(err =>
-              console.warn('Failed to log recently played:', err)
-            )
+            logRecentlyPlayed(userId, item)
+              .then(result => {
+                console.log('[MediaPlayerContext] ✅ logRecentlyPlayed result:', result)
+              })
+              .catch(err => {
+                console.warn('[MediaPlayerContext] ❌ Failed to log recently played:', err)
+              })
+          } else {
+            console.log('[MediaPlayerContext] ⚠️ SKIPPING recently played - no userId available')
           }
+        } else {
+          console.log('[MediaPlayerContext] ⚠️ SKIPPING play count/recently played - no item.id:', {
+            hasItemId: !!item.id,
+            itemTitle: item?.title,
+          })
         }
       }
 
@@ -289,7 +306,7 @@ export const MediaPlayerProvider = ({ children }) => {
       Alert.alert('loadMedia ERROR', `${error.message || error}`)
       setIsLoading(false)
     }
-  }, [])
+  }, [userId]) // userId must be in deps so logRecentlyPlayed gets current user
 
   /**
    * Playback status callback for audio

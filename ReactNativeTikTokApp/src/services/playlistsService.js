@@ -19,9 +19,10 @@ export const userPlaylistsRef = (userId) =>
  * @param {Object} playlistData - Playlist data
  * @param {string} playlistData.name - Playlist name
  * @param {string} playlistData.description - Optional description
+ * @param {string} playlistData.coverImageUrl - Optional cover image URL
  * @returns {Promise<Object>} Created playlist with ID
  */
-export const createPlaylist = async (userId, { name, description = '' }) => {
+export const createPlaylist = async (userId, { name, description = '', coverImageUrl = null }) => {
   if (!userId || !name) {
     throw new Error('userId and name are required')
   }
@@ -32,7 +33,7 @@ export const createPlaylist = async (userId, { name, description = '' }) => {
     const playlistData = {
       name: name.trim(),
       description: description.trim(),
-      coverImageUrl: null, // Will be set to first song's image
+      coverImageUrl: coverImageUrl || null, // Custom cover or first song's image
       createdBy: userId,
       createdAt: now,
       updatedAt: now,
