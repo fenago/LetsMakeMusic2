@@ -42,7 +42,7 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
 
   const { playlist, playlistLoading, songs } = usePlaylist(userId, playlistId)
   const { removeSongFromPlaylist, deletePlaylist } = usePlaylists(userId)
-  const { playList, playNext, playPrevious, currentMedia, isPlaying } = useMediaPlayer()
+  const { playList, playNext, playPrevious, currentMedia, isPlaying, queue, queueIndex } = useMediaPlayer()
 
   const handleGoBack = useCallback(() => {
     navigation.goBack()
@@ -78,26 +78,32 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
     handlePlaySong(songs[0], 0)
   }, [songs, handlePlaySong])
 
-  // Check if current song is from this playlist
-  const isPlayingFromThisPlaylist = currentMedia && songs.some(s => s.songId === currentMedia.id)
+  // Check if we have an active queue (for skip button styling)
+  const hasQueue = queue && queue.length > 1
 
   // Handle skip previous
-  const handleSkipPrevious = useCallback(() => {
+  const handleSkipPrevious = useCallback(async () => {
+    console.log('[PlaylistDetail] handleSkipPrevious called, queue:', queue?.length, 'queueIndex:', queueIndex)
     if (playPrevious) {
-      playPrevious()
+      await playPrevious()
     }
-  }, [playPrevious])
+  }, [playPrevious, queue, queueIndex])
 
   // Handle skip next
-  const handleSkipNext = useCallback(() => {
+  const handleSkipNext = useCallback(async () => {
+    console.log('[PlaylistDetail] handleSkipNext called, queue:', queue?.length, 'queueIndex:', queueIndex)
     if (playNext) {
-      playNext()
+      await playNext()
     }
-  }, [playNext])
+  }, [playNext, queue, queueIndex])
 
   // Handle shuffle play
-  const handleShufflePlay = useCallback(() => {
-    if (songs.length === 0) return
+  const handleShufflePlay = useCallback(async () => {
+    console.log('[PlaylistDetail] handleShufflePlay called, songs:', songs?.length)
+    if (songs.length === 0) {
+      console.log('[PlaylistDetail] No songs to shuffle')
+      return
+    }
     // Shuffle the songs array and play from first
     const shuffled = [...songs].sort(() => Math.random() - 0.5)
     const queueSongs = shuffled.map((s) => ({
@@ -108,7 +114,8 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
       audioUrl: s.audioUrl,
       duration: s.duration,
     }))
-    playList(queueSongs, 0)
+    console.log('[PlaylistDetail] Playing shuffled queue:', queueSongs.map(s => s.title))
+    await playList(queueSongs, 0)
   }, [songs, playList])
 
   const handleRemoveSong = useCallback(
@@ -256,12 +263,11 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
             style={[
               styles.controlButton,
               { backgroundColor: colorSet.secondaryBackground },
-              !isPlayingFromThisPlaylist && styles.controlButtonDisabled,
+              !hasQueue && styles.controlButtonDisabled,
             ]}
             onPress={handleSkipPrevious}
-            disabled={!isPlayingFromThisPlaylist}
           >
-            <SkipBack size={22} color={isPlayingFromThisPlaylist ? colorSet.primaryText : colorSet.grey6} fill={isPlayingFromThisPlaylist ? colorSet.primaryText : colorSet.grey6} />
+            <SkipBack size={22} color={hasQueue ? colorSet.primaryText : colorSet.grey6} fill={hasQueue ? colorSet.primaryText : colorSet.grey6} />
           </TouchableOpacity>
 
           {/* Play All Button */}
@@ -277,12 +283,11 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
             style={[
               styles.controlButton,
               { backgroundColor: colorSet.secondaryBackground },
-              !isPlayingFromThisPlaylist && styles.controlButtonDisabled,
+              !hasQueue && styles.controlButtonDisabled,
             ]}
             onPress={handleSkipNext}
-            disabled={!isPlayingFromThisPlaylist}
           >
-            <SkipForward size={22} color={isPlayingFromThisPlaylist ? colorSet.primaryText : colorSet.grey6} fill={isPlayingFromThisPlaylist ? colorSet.primaryText : colorSet.grey6} />
+            <SkipForward size={22} color={hasQueue ? colorSet.primaryText : colorSet.grey6} fill={hasQueue ? colorSet.primaryText : colorSet.grey6} />
           </TouchableOpacity>
         </View>
       )}
