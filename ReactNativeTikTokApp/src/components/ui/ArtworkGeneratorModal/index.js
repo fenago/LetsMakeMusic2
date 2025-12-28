@@ -3,6 +3,7 @@
  *
  * Features:
  * - Text prompt input for image generation
+ * - Reference image upload for personalized artwork
  * - Flexible style selection with many options
  * - Generated image preview
  * - Save to collection option
@@ -27,7 +28,8 @@ import {
   Alert,
   Dimensions,
 } from 'react-native'
-import { X, Sparkles, RefreshCw, AlertCircle, Settings, ChevronDown, ChevronUp } from 'lucide-react-native'
+import { X, Sparkles, RefreshCw, AlertCircle, Settings, ChevronDown, ChevronUp, ImagePlus, Trash2 } from 'lucide-react-native'
+import * as ImagePicker from 'expo-image-picker'
 import { useTheme } from '../../../core/dopebase'
 import { useImageGeneration } from '../../../hooks/useImageGeneration'
 
@@ -88,14 +90,21 @@ const ArtworkGeneratorModal = ({
     generate,
     generateStyled,
     generateCoverArt,
+    generateFromReference,
     clear,
     stylePresets,
+    imageModels,
+    selectedModel,
+    setSelectedModel,
+    defaultModelKey,
   } = useImageGeneration(currentUser)
 
   const [prompt, setPrompt] = useState(initialPrompt)
   const [selectedStyle, setSelectedStyle] = useState('NONE')
   const [isSaving, setIsSaving] = useState(false)
   const [showAllStyles, setShowAllStyles] = useState(false)
+  const [referenceImage, setReferenceImage] = useState(null) // { uri, base64, mimeType }
+  const [showModelPicker, setShowModelPicker] = useState(false)
 
   // Organize styles into grouped rows for display
   const styleItems = useMemo(() => {
@@ -105,8 +114,61 @@ const ArtworkGeneratorModal = ({
     }))
   }, [stylePresets])
 
+  // Organize models for display
+  const modelItems = useMemo(() => {
+    if (!imageModels) return []
+    return Object.entries(imageModels).map(([key, value]) => ({
+      key,
+      ...value,
+    }))
+  }, [imageModels])
+
+  // Get current model info
+  const currentModelInfo = imageModels?.[selectedModel] || imageModels?.NANO_BANANA
+
   // Show first row (7-8 items) by default, all if expanded
   const visibleStyles = showAllStyles ? styleItems : styleItems.slice(0, 8)
+
+  // Handle picking a reference image
+  const handlePickReferenceImage = useCallback(async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photos to upload a reference image.')
+        return
+      }
+
+      // Pick image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      })
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0]
+        // Determine MIME type from URI
+        const mimeType = asset.uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'
+
+        setReferenceImage({
+          uri: asset.uri,
+          base64: asset.base64,
+          mimeType,
+        })
+      }
+    } catch (err) {
+      console.error('[ArtworkGeneratorModal] Error picking image:', err)
+      Alert.alert('Error', 'Failed to pick image. Please try again.')
+    }
+  }, [])
+
+  // Remove reference image
+  const handleRemoveReferenceImage = useCallback(() => {
+    setReferenceImage(null)
+  }, [])
 
   // Handle generate
   const handleGenerate = useCallback(async () => {
@@ -117,8 +179,17 @@ const ArtworkGeneratorModal = ({
 
     clear()
 
+    // If reference image is provided, use reference-based generation
+    if (referenceImage) {
+      await generateFromReference(
+        referenceImage.base64,
+        referenceImage.mimeType,
+        prompt.trim(),
+        { style: selectedStyle !== 'NONE' ? selectedStyle : undefined }
+      )
+    }
     // If we have song info, use context-aware generation
-    if (songInfo && selectedStyle === 'ALBUM_COVER') {
+    else if (songInfo && selectedStyle === 'ALBUM_COVER') {
       await generateCoverArt(
         {
           title: songInfo.title,
@@ -132,7 +203,7 @@ const ArtworkGeneratorModal = ({
     } else {
       await generateStyled(prompt.trim(), selectedStyle)
     }
-  }, [prompt, selectedStyle, songInfo, generate, generateCoverArt, generateStyled, clear])
+  }, [prompt, selectedStyle, songInfo, referenceImage, generate, generateCoverArt, generateStyled, generateFromReference, clear])
 
   // Handle regenerate
   const handleRegenerate = useCallback(() => {
@@ -152,7 +223,8 @@ const ArtworkGeneratorModal = ({
         prompt: prompt.trim(),
         style: selectedStyle,
         aspectRatio: result.aspectRatio || '1:1',
-        model: 'gemini-2.0-flash-exp',
+        model: result.modelUsed || currentModelInfo?.id || 'unknown',
+        usedReferenceImage: result.usedReferenceImage || false,
       }
 
       onGenerated?.(artworkData)
@@ -163,13 +235,14 @@ const ArtworkGeneratorModal = ({
     } finally {
       setIsSaving(false)
     }
-  }, [result, prompt, selectedStyle, onGenerated])
+  }, [result, prompt, selectedStyle, onGenerated, currentModelInfo])
 
   // Handle close
   const handleClose = useCallback(() => {
     setPrompt(initialPrompt)
     setSelectedStyle('NONE')
     setShowAllStyles(false)
+    setReferenceImage(null)
     clear()
     onClose()
   }, [initialPrompt, clear, onClose])
@@ -261,6 +334,121 @@ const ArtworkGeneratorModal = ({
               numberOfLines={3}
               textAlignVertical="top"
             />
+          </View>
+
+          {/* AI Model Selection */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: brandColors.textPrimary }]}>
+              AI Model
+            </Text>
+            <TouchableOpacity
+              style={[styles.modelSelector, {
+                backgroundColor: brandColors.surface,
+                borderColor: brandColors.border,
+              }]}
+              onPress={() => setShowModelPicker(!showModelPicker)}
+            >
+              <View style={styles.modelSelectorContent}>
+                <Text style={[styles.modelName, { color: brandColors.textPrimary }]}>
+                  {currentModelInfo?.name || 'Select Model'}
+                </Text>
+                <Text style={[styles.modelDescription, { color: brandColors.textSecondary }]}>
+                  {currentModelInfo?.description || ''}
+                </Text>
+              </View>
+              {showModelPicker ? (
+                <ChevronUp size={20} color={brandColors.textSecondary} />
+              ) : (
+                <ChevronDown size={20} color={brandColors.textSecondary} />
+              )}
+            </TouchableOpacity>
+
+            {/* Model Picker Dropdown */}
+            {showModelPicker && (
+              <View style={[styles.modelPickerDropdown, {
+                backgroundColor: brandColors.surface,
+                borderColor: brandColors.border,
+              }]}>
+                {modelItems.map((model) => (
+                  <TouchableOpacity
+                    key={model.key}
+                    style={[
+                      styles.modelOption,
+                      selectedModel === model.key && {
+                        backgroundColor: brandColors.primary + '20',
+                      },
+                    ]}
+                    onPress={() => {
+                      setSelectedModel(model.key)
+                      setShowModelPicker(false)
+                    }}
+                  >
+                    <View style={styles.modelOptionContent}>
+                      <Text style={[
+                        styles.modelOptionName,
+                        { color: brandColors.textPrimary },
+                        selectedModel === model.key && { color: brandColors.primary, fontWeight: '600' },
+                      ]}>
+                        {model.name}
+                      </Text>
+                      <Text style={[styles.modelOptionDescription, { color: brandColors.textSecondary }]}>
+                        {model.description}
+                      </Text>
+                    </View>
+                    {model.isDefault && (
+                      <View style={[styles.defaultBadge, { backgroundColor: brandColors.primary }]}>
+                        <Text style={styles.defaultBadgeText}>Default</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Reference Image Section */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: brandColors.textPrimary }]}>
+              Reference Image (Optional)
+            </Text>
+            <Text style={[styles.sectionSubtitle, { color: brandColors.textSecondary }]}>
+              Upload a photo to personalize your artwork
+            </Text>
+
+            {referenceImage ? (
+              <View style={styles.referenceImageContainer}>
+                <Image
+                  source={{ uri: referenceImage.uri }}
+                  style={styles.referenceImagePreview}
+                  resizeMode="cover"
+                />
+                <TouchableOpacity
+                  style={[styles.removeImageButton, { backgroundColor: brandColors.errorBg }]}
+                  onPress={handleRemoveReferenceImage}
+                >
+                  <Trash2 size={18} color={brandColors.errorText} />
+                  <Text style={[styles.removeImageText, { color: brandColors.errorText }]}>
+                    Remove
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.uploadButton, {
+                  backgroundColor: brandColors.surface,
+                  borderColor: brandColors.border,
+                }]}
+                onPress={handlePickReferenceImage}
+              >
+                <ImagePlus size={24} color={brandColors.primary} />
+                <Text style={[styles.uploadButtonText, { color: brandColors.textPrimary }]}>
+                  Upload Photo
+                </Text>
+                <Text style={[styles.uploadHint, { color: brandColors.textSecondary }]}>
+                  e.g., a photo of yourself for personalized covers
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Style Selection */}
@@ -561,6 +749,106 @@ const styles = StyleSheet.create({
   regenerateText: {
     fontSize: 15,
     fontWeight: '500',
+  },
+  // Reference Image styles
+  sectionSubtitle: {
+    fontSize: 13,
+    marginBottom: 12,
+    marginTop: -8,
+  },
+  referenceImageContainer: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  referenceImagePreview: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+  },
+  removeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  removeImageText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  uploadButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    gap: 8,
+  },
+  uploadButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  uploadHint: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  // Model Picker styles
+  modelSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  modelSelectorContent: {
+    flex: 1,
+  },
+  modelName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modelDescription: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  modelPickerDropdown: {
+    marginTop: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  modelOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
+  },
+  modelOptionContent: {
+    flex: 1,
+  },
+  modelOptionName: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  modelOptionDescription: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  defaultBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  defaultBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
 })
 

@@ -6,10 +6,24 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MusicFeed from '../MusicFeed'
-import { subscribeToAllSongs, subscribeToLikedSongs } from '../../../services/songsService'
+import { subscribeToAllSongs, subscribeToLikedSongs, subscribeToUserSongs } from '../../../services/songsService'
 import { getPlayableUrl, getPlayableImageUrl } from '../../../utils/audioUtils'
 import { useCurrentUser } from '../../../core/onboarding'
 import { subscribeToHomeFeedPosts } from '../../../core/socialgraph/feed/api/firebase/firebaseFeedClient'
+
+/**
+ * Fisher-Yates shuffle algorithm for randomizing array order
+ * Creates a new shuffled array without modifying the original
+ */
+const shuffleArray = (array) => {
+  if (!array?.length) return array
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
 
 // NO SAMPLE DATA - Only real Firebase songs
 // NOTE: getPlayableUrl is now imported from centralized audioUtils
@@ -130,6 +144,7 @@ const HomeFeed = ({
 
   // State for real Firebase songs
   const [songs, setSongs] = useState([]) // All songs (For You)
+  const [userOwnSongs, setUserOwnSongs] = useState([]) // User's own songs
   const [followingSongs, setFollowingSongs] = useState([]) // Songs from followed users (Following)
   const [likedSongs, setLikedSongs] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -150,7 +165,9 @@ const HomeFeed = ({
           resolvedUrl: getPlayableUrl(first),
         })
       }
-      setSongs(fetchedSongs)
+      // Shuffle songs for variety - users won't see same order every time
+      const shuffledSongs = shuffleArray(fetchedSongs)
+      setSongs(shuffledSongs)
       setIsLoading(false)
     }, 50)
 
@@ -175,6 +192,25 @@ const HomeFeed = ({
 
     return () => {
       console.log('[HomeFeed] Unsubscribing from liked songs')
+      if (unsubscribe) unsubscribe()
+    }
+  }, [userId])
+
+  // Subscribe to user's OWN songs for mixing into the feed
+  useEffect(() => {
+    if (!userId) {
+      console.log('[HomeFeed] No userId, skipping user own songs subscription')
+      return
+    }
+
+    console.log('[HomeFeed] Subscribing to user own songs for user:', userId)
+    const unsubscribe = subscribeToUserSongs(userId, (fetchedUserSongs) => {
+      console.log('[HomeFeed] Received user own songs:', fetchedUserSongs.length)
+      setUserOwnSongs(fetchedUserSongs)
+    })
+
+    return () => {
+      console.log('[HomeFeed] Unsubscribing from user own songs')
       if (unsubscribe) unsubscribe()
     }
   }, [userId])
@@ -217,15 +253,58 @@ const HomeFeed = ({
     }
   }, [userId])
 
-  // Today's Picks - FOR YOU: Songs from all users (algorithmic recommendations)
-  const todaysPicksForYou = songs.length > 0
-    ? songs.slice(0, 10).map(songToPickFormat)
+  /**
+   * Mix user's own songs into the feed with a balanced ratio
+   * Inserts 1 user song every 4 other songs to maintain variety
+   * @param {Array} otherSongs - Songs from other users
+   * @param {Array} userSongs - Current user's own songs
+   * @param {number} insertEveryN - Insert a user song every N songs (default: 4)
+   * @returns {Array} Mixed feed with balanced user/other songs
+   */
+  const mixUserSongsIntoFeed = (otherSongs, userSongs, insertEveryN = 4) => {
+    if (!userSongs?.length) return otherSongs
+    if (!otherSongs?.length) return userSongs
+
+    const result = []
+    let userSongIndex = 0
+
+    for (let i = 0; i < otherSongs.length; i++) {
+      result.push(otherSongs[i])
+
+      // Insert a user song every N other songs (if we have more)
+      if ((i + 1) % insertEveryN === 0 && userSongIndex < userSongs.length) {
+        result.push(userSongs[userSongIndex])
+        userSongIndex++
+      }
+    }
+
+    // Add any remaining user songs at the end
+    while (userSongIndex < userSongs.length) {
+      result.push(userSongs[userSongIndex])
+      userSongIndex++
+    }
+
+    return result
+  }
+
+  // Today's Picks - FOR YOU: Mix of songs from all users + user's own songs
+  // Filter out user's own songs from the "all songs" list first to avoid duplicates
+  const otherUsersSongs = songs.filter(song => song.userId !== userId)
+  const mixedForYouSongs = mixUserSongsIntoFeed(otherUsersSongs, userOwnSongs, 4)
+
+  const todaysPicksForYou = mixedForYouSongs.length > 0
+    ? mixedForYouSongs.slice(0, 15).map(songToPickFormat)
     : (propsTodaysPicks || [])
 
-  // Today's Picks - FOLLOWING: Songs from users you follow (from home_feed_live)
-  const todaysPicksFollowing = followingSongs.length > 0
-    ? followingSongs.slice(0, 10).map(songToPickFormat)
-    : []
+  // Today's Picks - FOLLOWING: Songs from users you follow + user's own songs
+  // Mix user's songs into the following feed for visibility
+  const mixedFollowingSongs = mixUserSongsIntoFeed(followingSongs, userOwnSongs, 4)
+
+  const todaysPicksFollowing = mixedFollowingSongs.length > 0
+    ? mixedFollowingSongs.slice(0, 15).map(songToPickFormat)
+    : userOwnSongs.length > 0
+      ? userOwnSongs.slice(0, 10).map(songToPickFormat) // Fallback to just user's songs if no followed songs
+      : []
 
   // Combined - MusicFeed will pick based on toggle
   // Start with For You if Following is empty

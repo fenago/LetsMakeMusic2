@@ -19,6 +19,17 @@ import { createArtistVoice, canCreateVoiceFromSong } from '../../services/artist
 
 export default function CreateArtistVoiceScreen({ navigation, route }) {
   const song = route.params?.song
+
+  // DEBUG: Log received song data
+  console.log('[CreateArtistVoiceScreen] Received song from navigation:')
+  console.log('[CreateArtistVoiceScreen] Song keys:', song ? Object.keys(song) : 'null')
+  console.log('[CreateArtistVoiceScreen] Song task IDs:', {
+    sunoTaskId: song?.sunoTaskId,
+    taskId: song?.taskId,
+    task_id: song?.task_id,
+    sunoId: song?.sunoId,
+  })
+
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const styles = getStyles(isDark)
@@ -166,6 +177,21 @@ export default function CreateArtistVoiceScreen({ navigation, route }) {
             <Text style={styles.songTitle} numberOfLines={1}>{song.title || 'Untitled'}</Text>
             <Text style={styles.songArtist} numberOfLines={1}>
               {song.author?.stageName || song.artist || 'Unknown Artist'}
+            </Text>
+          </View>
+        </View>
+
+        {/* DEBUG: Show song IDs for troubleshooting */}
+        <View style={[styles.songCard, { marginTop: 8, padding: 8 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.songLabel, { color: '#ff6b6b', marginBottom: 8 }]}>DEBUG: Song IDs</Text>
+            <Text style={{ fontSize: 11, color: isDark ? '#888' : '#666', fontFamily: 'monospace' }}>
+              sunoId: {song.sunoId || 'null'}{'\n'}
+              sunoTaskId: {song.sunoTaskId || 'null'}{'\n'}
+              taskId: {song.taskId || 'null'}{'\n'}
+              task_id: {song.task_id || 'null'}{'\n'}
+              model: {song.model || song.modelName || song.model_name || 'null'}{'\n'}
+              Keys: {Object.keys(song).slice(0, 10).join(', ')}...
             </Text>
           </View>
         </View>

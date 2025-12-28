@@ -16,19 +16,15 @@ const CALLBACK_URL = 'https://letsmakemusic-4e0fe.web.app/api/suno-callback'
 
 /**
  * Model versions and their capabilities
- * V5, V4.5+ - up to 8 min, 5000 char prompt, 1000 char style
- * V4, V3.5 - up to 4 min, 3000 char prompt, 200 char style
  */
 export const MODEL_VERSIONS = {
-  V5: { value: 'V5', label: 'V5 (Latest)', maxPrompt: 5000, maxStyle: 1000, maxDuration: 8 },
-  V4_5PLUS: { value: 'V4_5PLUS', label: 'V4.5+', maxPrompt: 5000, maxStyle: 1000, maxDuration: 8 },
-  V4_5ALL: { value: 'V4_5ALL', label: 'V4.5 All', maxPrompt: 5000, maxStyle: 1000, maxDuration: 8 },
-  V4_5: { value: 'V4_5', label: 'V4.5', maxPrompt: 5000, maxStyle: 1000, maxDuration: 8 },
-  V4: { value: 'V4', label: 'V4', maxPrompt: 3000, maxStyle: 200, maxDuration: 4 },
-  V3_5: { value: 'V3_5', label: 'V3.5', maxPrompt: 3000, maxStyle: 200, maxDuration: 4 },
+  V5: { value: 'V5', label: 'V5 (Latest)', maxPrompt: 3000, maxStyle: 200, maxTitle: 80 },
+  V4_5PLUS: { value: 'V4_5PLUS', label: 'V4.5+', maxPrompt: 3000, maxStyle: 200, maxTitle: 80 },
+  V4: { value: 'V4', label: 'V4', maxPrompt: 3000, maxStyle: 200, maxTitle: 80 },
+  V3_5: { value: 'V3_5', label: 'V3.5', maxPrompt: 3000, maxStyle: 200, maxTitle: 80 },
 }
 
-export const DEFAULT_MODEL = 'V5'
+export const DEFAULT_MODEL = 'V4'
 
 /**
  * Generate a song using Simple Mode (non-custom)
@@ -101,18 +97,31 @@ export const generateSongSimple = async (description, instrumental = false, mode
 
     const data = await response.json()
 
+    // DEBUG: Log full API response to verify taskId field name
+    console.log('[sunoApi] generateSongSimple response:', JSON.stringify(data, null, 2))
+    console.log('[sunoApi] data.data keys:', data.data ? Object.keys(data.data) : 'null')
+    console.log('[sunoApi] taskId value:', data.data?.taskId)
+    console.log('[sunoApi] task_id value:', data.data?.task_id)
+
     if (data.code !== 200) {
       throw new Error(data.msg || 'Generation failed')
     }
 
-    // Return task ID for polling
+    // Return task ID for polling - check both possible field names
+    const taskId = data.data?.taskId || data.data?.task_id
+    console.log('[sunoApi] Extracted taskId:', taskId)
+
     return {
-      taskId: data.data?.taskId,
+      success: true,
+      taskId,
       status: 'pending',
     }
   } catch (error) {
     console.error('Error generating song (simple):', error)
-    throw error
+    return {
+      success: false,
+      error: error.message || 'Failed to start generation',
+    }
   }
 }
 
@@ -198,17 +207,31 @@ export const generateSongCustom = async ({
 
     const data = await response.json()
 
+    // DEBUG: Log full API response to verify taskId field name
+    console.log('[sunoApi] generateSongCustom response:', JSON.stringify(data, null, 2))
+    console.log('[sunoApi] data.data keys:', data.data ? Object.keys(data.data) : 'null')
+    console.log('[sunoApi] taskId value:', data.data?.taskId)
+    console.log('[sunoApi] task_id value:', data.data?.task_id)
+
     if (data.code !== 200) {
       throw new Error(data.msg || 'Generation failed')
     }
 
+    // Return task ID for polling - check both possible field names
+    const taskId = data.data?.taskId || data.data?.task_id
+    console.log('[sunoApi] Extracted taskId:', taskId)
+
     return {
-      taskId: data.data?.taskId,
+      success: true,
+      taskId,
       status: 'pending',
     }
   } catch (error) {
     console.error('Error generating song (custom):', error)
-    throw error
+    return {
+      success: false,
+      error: error.message || 'Failed to start custom generation',
+    }
   }
 }
 
@@ -539,12 +562,16 @@ export const extendSong = async ({
     console.log('[sunoApi] Extend request submitted, taskId:', data.data?.taskId)
 
     return {
+      success: true,
       taskId: data.data?.taskId,
       status: 'pending',
     }
   } catch (error) {
     console.error('[sunoApi] Error extending song:', error)
-    throw error
+    return {
+      success: false,
+      error: error.message || 'Failed to extend song',
+    }
   }
 }
 
@@ -736,12 +763,16 @@ export const generateMusicVideo = async ({
 
     // Return the taskId we generated - don't rely on API to echo it back
     return {
+      success: true,
       taskId: data.data?.taskId || generatedTaskId,
       status: 'pending',
     }
   } catch (error) {
     console.error('[sunoApi] Error generating music video:', error)
-    throw error
+    return {
+      success: false,
+      error: error.message || 'Failed to generate music video',
+    }
   }
 }
 
@@ -911,7 +942,10 @@ export const generatePersona = async ({
 }) => {
   try {
     console.log('[sunoApi] ========== GENERATE PERSONA (SYNTHETIC SINGER) START ==========')
-    console.log('[sunoApi] Params:', { taskId, audioId, name, description })
+
+    // Suno API requires a description - provide default if empty
+    const finalDescription = description?.trim() || `AI vocal style captured from "${name}"`
+    console.log('[sunoApi] Params:', { taskId, audioId, name, description: finalDescription })
 
     if (!taskId) {
       throw new Error('taskId is required to create a Synthetic Singer')
@@ -949,7 +983,7 @@ export const generatePersona = async ({
       taskId,
       audioId,
       name: name.trim().substring(0, 50),
-      description: (description || '').trim().substring(0, 200),
+      description: finalDescription.substring(0, 200),
       callBackUrl: CALLBACK_URL,
     }
 
@@ -977,19 +1011,31 @@ export const generatePersona = async ({
 
     if (data.code !== 200) {
       const errorMsg = data.msg || 'Synthetic Singer creation failed'
+      const lowerMsg = errorMsg.toLowerCase()
 
-      // Handle specific error cases
-      if (errorMsg.toLowerCase().includes('already exists') || errorMsg.toLowerCase().includes('persona exists')) {
+      console.log('[sunoApi] Persona API error:', { code: data.code, msg: errorMsg })
+
+      // Handle specific error cases with user-friendly messages
+      if (lowerMsg.includes('already exists') || lowerMsg.includes('persona exists')) {
         throw new Error('A Synthetic Singer has already been created from this song. Each song can only create one voice.')
       }
-      if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('expired')) {
+      if (lowerMsg.includes('not found') || lowerMsg.includes('expired')) {
         throw new Error('This song has expired on Suno servers. Synthetic Singers must be created within 15 days of song generation.')
       }
-      if (errorMsg.toLowerCase().includes('model') || errorMsg.toLowerCase().includes('v3')) {
+      if (lowerMsg.includes('model') || lowerMsg.includes('v3')) {
         throw new Error('Synthetic Singers can only be created from songs generated with Model V4 or higher.')
       }
-      if (errorMsg.toLowerCase().includes('not complete') || errorMsg.toLowerCase().includes('pending')) {
+      if (lowerMsg.includes('not complete') || lowerMsg.includes('pending')) {
         throw new Error('The song must be fully generated before creating a Synthetic Singer. Please wait for the song to complete.')
+      }
+      if (lowerMsg.includes('internal error') || lowerMsg.includes('server error')) {
+        throw new Error('Suno API is temporarily unavailable. Please try again in a few minutes.')
+      }
+      if (lowerMsg.includes('invalid') || lowerMsg.includes('param')) {
+        throw new Error('Invalid song data. The Suno IDs may be incorrect or the song may no longer exist on Suno servers.')
+      }
+      if (lowerMsg.includes('credit') || lowerMsg.includes('quota')) {
+        throw new Error('Insufficient Suno API credits. Please try again later.')
       }
 
       throw new Error(`Synthetic Singer creation failed: ${errorMsg}`)
@@ -1072,10 +1118,16 @@ export const checkArtistVoiceEligibility = (song) => {
 
   // Check if song has required Suno IDs
   if (!song.sunoId && !song.suno_id && !song.audioId) {
-    return { eligible: false, reason: 'Song is missing Suno audio ID' }
+    return { eligible: false, reason: 'Song is missing Suno audio ID. This song may have been created before Synthetic Singer support was added.' }
   }
   if (!song.taskId && !song.task_id && !song.sunoTaskId) {
-    return { eligible: false, reason: 'Song is missing Suno task ID' }
+    // Log the actual fields for debugging
+    console.log('[checkArtistVoiceEligibility] Missing task ID. Song fields:', Object.keys(song))
+    return {
+      eligible: false,
+      reason: 'This song was created before Synthetic Singer support was added. To use Synthetic Singers, please create a new song.',
+      missingTaskId: true,
+    }
   }
 
   // Check 15-day expiration window
@@ -1111,6 +1163,182 @@ export const checkArtistVoiceEligibility = (song) => {
   }
 }
 
+/**
+ * Generate lyrics using AI
+ * Uses the Suno Lyrics API to generate song lyrics based on a prompt
+ *
+ * @param {string} prompt - Description of the lyrics (theme, mood, style) - max 200 words
+ * @returns {Promise<object>} Task ID for polling
+ */
+export const generateLyrics = async (prompt) => {
+  try {
+    console.log('[sunoApi] ========== GENERATE LYRICS START ==========')
+    console.log('[sunoApi] Prompt:', prompt)
+
+    if (!prompt || !prompt.trim()) {
+      throw new Error('A description is required to generate lyrics')
+    }
+
+    // Check credits first
+    try {
+      const quota = await getQuota()
+      console.log('[sunoApi] Credit check for lyrics:', quota?.data)
+      if (quota?.data?.remainingCredits !== undefined && quota.data.remainingCredits < 5) {
+        throw new Error('Insufficient credits. Please add more credits to continue.')
+      }
+    } catch (quotaError) {
+      console.warn('[sunoApi] Could not check quota:', quotaError.message)
+    }
+
+    const body = {
+      prompt: prompt.trim().substring(0, 1000), // Max 200 words, ~1000 chars
+      callBackUrl: CALLBACK_URL,
+    }
+
+    console.log('[sunoApi] Lyrics request body:', JSON.stringify(body, null, 2))
+
+    const response = await fetch(`${SUNO_API_BASE}/lyrics`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUNO_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    })
+
+    console.log('[sunoApi] Lyrics response status:', response.status)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[sunoApi] Lyrics generation HTTP error:', errorText)
+      throw new Error(`Suno API error: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    console.log('[sunoApi] Lyrics generation response:', JSON.stringify(data, null, 2))
+
+    if (data.code !== 200) {
+      const errorMsg = data.msg || 'Lyrics generation failed'
+      throw new Error(errorMsg)
+    }
+
+    const taskId = data.data?.taskId || data.data?.task_id
+    console.log('[sunoApi] Lyrics generation taskId:', taskId)
+
+    return {
+      success: true,
+      taskId,
+      status: 'pending',
+    }
+  } catch (error) {
+    console.error('[sunoApi] Error generating lyrics:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to start lyrics generation',
+    }
+  }
+}
+
+/**
+ * Get lyrics generation status by task ID
+ *
+ * @param {string} taskId - Task ID from generateLyrics call
+ * @returns {Promise<object>} Lyrics generation status and data
+ */
+export const getLyricsGenerationStatus = async (taskId) => {
+  try {
+    const response = await fetch(`${SUNO_API_BASE}/lyrics/record-info?taskId=${taskId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${SUNO_API_KEY}`,
+      },
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Suno API error: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.error('[sunoApi] Error getting lyrics generation status:', error)
+    throw error
+  }
+}
+
+/**
+ * Poll for lyrics generation completion
+ * Status values: PENDING, SUCCESS, CREATE_TASK_FAILED, GENERATE_LYRICS_FAILED, CALLBACK_EXCEPTION, SENSITIVE_WORD_ERROR
+ *
+ * @param {string} taskId - Task ID to poll
+ * @param {number} maxAttempts - Maximum polling attempts (default 24 = ~2 mins)
+ * @param {number} interval - Polling interval in ms (default 5000 = 5s)
+ * @param {function} onProgress - Optional callback for progress updates
+ * @returns {Promise<object>} Completed lyrics data (2 variations)
+ */
+export const pollForLyricsCompletion = async (taskId, maxAttempts = 24, interval = 5000, onProgress = null) => {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // Report progress
+    if (onProgress) {
+      onProgress({
+        attempt: attempt + 1,
+        maxAttempts,
+        elapsedSeconds: (attempt + 1) * (interval / 1000),
+      })
+    }
+
+    const result = await getLyricsGenerationStatus(taskId)
+    const taskStatus = result?.data?.status
+    console.log('[sunoApi] Lyrics poll attempt', attempt + 1, 'status:', taskStatus)
+
+    if (result.code === 200 && result.data) {
+      // Check for success
+      if (taskStatus === 'SUCCESS') {
+        const lyricsData = result.data.response?.data || []
+        console.log('[sunoApi] Lyrics generation SUCCESS:', JSON.stringify(result.data, null, 2))
+
+        return {
+          status: 'complete',
+          taskId,
+          prompt: JSON.parse(result.data.param || '{}')?.prompt || '',
+          lyrics: lyricsData.map((item, index) => ({
+            id: `${taskId}_${index}`,
+            text: item.text || '',
+            title: item.title || '',
+            status: item.status || 'complete',
+            errorMessage: item.errorMessage || '',
+          })),
+        }
+      }
+
+      // Still pending
+      if (taskStatus === 'PENDING') {
+        console.log('[sunoApi] Lyrics still generating...')
+      }
+
+      // Check for error states
+      if (taskStatus === 'CREATE_TASK_FAILED') {
+        throw new Error('Failed to start lyrics generation. Please try again.')
+      }
+      if (taskStatus === 'GENERATE_LYRICS_FAILED') {
+        throw new Error('Lyrics generation failed. Try a different description.')
+      }
+      if (taskStatus === 'CALLBACK_EXCEPTION') {
+        throw new Error('Server error during lyrics generation. Please try again.')
+      }
+      if (taskStatus === 'SENSITIVE_WORD_ERROR') {
+        throw new Error('Your description contains words that cannot be processed. Please modify your input.')
+      }
+    }
+
+    // Wait before next poll
+    await new Promise(resolve => setTimeout(resolve, interval))
+  }
+
+  throw new Error('Lyrics generation timed out after 2 minutes')
+}
+
 export default {
   generateSongSimple,
   generateSongCustom,
@@ -1125,6 +1353,9 @@ export default {
   pollForVideoCompletion,
   generatePersona,
   checkArtistVoiceEligibility,
+  generateLyrics,
+  getLyricsGenerationStatus,
+  pollForLyricsCompletion,
   MODEL_VERSIONS,
   DEFAULT_MODEL,
 }

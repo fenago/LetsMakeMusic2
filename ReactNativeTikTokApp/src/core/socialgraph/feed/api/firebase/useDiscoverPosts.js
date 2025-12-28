@@ -6,6 +6,20 @@ import { hydratePostsWithMyReactions } from '../utils'
 
 const batchSize = 25
 
+/**
+ * Fisher-Yates shuffle algorithm for randomizing array order
+ * Creates a new shuffled array without modifying the original
+ */
+const shuffleArray = (array) => {
+  if (!array?.length) return array
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 export const useDiscoverPosts = () => {
   const [posts, setPosts] = useState(null)
   const [isLoadingBottom, setIsLoadingBottom] = useState(false)
@@ -49,9 +63,12 @@ export const useDiscoverPosts = () => {
       }
 
       pagination.current.page += 1
-      
+
       setPosts(oldPosts => {
-        const combinedPosts = oldPosts ? [...oldPosts, ...newPosts] : newPosts
+        // Shuffle on initial load (page 0) for variety
+        const isInitialLoad = !oldPosts || oldPosts.length === 0
+        const postsToAdd = isInitialLoad ? shuffleArray(newPosts) : newPosts
+        const combinedPosts = oldPosts ? [...oldPosts, ...postsToAdd] : postsToAdd
         return hydratePostsWithMyReactions(
           removeDuplicates(combinedPosts),
           userID,
@@ -81,12 +98,16 @@ export const useDiscoverPosts = () => {
     if (newPosts?.length === 0) {
       pagination.current.exhausted = true
       setPosts([])
+      setRefreshing(false)
+      return
     }
     pagination.current.page += 1
     setRefreshing(false)
-    setPosts(oldPosts =>
+    // Shuffle posts on refresh for variety
+    const shuffledPosts = shuffleArray(newPosts)
+    setPosts(
       hydratePostsWithMyReactions(
-        deduplicatedPosts(oldPosts, newPosts, true),
+        shuffledPosts,
         userID,
       ),
     )

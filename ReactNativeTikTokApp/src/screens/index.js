@@ -33,6 +33,12 @@ export { default as ArtworkDetailScreen } from './ArtworkDetailScreen/ArtworkDet
 export { default as SelectSongForArtworkScreen } from './SelectSongForArtworkScreen/SelectSongForArtworkScreen'
 export { default as SelectBandForArtworkScreen } from './SelectBandForArtworkScreen/SelectBandForArtworkScreen'
 
+// Video Studio screens
+export { VideoStudioScreen, VideoClipDetailScreen } from './VideoStudio'
+
+// Media Studio (unified)
+export { MediaStudioScreen } from './MediaStudio'
+
 // Song Features screens (FullPlayer expandable sections + Create menu)
 export {
   CreateMusicVideoScreen,
@@ -46,6 +52,8 @@ export {
   GetAcapellaScreen,
   StemSongScreen,
   CreateLyricsScreen,
+  LyricsDetailScreen,
   BuildBeatsScreen,
   CreateArtistVoiceScreen,
+  SyntheticSingerProfileScreen,
 } from './SongFeatures'

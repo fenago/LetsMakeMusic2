@@ -5,7 +5,6 @@ import {
   Image,
   StyleSheet,
   Dimensions,
-  useColorScheme,
   ScrollView,
   Modal,
   TouchableOpacity as RNTouchableOpacity,
@@ -59,8 +58,10 @@ import {
 import { useNavigation } from '@react-navigation/native'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 import { useCurrentUser } from '../../../core/onboarding'
+import { useTheme } from '../../../core/dopebase'
 import { usePlaylists } from '../../../hooks/usePlaylists'
 import EditSongModal from '../EditSongModal'
+import LyricsViewModal from '../LyricsViewModal'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const ARTWORK_SIZE = SCREEN_WIDTH - 80
@@ -121,8 +122,10 @@ const ProgressSection = ({ styles }) => {
  * - Drag down to minimize
  */
 const FullPlayerBottomSheet = () => {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  // Use useTheme from DopebaseContext for safer theme access
+  // This avoids "hasValue of undefined" errors from useColorScheme in certain contexts
+  const themeContext = useTheme()
+  const isDark = (themeContext?.appearance ?? 'light') === 'dark'
 
   const bottomSheetRef = useRef(null)
   const [isLikeLoading, setIsLikeLoading] = useState(false)
@@ -132,7 +135,6 @@ const FullPlayerBottomSheet = () => {
   const [showQueue, setShowQueue] = useState(true)
   const [showArtist, setShowArtist] = useState(true)
   const [showLyricsModal, setShowLyricsModal] = useState(false)
-  const [lyricsTab, setLyricsTab] = useState('raw') // 'raw' | 'timestamped'
   // New expandable sections
   const [showCreateVideo, setShowCreateVideo] = useState(false)
   const [showMusicGeneration, setShowMusicGeneration] = useState(false)
@@ -706,138 +708,14 @@ const FullPlayerBottomSheet = () => {
         </Modal>
 
         {/* Full Lyrics Modal */}
-        <Modal
+        <LyricsViewModal
           visible={showLyricsModal}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setShowLyricsModal(false)}
-        >
-          <View style={styles.lyricsModalContainer}>
-            <View style={styles.lyricsModalHeader}>
-              <Text style={styles.lyricsModalTitle}>Lyrics</Text>
-              <Pressable
-                style={styles.lyricsModalCloseButton}
-                onPress={() => setShowLyricsModal(false)}
-                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-              >
-                <X size={22} color={isDark ? '#ffffff' : '#151723'} strokeWidth={2.5} />
-              </Pressable>
-            </View>
-            <Text style={styles.lyricsModalTrackName} numberOfLines={1}>
-              {currentMedia.title || currentMedia.label || currentMedia.name || 'Unknown Track'}
-            </Text>
-
-            {/* Lyrics Tabs - Only show when we have timestamped lyrics (for Karaoke mode) */}
-            {(() => {
-              const hasTimestampedLyrics = currentMedia.timestampedLyrics &&
-                Array.isArray(currentMedia.timestampedLyrics) &&
-                currentMedia.timestampedLyrics.length > 0
-
-              if (hasTimestampedLyrics) {
-                return (
-                  <View style={styles.lyricsTabs}>
-                    <TouchableOpacity
-                      style={[styles.lyricsTab, lyricsTab === 'raw' && styles.lyricsTabActive]}
-                      onPress={() => setLyricsTab('raw')}
-                    >
-                      <Text style={[styles.lyricsTabText, lyricsTab === 'raw' && styles.lyricsTabTextActive]}>
-                        Lyrics
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.lyricsTab, lyricsTab === 'timestamped' && styles.lyricsTabActive]}
-                      onPress={() => setLyricsTab('timestamped')}
-                    >
-                      <Text style={[styles.lyricsTabText, lyricsTab === 'timestamped' && styles.lyricsTabTextActive]}>
-                        Karaoke
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )
-              }
-              return null
-            })()}
-
-            <ScrollView
-              style={styles.lyricsModalScroll}
-              showsVerticalScrollIndicator={true}
-              contentContainerStyle={styles.lyricsModalScrollContent}
-              scrollEnabled={true}
-              bounces={true}
-              nestedScrollEnabled={true}
-            >
-              {lyricsTab === 'raw' ? (
-                <Text style={styles.lyricsModalText}>
-                  {currentMedia.rawLyrics || currentMedia.lyrics ||
-                    "Lyrics not available for this track.\n\nCheck back later or try playing the song again."}
-                </Text>
-              ) : (
-                currentMedia.timestampedLyrics && Array.isArray(currentMedia.timestampedLyrics) && currentMedia.timestampedLyrics.length > 0 ? (
-                  currentMedia.timestampedLyrics.map((line, index) => {
-                    const lineStartMs = (line.startTime || 0) * 1000
-                    const lineEndMs = (line.endTime || 0) * 1000
-                    const lineDuration = lineEndMs - lineStartMs
-                    const isActive = position >= lineStartMs && position < lineEndMs
-                    const isPast = position >= lineEndMs
-
-                    // Split line into words for karaoke-style highlighting
-                    const words = (line.text || '').split(/(\s+)/)
-                    const wordCount = words.filter(w => w.trim()).length
-
-                    // Calculate progress within the line (0 to 1)
-                    const lineProgress = isActive
-                      ? Math.min(1, Math.max(0, (position - lineStartMs) / lineDuration))
-                      : isPast ? 1 : 0
-
-                    // Calculate which word index we're currently on
-                    const currentWordIndex = Math.floor(lineProgress * wordCount)
-
-                    let actualWordIndex = 0 // Track only non-whitespace words
-
-                    return (
-                      <Text
-                        key={index}
-                        style={[
-                          styles.timestampedLyricLine,
-                          isActive && styles.timestampedLyricLineActive
-                        ]}
-                      >
-                        {words.map((word, wordIdx) => {
-                          // Skip styling for whitespace
-                          if (!word.trim()) {
-                            return <Text key={wordIdx}>{word}</Text>
-                          }
-
-                          const thisWordIndex = actualWordIndex
-                          actualWordIndex++
-
-                          const isWordSung = isPast || (isActive && thisWordIndex < currentWordIndex)
-                          const isCurrentWord = isActive && thisWordIndex === currentWordIndex
-
-                          return (
-                            <Text
-                              key={wordIdx}
-                              style={[
-                                isWordSung && styles.karaokeWordSung,
-                                isCurrentWord && styles.karaokeWordCurrent,
-                              ]}
-                            >
-                              {word}
-                            </Text>
-                          )
-                        })}
-                      </Text>
-                    )
-                  })
-                ) : (
-                  <Text style={styles.lyricsModalText}>
-                    Timestamped lyrics not available for this track.
-                  </Text>
-                )
-              )}
-            </ScrollView>
-          </View>
-        </Modal>
+          onClose={() => setShowLyricsModal(false)}
+          title={currentMedia?.title || currentMedia?.label || currentMedia?.name || 'Unknown Track'}
+          rawLyrics={currentMedia?.rawLyrics || currentMedia?.lyrics}
+          timestampedLyrics={currentMedia?.timestampedLyrics}
+          currentPosition={position}
+        />
 
         {/* Analytics Modal */}
         <Modal

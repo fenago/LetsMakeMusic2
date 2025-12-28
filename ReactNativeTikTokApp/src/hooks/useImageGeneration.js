@@ -10,6 +10,7 @@ import {
   initializeGemini,
   isGeminiInitialized,
   generateImage,
+  generateImageFromReference,
   generateWithStyle,
   generateAlbumCover,
   generateArtistPhoto,
@@ -17,6 +18,8 @@ import {
   describeImage,
   STYLE_PRESETS,
   ASPECT_RATIOS,
+  IMAGE_MODELS,
+  getDefaultModelKey,
 } from '../services/geminiImageService'
 
 /**
@@ -30,6 +33,7 @@ export const useImageGeneration = (currentUser) => {
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [selectedModel, setSelectedModel] = useState(getDefaultModelKey())
 
   // Initialize with user's API key when available
   useEffect(() => {
@@ -49,6 +53,7 @@ export const useImageGeneration = (currentUser) => {
 
   /**
    * Generate an image from a text prompt
+   * Uses selectedModel by default, or options.model if specified
    */
   const generate = useCallback(
     async (prompt, options = {}) => {
@@ -63,7 +68,9 @@ export const useImageGeneration = (currentUser) => {
       setResult(null)
 
       try {
-        const response = await generateImage(prompt, options)
+        // Use the selected model unless overridden in options
+        const modelToUse = options.model || selectedModel
+        const response = await generateImage(prompt, { ...options, model: modelToUse })
 
         if (response.success) {
           const generatedResult = {
@@ -73,6 +80,7 @@ export const useImageGeneration = (currentUser) => {
             prompt,
             style: options.style || null,
             aspectRatio: options.aspectRatio || '1:1',
+            modelUsed: response.modelUsed,
           }
           setResult(generatedResult)
           return { success: true, result: generatedResult }
@@ -88,7 +96,7 @@ export const useImageGeneration = (currentUser) => {
         setLoading(false)
       }
     },
-    [isInitialized]
+    [isInitialized, selectedModel]
   )
 
   /**
@@ -268,6 +276,58 @@ export const useImageGeneration = (currentUser) => {
   )
 
   /**
+   * Generate artwork from a reference image + text prompt
+   * This allows personalized artwork by using a photo as reference
+   * Example: Upload selfie + "me riding a horse with a top hat"
+   */
+  const generateFromReference = useCallback(
+    async (referenceImageBase64, mimeType, prompt, options = {}) => {
+      if (!isInitialized) {
+        const errorMsg = 'Please add your API key in Backstage Settings.'
+        setError(errorMsg)
+        return { success: false, error: errorMsg }
+      }
+
+      setLoading(true)
+      setError(null)
+      setResult(null)
+
+      try {
+        const response = await generateImageFromReference(
+          referenceImageBase64,
+          mimeType,
+          prompt,
+          options
+        )
+
+        if (response.success) {
+          const generatedResult = {
+            uri: `data:${response.mimeType};base64,${response.imageData}`,
+            base64: response.imageData,
+            mimeType: response.mimeType,
+            prompt,
+            style: options.style || null,
+            aspectRatio: options.aspectRatio || '1:1',
+            usedReferenceImage: true,
+          }
+          setResult(generatedResult)
+          return { success: true, result: generatedResult }
+        } else {
+          setError(response.error)
+          return { success: false, error: response.error }
+        }
+      } catch (err) {
+        const errorMsg = err.message || 'Generation from reference failed'
+        setError(errorMsg)
+        return { success: false, error: errorMsg }
+      } finally {
+        setLoading(false)
+      }
+    },
+    [isInitialized]
+  )
+
+  /**
    * Describe an image (for getting inspiration or understanding content)
    */
   const describe = useCallback(
@@ -316,19 +376,24 @@ export const useImageGeneration = (currentUser) => {
     result,
     isInitialized,
     hasApiKey,
+    selectedModel,
 
     // Methods
     generate,
     generateStyled,
     generateCoverArt,
     generateProfilePhoto,
+    generateFromReference,
     edit,
     describe,
     clear,
+    setSelectedModel,
 
     // Constants
     stylePresets: STYLE_PRESETS,
     aspectRatios: ASPECT_RATIOS,
+    imageModels: IMAGE_MODELS,
+    defaultModelKey: getDefaultModelKey(),
   }
 }
 

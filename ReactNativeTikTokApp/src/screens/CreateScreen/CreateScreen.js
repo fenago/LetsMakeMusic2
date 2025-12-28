@@ -722,24 +722,39 @@ export default function CreateScreen({ navigation, route }) {
 
               {/* Simple Mode UI */}
               {songMode === SONG_MODES.SIMPLE && (
-                <View style={styles.formSection}>
-                  <Text style={styles.label}>Song Description</Text>
-                  <Text style={styles.sublabel}>
-                    Describe the song you want to create
-                  </Text>
-                  <TextInput
-                    style={styles.textArea}
-                    placeholder="e.g., An upbeat pop song about summer adventures with friends, featuring catchy hooks and energetic beats..."
-                    placeholderTextColor="#666"
-                    multiline
-                    maxLength={descriptionLimit}
-                    value={description}
-                    onChangeText={setDescription}
-                  />
-                  <Text style={styles.charCount}>
-                    {description.length}/{descriptionLimit}
-                  </Text>
-                </View>
+                <>
+                  <View style={styles.formSection}>
+                    <Text style={styles.label}>Song Description</Text>
+                    <Text style={styles.sublabel}>
+                      Describe the song you want to create
+                    </Text>
+                    <TextInput
+                      style={styles.textArea}
+                      placeholder="e.g., An upbeat pop song about summer adventures with friends, featuring catchy hooks and energetic beats..."
+                      placeholderTextColor="#666"
+                      multiline
+                      maxLength={descriptionLimit}
+                      value={description}
+                      onChangeText={setDescription}
+                    />
+                    <Text style={styles.charCount}>
+                      {description.length}/{descriptionLimit}
+                    </Text>
+                  </View>
+
+                  {/* Synthetic Singer Picker for Simple Mode */}
+                  <View style={styles.formSection}>
+                    <Text style={styles.label}>Synthetic Singer (Optional)</Text>
+                    <Text style={styles.sublabel}>
+                      Apply a saved vocal style to this song
+                    </Text>
+                    <VoicePicker
+                      selectedVoice={selectedVoice}
+                      onSelect={setSelectedVoice}
+                      disabled={isGenerating}
+                    />
+                  </View>
+                </>
               )}
 
               {/* Custom Mode UI */}

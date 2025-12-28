@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react'
+import React, { useCallback, useState, useRef, useMemo } from 'react'
 import {
   Dimensions,
   View,
@@ -14,7 +14,7 @@ import {
 import { useTheme } from '../../../core/dopebase'
 import FeedItem from './FeedItem/FeedItem'
 import { FEED_ITEM_HEIGHT } from './FeedItem/styles'
-import styles from './styles'
+import { dynamicStyles } from './styles'
 import { logInfo, logWarn, logError } from '../../../services/debugLogService'
 
 // CRITICAL: viewabilityConfig must be defined OUTSIDE the component or in a useRef
@@ -50,7 +50,13 @@ export default function Feed(props) {
 
   const { theme } = useTheme()
 
-  const [paused, setPaused] = useState(false)
+  // Get stage theme from user settings (default to 'Light')
+  const stageTheme = user?.settings?.stage_theme || 'Light'
+
+  // Generate dynamic styles based on stage theme
+  const styles = useMemo(() => dynamicStyles(stageTheme), [stageTheme])
+
+  const [paused, setPaused] = useState(true) // Start paused - user must tap to play
   const [selected, setSelected] = useState(startIndex ?? 0)
   const flatListRef = useRef(null)
   // Flag to ignore viewability changes during UI interactions (like, comment, etc.)
@@ -295,6 +301,7 @@ export default function Feed(props) {
           paused={paused}
           selected={selected}
           index={index}
+          stageTheme={stageTheme}
           onSharePost={onSharePost}
           onReaction={handleReaction}
           onFeedUserItemPress={onFeedUserItemPress}
@@ -312,6 +319,7 @@ export default function Feed(props) {
       user,
       paused,
       selected,
+      stageTheme,
       onSharePost,
       handleReaction,
       onFeedUserItemPress,

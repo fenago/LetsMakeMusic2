@@ -54,8 +54,29 @@ export const createArtistVoice = async ({ userId, song, name, description = '' }
     const audioId = song.sunoId || song.suno_id || song.audioId
     const taskId = song.taskId || song.task_id || song.sunoTaskId
 
-    if (!audioId || !taskId) {
-      throw new Error('Song is missing required Suno IDs')
+    // Detailed debug logging
+    console.log('[artistVoiceService] Song Suno IDs:', {
+      songId: song.id,
+      sunoId: song.sunoId,
+      suno_id: song.suno_id,
+      audioId: song.audioId,
+      taskId: song.taskId,
+      task_id: song.task_id,
+      sunoTaskId: song.sunoTaskId,
+      extractedAudioId: audioId,
+      extractedTaskId: taskId,
+    })
+
+    if (!audioId) {
+      console.error('[artistVoiceService] Missing audio ID. Song has these fields:', Object.keys(song))
+      throw new Error(`This song is missing the Suno audio ID. Song fields present: ${Object.keys(song).join(', ')}`)
+    }
+    if (!taskId) {
+      // More detailed error - show what we checked
+      console.error('[artistVoiceService] Missing task ID. Checked: taskId, task_id, sunoTaskId')
+      console.error('[artistVoiceService] Song has these fields:', Object.keys(song))
+      console.error('[artistVoiceService] Full song object:', JSON.stringify(song, null, 2))
+      throw new Error(`Missing Suno task ID. This song may have been created before task IDs were saved. Fields checked: taskId=${song.taskId}, task_id=${song.task_id}, sunoTaskId=${song.sunoTaskId}`)
     }
 
     // Call Suno API to create the persona
@@ -79,6 +100,16 @@ export const createArtistVoice = async ({ userId, song, name, description = '' }
       // User-provided metadata
       name: name.trim(),
       description: description.trim(),
+
+      // Profile fields (for Synthetic Singer identity)
+      avatarUrl: null,             // Custom avatar - defaults to source song image
+      bio: '',                     // Short bio/tagline
+      backstory: '',               // Full character backstory
+      genre: song.style || '',     // Primary genre - default from source song
+      isPublic: true,              // Whether profile is publicly visible
+
+      // Manager (the user who created this singer)
+      managerId: userId,
 
       // Source song reference (denormalized for display)
       sourceSong: {
@@ -233,11 +264,11 @@ export const getVoiceById = async (userId, voiceId) => {
 }
 
 /**
- * Update an Artist Voice (rename, update description)
+ * Update an Artist Voice (profile, name, description, etc.)
  *
  * @param {string} userId - User ID
  * @param {string} voiceId - Voice document ID
- * @param {Object} updates - Fields to update (name, description)
+ * @param {Object} updates - Fields to update
  * @returns {Promise<void>}
  */
 export const updateVoice = async (userId, voiceId, updates) => {
@@ -246,7 +277,8 @@ export const updateVoice = async (userId, voiceId, updates) => {
       throw new Error('User ID and Voice ID are required')
     }
 
-    const allowedFields = ['name', 'description']
+    // All editable profile fields
+    const allowedFields = ['name', 'description', 'avatarUrl', 'bio', 'backstory', 'genre', 'isPublic']
     const sanitizedUpdates = {}
 
     for (const field of allowedFields) {
@@ -268,6 +300,68 @@ export const updateVoice = async (userId, voiceId, updates) => {
   } catch (error) {
     console.error('[artistVoiceService] Error updating voice:', error)
     throw error
+  }
+}
+
+/**
+ * Update Synthetic Singer avatar
+ * Uploads image to Firebase Storage and updates voice document
+ *
+ * @param {string} userId - User ID
+ * @param {string} voiceId - Voice document ID
+ * @param {string} avatarUrl - New avatar URL (already uploaded to Firebase Storage)
+ * @returns {Promise<void>}
+ */
+export const updateVoiceAvatar = async (userId, voiceId, avatarUrl) => {
+  try {
+    if (!userId || !voiceId) {
+      throw new Error('User ID and Voice ID are required')
+    }
+
+    await userVoicesRef(userId).doc(voiceId).update({
+      avatarUrl,
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    })
+
+    console.log('[artistVoiceService] Updated avatar for voice:', voiceId)
+  } catch (error) {
+    console.error('[artistVoiceService] Error updating avatar:', error)
+    throw error
+  }
+}
+
+/**
+ * Get all songs created with a specific Synthetic Singer
+ *
+ * @param {string} singerId - Voice document ID
+ * @returns {Promise<Array>} Array of songs
+ */
+export const getSongsBySinger = async (singerId) => {
+  try {
+    if (!singerId) {
+      return []
+    }
+
+    const snapshot = await db.collection('songs')
+      .where('author.singerId', '==', singerId)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get()
+
+    const songs = []
+    snapshot.forEach((doc) => {
+      songs.push({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate(),
+        updatedAt: doc.data().updatedAt?.toDate(),
+      })
+    })
+
+    return songs
+  } catch (error) {
+    console.error('[artistVoiceService] Error fetching songs by singer:', error)
+    return []
   }
 }
 
@@ -435,6 +529,8 @@ export default {
   subscribeToUserVoices,
   getVoiceById,
   updateVoice,
+  updateVoiceAvatar,
+  getSongsBySinger,
   deleteVoice,
   incrementVoiceUsage,
   canCreateVoiceFromSong,

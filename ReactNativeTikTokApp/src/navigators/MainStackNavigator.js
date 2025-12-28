@@ -43,6 +43,11 @@ import {
   ArtworkDetailScreen,
   SelectSongForArtworkScreen,
   SelectBandForArtworkScreen,
+  // Video Studio screens
+  VideoStudioScreen,
+  VideoClipDetailScreen,
+  // Media Studio (unified)
+  MediaStudioScreen,
   // Song Features screens
   CreateMusicVideoScreen,
   ExtendSongScreen,
@@ -55,8 +60,10 @@ import {
   GetAcapellaScreen,
   StemSongScreen,
   CreateLyricsScreen,
+  LyricsDetailScreen,
   BuildBeatsScreen,
   CreateArtistVoiceScreen,
+  SyntheticSingerProfileScreen,
 } from '../screens'
 // import { Camera, NewPost, ComposerSongs } from '../components';
 import { InnerFriendsSearchNavigator } from './InnerStackNavigators'
@@ -256,6 +263,37 @@ const MainStackNavigator = () => {
         }}
         component={SelectBandForArtworkScreen}
       />
+      {/* Video Studio Screens */}
+      <MainStack.Screen
+        name="VideoStudio"
+        options={{
+          headerShown: false,
+        }}
+        component={VideoStudioScreen}
+      />
+      <MainStack.Screen
+        name="VideoClipDetail"
+        options={{
+          headerShown: false,
+        }}
+        component={VideoClipDetailScreen}
+      />
+      <MainStack.Screen
+        name="SelectSongForVideoClip"
+        options={{
+          headerShown: false,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={VideoStudioScreen}
+      />
+      {/* Media Studio (unified Video + Artwork) */}
+      <MainStack.Screen
+        name="MediaStudio"
+        options={{
+          headerShown: false,
+        }}
+        component={MediaStudioScreen}
+      />
       {/* Band Screens */}
       <MainStack.Screen
         name="BandDetail"
@@ -415,12 +453,17 @@ const MainStackNavigator = () => {
       <MainStack.Screen
         name="CreateLyrics"
         options={{
-          headerTitle: 'Create Lyrics',
-          headerStyle: { backgroundColor: '#000' },
-          headerTintColor: '#fff',
+          headerShown: false,
           ...TransitionPresets.ModalSlideFromBottomIOS,
         }}
         component={CreateLyricsScreen}
+      />
+      <MainStack.Screen
+        name="LyricsDetail"
+        options={{
+          headerShown: false,
+        }}
+        component={LyricsDetailScreen}
       />
       <MainStack.Screen
         name="BuildBeats"
@@ -439,6 +482,13 @@ const MainStackNavigator = () => {
           ...TransitionPresets.ModalSlideFromBottomIOS,
         }}
         component={CreateArtistVoiceScreen}
+      />
+      <MainStack.Screen
+        name="SyntheticSingerProfile"
+        options={{
+          headerShown: false,
+        }}
+        component={SyntheticSingerProfileScreen}
       />
     </MainStack.Navigator>
   )

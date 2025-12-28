@@ -14,7 +14,7 @@ import {
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeInDown } from 'react-native-reanimated'
-import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users, ImageIcon, Mic } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users, ImageIcon, Mic, FileText, Copy, CheckCircle, Disc3 } from 'lucide-react-native'
 import { useTheme, useTranslations } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserSongs, deleteSong } from '../../services/songsService'
@@ -25,6 +25,9 @@ import { usePlaylists } from '../../hooks/usePlaylists'
 import { useRecommendations } from '../../hooks/useRecommendations'
 import { useArtwork } from '../../hooks/useArtwork'
 import { useArtistVoices } from '../../hooks/useArtistVoices'
+import { useVideoClips } from '../../hooks/useVideoClips'
+import { useLyrics } from '../../hooks/useLyrics'
+import { useBeats } from '../../hooks/useBeats'
 import { BandCard } from '../../components'
 import VoiceCard from '../../components/ui/VoiceCard'
 import PlaylistCard from '../../components/ui/PlaylistCard'
@@ -74,6 +77,10 @@ const LibraryScreen = ({ navigation }) => {
   const [isYourBandsExpanded, setIsYourBandsExpanded] = useState(true)
   const [isYourArtworkExpanded, setIsYourArtworkExpanded] = useState(true)
   const [isYourVoicesExpanded, setIsYourVoicesExpanded] = useState(true)
+  const [isYourVideoClipsExpanded, setIsYourVideoClipsExpanded] = useState(true)
+  const [isMediaStudioExpanded, setIsMediaStudioExpanded] = useState(true)
+  const [isYourLyricsExpanded, setIsYourLyricsExpanded] = useState(true)
+  const [isYourBeatsExpanded, setIsYourBeatsExpanded] = useState(true)
 
   // Toggle handlers using useCallback to prevent re-creation
   const toggleRecentlyPlayed = useCallback(() => {
@@ -99,6 +106,18 @@ const LibraryScreen = ({ navigation }) => {
   }, [])
   const toggleYourVoices = useCallback(() => {
     setIsYourVoicesExpanded(prev => !prev)
+  }, [])
+  const toggleYourVideoClips = useCallback(() => {
+    setIsYourVideoClipsExpanded(prev => !prev)
+  }, [])
+  const toggleMediaStudio = useCallback(() => {
+    setIsMediaStudioExpanded(prev => !prev)
+  }, [])
+  const toggleYourLyrics = useCallback(() => {
+    setIsYourLyricsExpanded(prev => !prev)
+  }, [])
+  const toggleYourBeats = useCallback(() => {
+    setIsYourBeatsExpanded(prev => !prev)
   }, [])
 
   // Edit modal state
@@ -131,6 +150,44 @@ const LibraryScreen = ({ navigation }) => {
 
   // Subscribe to user's Artist Voices
   const { voices, voicesLoading, voicesCount } = useArtistVoices(userId)
+
+  // Subscribe to user's video clips
+  const {
+    videoClips,
+    completedClips,
+    videoClipsLoading,
+    videoClipsCount,
+  } = useVideoClips(userId, {
+    id: currentUser?.id,
+    stageName: currentUser?.firstName || currentUser?.stageName || 'Unknown',
+    profilePictureURL: currentUser?.profilePictureURL,
+  })
+
+  // Subscribe to user's lyrics
+  const {
+    lyrics,
+    lyricsLoading,
+    lyricsCount,
+  } = useLyrics(userId)
+
+  // Subscribe to user's beats
+  const {
+    beats,
+    beatsLoading,
+    beatsCount,
+  } = useBeats(userId)
+
+  // Debug logging for lyrics and beats
+  useEffect(() => {
+    console.log('[LibraryScreen] Debug Info:')
+    console.log('[LibraryScreen] - userId:', userId)
+    console.log('[LibraryScreen] - currentUser?.id:', currentUser?.id)
+    console.log('[LibraryScreen] - currentUser?.userID:', currentUser?.userID)
+    console.log('[LibraryScreen] - lyricsCount:', lyricsCount)
+    console.log('[LibraryScreen] - beatsCount:', beatsCount)
+    console.log('[LibraryScreen] - lyricsLoading:', lyricsLoading)
+    console.log('[LibraryScreen] - beatsLoading:', beatsLoading)
+  }, [userId, lyricsCount, beatsCount, lyricsLoading, beatsLoading])
 
   // Get recommendations (will be fetched once songs are loaded)
   const likedSongsList = songs.filter((song) => isLikedFn(song.id))
@@ -256,6 +313,24 @@ const LibraryScreen = ({ navigation }) => {
 
   // Handle creating Synthetic Singer from a song
   const handleCreateArtistVoice = (song) => {
+    // DEBUG: Log all song fields to trace task ID issue
+    console.log('[LibraryScreen] handleCreateArtistVoice called')
+    console.log('[LibraryScreen] Song object keys:', Object.keys(song))
+    console.log('[LibraryScreen] Song data:', {
+      id: song.id,
+      title: song.title,
+      sunoId: song.sunoId,
+      sunoTaskId: song.sunoTaskId,
+      taskId: song.taskId,
+      task_id: song.task_id,
+      model: song.model,
+      modelName: song.modelName,
+      model_name: song.model_name,
+      userId: song.userId,
+      authorID: song.authorID,
+      createdAt: song.createdAt,
+    })
+
     // Navigate to CreateArtistVoice screen with full song data including owner
     navigation.navigate('CreateArtistVoice', {
       song: {
@@ -269,8 +344,15 @@ const LibraryScreen = ({ navigation }) => {
         userId: song.userId || song.authorID || song.ownerId,
         authorID: song.authorID,
         author: song.author,
-        // Include task ID for Suno API
-        taskId: song.taskId || song.task_id,
+        // Include task ID for Suno API - check all possible field names
+        taskId: song.taskId || song.task_id || song.sunoTaskId,
+        sunoTaskId: song.sunoTaskId,
+        // Include model info for eligibility check
+        model: song.model,
+        modelName: song.modelName,
+        model_name: song.model_name,
+        // Include creation date for expiration check
+        createdAt: song.createdAt,
       },
     })
   }
@@ -1220,9 +1302,9 @@ const LibraryScreen = ({ navigation }) => {
     navigation.navigate('ArtworkDetail', { artworkId: artworkItem.id })
   }
 
-  // Handle navigate to Artwork Studio
+  // Handle navigate to Media Studio (unified for artwork and videos)
   const handleGoToArtworkStudio = () => {
-    navigation.navigate('ArtworkStudio')
+    navigation.navigate('MediaStudio', { mediaType: 'image' })
   }
 
   // Render artwork item (horizontal scroll style)
@@ -1337,6 +1419,295 @@ const LibraryScreen = ({ navigation }) => {
     </View>
   )
 
+  // Handle video clip press - navigate to detail
+  const handleVideoClipPress = (clip) => {
+    navigation.navigate('VideoClipDetail', { clipId: clip.id })
+  }
+
+  // Handle navigate to Media Studio (unified for artwork and videos)
+  const handleGoToVideoStudio = () => {
+    navigation.navigate('MediaStudio', { mediaType: 'video' })
+  }
+
+  // Render video clip item (horizontal scroll style)
+  const renderVideoClipItem = ({ item: clip, index }) => {
+    const thumbnailUrl = clip?.thumbnailUrl
+    const isGenerating = clip?.status === 'generating'
+
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(index * 50).springify()}
+        style={styles.gridItem}>
+        <TouchableOpacity
+          onPress={() => handleVideoClipPress(clip)}
+          activeOpacity={0.8}
+          disabled={isGenerating}>
+          <View style={styles.imageContainer}>
+            {thumbnailUrl ? (
+              <Image
+                source={{ uri: thumbnailUrl }}
+                style={styles.songImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+              />
+            ) : (
+              <View
+                style={[
+                  styles.songImagePlaceholder,
+                  { backgroundColor: colorSet.grey3 },
+                ]}>
+                <Film size={32} color={colorSet.grey9} />
+              </View>
+            )}
+            {/* Play overlay */}
+            {!isGenerating && (
+              <View style={styles.recentlyPlayedOverlay}>
+                <Play size={24} color="#fff" fill="#fff" />
+              </View>
+            )}
+            {/* Duration badge */}
+            {clip.duration && (
+              <View style={styles.videoDurationBadge}>
+                <Text style={styles.videoDurationText}>{clip.duration}s</Text>
+              </View>
+            )}
+            {/* Generating indicator */}
+            {isGenerating && (
+              <View style={styles.generatingOverlay}>
+                <ActivityIndicator size="small" color="#fff" />
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+        <View style={styles.songInfoRow}>
+          <TouchableOpacity
+            style={styles.songTextContainer}
+            onPress={() => handleVideoClipPress(clip)}
+            activeOpacity={0.7}>
+            <Text
+              style={[styles.songTitle, { color: colorSet.primaryText }]}
+              numberOfLines={1}>
+              {clip.prompt || 'Untitled Video'}
+            </Text>
+            <Text
+              style={[styles.songDescription, { color: colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {clip.modelName || 'AI Generated'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    )
+  }
+
+  // Render Your Video Clips section
+  const renderYourVideoClipsSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Your Video Clips"
+        icon={Film}
+        iconColor="#3b82f6"
+        isExpanded={isYourVideoClipsExpanded}
+        onToggle={toggleYourVideoClips}
+        count={videoClipsCount}
+        showAddButton
+        onAdd={handleGoToVideoStudio}
+      />
+      {isYourVideoClipsExpanded && (
+        videoClipsLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : completedClips.length > 0 ? (
+          <FlatList
+            data={completedClips.slice(0, 10)}
+            renderItem={renderVideoClipItem}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContainer}
+            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+            ListFooterComponent={completedClips.length > 10 ? (
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                onPress={handleGoToVideoStudio}>
+                <Text style={[styles.seeAllText, { color: colorSet.primaryForeground }]}>
+                  See All ({videoClipsCount})
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          />
+        ) : (
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Create AI-powered video clips with Veo 3.1
+            </Text>
+          </View>
+        )
+      )}
+    </View>
+  )
+
+  // Handle navigate to Media Studio
+  const handleGoToMediaStudio = () => {
+    navigation.navigate('MediaStudio')
+  }
+
+  // Combined media count for unified section
+  const mediaStudioCount = (artworkCount || 0) + (videoClipsCount || 0)
+
+  // Combine and sort artwork + video clips by date for unified preview
+  const combinedMedia = React.useMemo(() => {
+    const normalizedArtwork = (artwork || []).map((item) => ({
+      ...item,
+      mediaType: 'image',
+      thumbnailUrl: item.thumbnailUrl || item.imageUrl,
+      sortDate: item.createdAt?.toDate?.() || new Date(item.createdAt) || new Date(0),
+    }))
+
+    const normalizedVideos = (completedClips || []).map((item) => ({
+      ...item,
+      mediaType: 'video',
+      sortDate: item.createdAt?.toDate?.() || new Date(item.createdAt) || new Date(0),
+    }))
+
+    return [...normalizedArtwork, ...normalizedVideos]
+      .sort((a, b) => b.sortDate - a.sortDate)
+      .slice(0, 10)
+  }, [artwork, completedClips])
+
+  // Render combined media item for Media Studio section
+  const renderMediaStudioItem = ({ item, index }) => {
+    const isVideo = item.mediaType === 'video'
+    const thumbnailUrl = item.thumbnailUrl || item.imageUrl
+
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(index * 50).springify()}
+        style={styles.gridItem}>
+        <TouchableOpacity
+          onPress={() => {
+            if (isVideo) {
+              navigation.navigate('VideoClipDetail', { clipId: item.id })
+            } else {
+              navigation.navigate('ArtworkDetail', { artworkId: item.id })
+            }
+          }}
+          activeOpacity={0.8}>
+          <View style={styles.imageContainer}>
+            {thumbnailUrl ? (
+              <Image
+                source={{ uri: thumbnailUrl }}
+                style={styles.songImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+              />
+            ) : (
+              <View
+                style={[
+                  styles.songImagePlaceholder,
+                  { backgroundColor: colorSet.grey3 },
+                ]}>
+                {isVideo ? (
+                  <Film size={32} color={colorSet.grey9} />
+                ) : (
+                  <ImageIcon size={32} color={colorSet.grey9} />
+                )}
+              </View>
+            )}
+            {/* Type badge */}
+            <View style={[
+              styles.artworkBadge,
+              { backgroundColor: isVideo ? 'rgba(59, 130, 246, 0.9)' : 'rgba(147, 51, 234, 0.9)' }
+            ]}>
+              {isVideo ? (
+                <Film size={10} color="#fff" />
+              ) : (
+                <Sparkles size={10} color="#fff" />
+              )}
+            </View>
+            {/* Play overlay for videos */}
+            {isVideo && (
+              <View style={styles.recentlyPlayedOverlay}>
+                <Play size={24} color="#fff" fill="#fff" />
+              </View>
+            )}
+            {/* Duration badge for videos */}
+            {isVideo && item.duration && (
+              <View style={styles.videoDurationBadge}>
+                <Text style={styles.videoDurationText}>{item.duration}s</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+        <View style={styles.songInfoRow}>
+          <View style={styles.songTextContainer}>
+            <Text
+              style={[styles.songTitle, { color: colorSet.primaryText }]}
+              numberOfLines={1}>
+              {item.prompt || (item.photographer ? `by ${item.photographer}` : 'Untitled')}
+            </Text>
+            <Text
+              style={[styles.songDescription, { color: colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {isVideo ? (item.modelName || 'AI Video') : (item.style || (item.source === 'generated' ? 'AI Image' : 'Stock'))}
+            </Text>
+          </View>
+        </View>
+      </Animated.View>
+    )
+  }
+
+  // Render unified Media Studio section
+  const renderMediaStudioSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Media Studio"
+        icon={Sparkles}
+        iconColor="#ec4899"
+        isExpanded={isMediaStudioExpanded}
+        onToggle={toggleMediaStudio}
+        count={mediaStudioCount}
+        showAddButton
+        onAdd={handleGoToMediaStudio}
+      />
+      {isMediaStudioExpanded && (
+        artworkLoading || videoClipsLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : combinedMedia.length > 0 ? (
+          <FlatList
+            data={combinedMedia}
+            renderItem={renderMediaStudioItem}
+            keyExtractor={(item) => `${item.mediaType}-${item.id}`}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContainer}
+            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+            ListFooterComponent={mediaStudioCount > 10 ? (
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                onPress={handleGoToMediaStudio}>
+                <Text style={[styles.seeAllText, { color: colorSet.primaryForeground }]}>
+                  See All ({mediaStudioCount})
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          />
+        ) : (
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Create AI videos, images, or browse stock photos
+            </Text>
+          </View>
+        )
+      )}
+    </View>
+  )
+
   // Handle voice deletion from VoiceCard
   const handleVoiceDelete = useCallback((voiceId) => {
     // VoiceCard handles the actual deletion, this is just for UI refresh
@@ -1381,6 +1752,261 @@ const LibraryScreen = ({ navigation }) => {
     </View>
   )
 
+  // Handle lyrics press - navigate to detail or copy
+  const handleLyricsPress = (lyricsItem) => {
+    navigation.navigate('LyricsDetail', { lyricsId: lyricsItem.id })
+  }
+
+  // Handle navigate to Create Lyrics
+  const handleGoToCreateLyrics = () => {
+    navigation.navigate('CreateLyrics')
+  }
+
+  // Render lyrics item (horizontal scroll style)
+  const renderLyricsItem = ({ item: lyricsItem, index }) => {
+    const isEdited = lyricsItem?.isEdited
+    const isFavorite = lyricsItem?.isFavorite
+    const title = lyricsItem?.title || 'Untitled'
+    const preview = lyricsItem?.text?.substring(0, 60) || 'No content'
+
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(index * 50).springify()}
+        style={styles.lyricsGridItem}>
+        <TouchableOpacity
+          onPress={() => handleLyricsPress(lyricsItem)}
+          activeOpacity={0.8}
+          style={[styles.lyricsCard, { backgroundColor: colorSet.grey3 }]}>
+          {/* Lyrics preview content */}
+          <View style={styles.lyricsCardContent}>
+            <FileText size={24} color="#ec4899" style={styles.lyricsCardIcon} />
+            <Text
+              style={[styles.lyricsCardPreview, { color: colorSet.secondaryText }]}
+              numberOfLines={3}>
+              {preview}...
+            </Text>
+          </View>
+          {/* Badges */}
+          <View style={styles.lyricsBadges}>
+            {isFavorite && (
+              <View style={styles.lyricsFavoriteBadge}>
+                <Heart size={10} color="#ef4444" fill="#ef4444" />
+              </View>
+            )}
+            {isEdited && (
+              <View style={styles.lyricsEditedBadge}>
+                <Pencil size={10} color="#f59e0b" />
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+        <View style={styles.songInfoRow}>
+          <TouchableOpacity
+            style={styles.songTextContainer}
+            onPress={() => handleLyricsPress(lyricsItem)}
+            activeOpacity={0.7}>
+            <Text
+              style={[styles.songTitle, { color: colorSet.primaryText }]}
+              numberOfLines={1}>
+              {title}
+            </Text>
+            <Text
+              style={[styles.songDescription, { color: colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {lyricsItem.usedInSongs?.length > 0
+                ? `Used in ${lyricsItem.usedInSongs.length} song${lyricsItem.usedInSongs.length > 1 ? 's' : ''}`
+                : 'AI Generated'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    )
+  }
+
+  // Render Your Lyrics (Lyrics Lab) section
+  const renderYourLyricsSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Lyrics Lab"
+        icon={FileText}
+        iconColor="#ec4899"
+        isExpanded={isYourLyricsExpanded}
+        onToggle={toggleYourLyrics}
+        count={lyricsCount}
+        showAddButton
+        onAdd={handleGoToCreateLyrics}
+      />
+      {isYourLyricsExpanded && (
+        lyricsLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : lyrics.length > 0 ? (
+          <FlatList
+            data={lyrics.slice(0, 10)}
+            renderItem={renderLyricsItem}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContainer}
+            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+            ListFooterComponent={lyrics.length > 10 ? (
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                onPress={handleGoToCreateLyrics}>
+                <Text style={[styles.seeAllText, { color: colorSet.primaryForeground }]}>
+                  See All ({lyricsCount})
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          />
+        ) : (
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Create AI lyrics for your next song
+            </Text>
+          </View>
+        )
+      )}
+    </View>
+  )
+
+  // Handle beat press - navigate to BuildBeats or play the beat
+  const handleBeatPress = (beat) => {
+    // For now, navigate to BuildBeats with the beat info
+    // Later could add a BeatDetail screen
+    navigation.navigate('BuildBeats', { beatId: beat.id })
+  }
+
+  // Handle navigate to Build Beats
+  const handleGoToBuildBeats = () => {
+    navigation.navigate('BuildBeats')
+  }
+
+  // Render beat item (horizontal scroll style)
+  const renderBeatItem = ({ item: beat, index }) => {
+    const imageUrl = beat?.imageUrl
+    const title = beat?.title || 'Untitled Beat'
+    const style = beat?.style || beat?.prompt?.substring(0, 30) || 'Instrumental'
+    const isFavorite = beat?.isFavorite
+    const duration = beat?.duration
+
+    // Format duration from seconds to mm:ss
+    const formatBeatDuration = (seconds) => {
+      if (!seconds) return ''
+      const mins = Math.floor(seconds / 60)
+      const secs = Math.floor(seconds % 60)
+      return `${mins}:${secs.toString().padStart(2, '0')}`
+    }
+
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(index * 50).springify()}
+        style={styles.gridItem}>
+        <TouchableOpacity
+          onPress={() => handleBeatPress(beat)}
+          activeOpacity={0.8}>
+          <View style={styles.imageContainer}>
+            {imageUrl ? (
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.songImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+              />
+            ) : (
+              <View
+                style={[
+                  styles.beatImagePlaceholder,
+                  { backgroundColor: '#8b5cf620' },
+                ]}>
+                <Disc3 size={40} color="#8b5cf6" />
+              </View>
+            )}
+            {/* Favorite badge */}
+            {isFavorite && (
+              <View style={styles.beatFavoriteBadge}>
+                <Heart size={12} color="#ef4444" fill="#ef4444" />
+              </View>
+            )}
+            {/* Duration badge */}
+            {duration && (
+              <View style={styles.beatDurationBadge}>
+                <Text style={styles.beatDurationText}>{formatBeatDuration(duration)}</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+        <View style={styles.songInfoRow}>
+          <TouchableOpacity
+            style={styles.songTextContainer}
+            onPress={() => handleBeatPress(beat)}
+            activeOpacity={0.7}>
+            <Text
+              style={[styles.songTitle, { color: colorSet.primaryText }]}
+              numberOfLines={1}>
+              {title}
+            </Text>
+            <Text
+              style={[styles.songDescription, { color: colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {style}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    )
+  }
+
+  // Render Your Beats (Beats Lab) section
+  const renderYourBeatsSection = () => (
+    <View style={styles.section}>
+      <CollapsibleSectionHeader
+        title="Beats Lab"
+        icon={Disc3}
+        iconColor="#8b5cf6"
+        isExpanded={isYourBeatsExpanded}
+        onToggle={toggleYourBeats}
+        count={beatsCount}
+        showAddButton
+        onAdd={handleGoToBuildBeats}
+      />
+      {isYourBeatsExpanded && (
+        beatsLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : beats.length > 0 ? (
+          <FlatList
+            data={beats.slice(0, 10)}
+            renderItem={renderBeatItem}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContainer}
+            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+            ListFooterComponent={beats.length > 10 ? (
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                onPress={handleGoToBuildBeats}>
+                <Text style={[styles.seeAllText, { color: colorSet.primaryForeground }]}>
+                  See All ({beatsCount})
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          />
+        ) : (
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Create AI instrumentals and beats
+            </Text>
+          </View>
+        )
+      )}
+    </View>
+  )
+
   return (
     <View
       style={[
@@ -1400,7 +2026,9 @@ const LibraryScreen = ({ navigation }) => {
         {renderYourSongsSection()}
         {renderYourBandsSection()}
         {renderYourVoicesSection()}
-        {renderYourArtworkSection()}
+        {renderYourLyricsSection()}
+        {renderYourBeatsSection()}
+        {renderMediaStudioSection()}
         {renderLikedSongsSection()}
         {renderYourPlaylistsSection()}
         {renderRecentlyPlayedSection()}
@@ -1790,6 +2418,135 @@ const styles = StyleSheet.create({
   },
   voicesListContainer: {
     paddingHorizontal: 16,
+  },
+  // Video Clips styles
+  videoClipItem: {
+    width: HORIZONTAL_ITEM_WIDTH,
+    marginRight: 12,
+  },
+  videoClipImageContainer: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  videoClipImage: {
+    width: '100%',
+    height: '100%',
+  },
+  videoClipPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoDurationBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  videoDurationText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  generatingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoClipTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 6,
+    numberOfLines: 1,
+  },
+  videoClipsListContainer: {
+    paddingHorizontal: 16,
+  },
+  // Lyrics Lab styles
+  lyricsGridItem: {
+    width: HORIZONTAL_ITEM_WIDTH,
+  },
+  lyricsCard: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    padding: 12,
+    position: 'relative',
+  },
+  lyricsCardContent: {
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  lyricsCardIcon: {
+    marginBottom: 8,
+  },
+  lyricsCardPreview: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  lyricsBadges: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    gap: 4,
+  },
+  lyricsFavoriteBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lyricsEditedBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Beats Lab styles
+  beatImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  beatFavoriteBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  beatDurationBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  beatDurationText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
   },
 })
 

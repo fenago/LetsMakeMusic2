@@ -318,8 +318,17 @@ export const ConfigProvider = ({ children }) => {
           ],
         },
         {
-          title: localized('Feed'),
+          title: localized('Stage'),
           fields: [
+            {
+              displayName: localized('Stage Theme'),
+              type: 'select',
+              editable: true,
+              key: 'stage_theme',
+              value: 'Light',
+              options: ['Light', 'Dark'],
+              displayOptions: ['Light', 'Dark'],
+            },
             {
               displayName: localized('Autoplay Videos'),
               type: 'select',

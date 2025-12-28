@@ -2,9 +2,10 @@
  * VoiceCard - Component for displaying a Synthetic Singer in the Library
  *
  * Shows voice name, source song thumbnail, usage count, and action menu.
+ * Supports both light and dark themes.
  */
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -13,8 +14,10 @@ import {
   Image,
   Alert,
 } from 'react-native'
-import { Mic, MoreVertical, Trash2, Pencil, Music } from 'lucide-react-native'
+import { Mic, MoreVertical, Trash2, Pencil, Music, User } from 'lucide-react-native'
+import { useNavigation } from '@react-navigation/native'
 
+import { useTheme } from '../../../core/dopebase'
 import { useCurrentUser } from '../../../core/onboarding'
 import { deleteVoice, updateVoice } from '../../../services/artistVoiceService'
 
@@ -27,9 +30,50 @@ import { deleteVoice, updateVoice } from '../../../services/artistVoiceService'
  * @param {Object} props.style - Additional container styles
  */
 export default function VoiceCard({ voice, onDelete, style }) {
+  const { theme, appearance } = useTheme()
+  const colors = theme.colors[appearance]
   const currentUser = useCurrentUser()
+  const navigation = useNavigation()
   const [showMenu, setShowMenu] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Dynamic styles based on theme
+  const themedStyles = useMemo(() => ({
+    container: {
+      backgroundColor: appearance === 'dark' ? '#1a1a1a' : colors.primaryBackground,
+      borderColor: appearance === 'dark' ? 'transparent' : colors.hairline,
+      borderWidth: appearance === 'dark' ? 0 : 1,
+    },
+    thumbnailPlaceholder: {
+      backgroundColor: appearance === 'dark' ? '#333' : colors.grey3,
+    },
+    name: {
+      color: colors.primaryText,
+    },
+    sourceSong: {
+      color: colors.secondaryText,
+    },
+    menuDropdown: {
+      backgroundColor: appearance === 'dark' ? '#2a2a2a' : colors.primaryBackground,
+      borderColor: appearance === 'dark' ? 'transparent' : colors.hairline,
+      borderWidth: appearance === 'dark' ? 0 : 1,
+    },
+    menuItemText: {
+      color: colors.primaryText,
+    },
+    menuItemBorder: {
+      borderTopColor: appearance === 'dark' ? '#333' : colors.hairline,
+    },
+  }), [appearance, colors])
+
+  // Navigate to profile screen
+  const handleViewProfile = useCallback(() => {
+    setShowMenu(false)
+    navigation.navigate('SyntheticSingerProfile', {
+      voiceId: voice?.id,
+      userId: currentUser?.id,
+    })
+  }, [navigation, voice?.id, currentUser?.id])
 
   const handleDelete = useCallback(async () => {
     if (!currentUser?.id || !voice?.id) return
@@ -99,33 +143,42 @@ export default function VoiceCard({ voice, onDelete, style }) {
     ? '1 song created'
     : `${voice.usageCount || 0} songs created`
 
-  return (
-    <View style={[styles.container, style]}>
-      {/* Thumbnail */}
-      {voice.sourceSong?.imageUrl ? (
-        <Image
-          source={{ uri: voice.sourceSong.imageUrl }}
-          style={styles.thumbnail}
-        />
-      ) : (
-        <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
-          <Mic size={24} color="#666" />
-        </View>
-      )}
+  const iconColor = colors.secondaryText
 
-      {/* Info */}
-      <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>
-          {voice.name}
-        </Text>
-        <View style={styles.metaRow}>
-          <Music size={12} color="#888" />
-          <Text style={styles.sourceSong} numberOfLines={1}>
-            {voice.sourceSong?.title || 'Unknown song'}
+  return (
+    <View style={[styles.container, themedStyles.container, style]}>
+      {/* Tappable content area */}
+      <TouchableOpacity
+        style={styles.contentArea}
+        onPress={handleViewProfile}
+        activeOpacity={0.7}
+      >
+        {/* Thumbnail */}
+        {voice.sourceSong?.imageUrl ? (
+          <Image
+            source={{ uri: voice.sourceSong.imageUrl }}
+            style={styles.thumbnail}
+          />
+        ) : (
+          <View style={[styles.thumbnail, styles.thumbnailPlaceholder, themedStyles.thumbnailPlaceholder]}>
+            <Mic size={24} color={iconColor} />
+          </View>
+        )}
+
+        {/* Info */}
+        <View style={styles.info}>
+          <Text style={[styles.name, themedStyles.name]} numberOfLines={1}>
+            {voice.name}
           </Text>
+          <View style={styles.metaRow}>
+            <Music size={12} color={iconColor} />
+            <Text style={[styles.sourceSong, themedStyles.sourceSong]} numberOfLines={1}>
+              {voice.sourceSong?.title || 'Unknown song'}
+            </Text>
+          </View>
+          <Text style={styles.usage}>{usageText}</Text>
         </View>
-        <Text style={styles.usage}>{usageText}</Text>
-      </View>
+      </TouchableOpacity>
 
       {/* Menu Button */}
       <TouchableOpacity
@@ -133,21 +186,28 @@ export default function VoiceCard({ voice, onDelete, style }) {
         onPress={toggleMenu}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <MoreVertical size={20} color="#888" />
+        <MoreVertical size={20} color={iconColor} />
       </TouchableOpacity>
 
       {/* Dropdown Menu */}
       {showMenu && (
-        <View style={styles.menuDropdown}>
+        <View style={[styles.menuDropdown, themedStyles.menuDropdown]}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={handleViewProfile}
+          >
+            <User size={16} color={colors.primaryText} />
+            <Text style={[styles.menuItemText, themedStyles.menuItemText]}>View Profile</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.menuItem}
             onPress={handleRename}
           >
-            <Pencil size={16} color="#fff" />
-            <Text style={styles.menuItemText}>Rename</Text>
+            <Pencil size={16} color={colors.primaryText} />
+            <Text style={[styles.menuItemText, themedStyles.menuItemText]}>Rename</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.menuItem, styles.menuItemDestructive]}
+            style={[styles.menuItem, styles.menuItemDestructive, themedStyles.menuItemBorder]}
             onPress={handleDelete}
             disabled={isDeleting}
           >
@@ -166,11 +226,15 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
     position: 'relative',
+  },
+  contentArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   thumbnail: {
     width: 56,
@@ -178,7 +242,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   thumbnailPlaceholder: {
-    backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -188,7 +251,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   name: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
@@ -200,7 +262,6 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   sourceSong: {
-    color: '#888',
     fontSize: 13,
     flex: 1,
   },
@@ -216,7 +277,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 48,
     right: 8,
-    backgroundColor: '#2a2a2a',
     borderRadius: 8,
     paddingVertical: 4,
     minWidth: 140,
@@ -236,10 +296,8 @@ const styles = StyleSheet.create({
   },
   menuItemDestructive: {
     borderTopWidth: 1,
-    borderTopColor: '#333',
   },
   menuItemText: {
-    color: '#fff',
     fontSize: 14,
   },
   menuItemTextDestructive: {

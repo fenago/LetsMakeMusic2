@@ -299,6 +299,21 @@ export const subscribeToUserSongs = (userId, callback) => {
           ...doc.data(),
         })) || []
         console.log('Songs fetched from Firebase:', songs.length, songs.map(s => s.title))
+        // DEBUG: Log first song's task ID fields to trace Synthetic Singer issue
+        if (songs.length > 0) {
+          const firstSong = songs[0]
+          console.log('[songsService DEBUG] First song keys:', Object.keys(firstSong))
+          console.log('[songsService DEBUG] First song task IDs:', {
+            id: firstSong.id,
+            title: firstSong.title,
+            sunoTaskId: firstSong.sunoTaskId,
+            taskId: firstSong.taskId,
+            task_id: firstSong.task_id,
+            sunoId: firstSong.sunoId,
+            model: firstSong.model,
+            modelName: firstSong.modelName,
+          })
+        }
         callback(songs)
       },
       (error) => {

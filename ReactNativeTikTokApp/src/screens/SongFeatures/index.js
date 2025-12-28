@@ -10,7 +10,9 @@ export { default as AddMediaForVideoScreen } from './AddMediaForVideoScreen'
 export { default as GetAcapellaScreen } from './GetAcapellaScreen'
 export { default as StemSongScreen } from './StemSongScreen'
 export { default as CreateArtistVoiceScreen } from './CreateArtistVoiceScreen'
+export { default as SyntheticSingerProfileScreen } from './SyntheticSingerProfileScreen'
 
 // Create menu screens
 export { default as CreateLyricsScreen } from './CreateLyricsScreen'
+export { default as LyricsDetailScreen } from './LyricsDetailScreen'
 export { default as BuildBeatsScreen } from './BuildBeatsScreen'

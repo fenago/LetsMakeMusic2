@@ -94,10 +94,15 @@ exports.addComment = feed.addComment
 exports.deleteComment = feed.deleteComment
 exports.listComments = feed.listComments
 exports.listHashtagFeedPosts = feed.listHashtagFeedPosts
+exports.listProfileFeedPosts = feed.listProfileFeedPosts
 
 // songs - song sharing to social feed
 const songs = require('./songs/createSongPost')
 exports.createSongPost = songs.createSongPost
+
+// songs - auto-post trigger (creates post when song is created)
+const autoPostSong = require('./songs/autoPostSong')
+exports.onSongCreated = autoPostSong.onSongCreated
 
 // seed - LetsMakeMusic test users
 const musicSeed = require('./seed/musicAppSeed')
@@ -122,6 +127,11 @@ const backfillSunoId = require('./seed/backfillSunoId')
 exports.backfillSunoId = backfillSunoId.backfillSunoId
 exports.backfillSunoIdHTTP = backfillSunoId.backfillSunoIdHTTP
 exports.checkSongSunoId = backfillSunoId.checkSongSunoId
+
+// backfill profile_feed_live - ensure all users have their songs in their profile feed
+const backfillProfileFeed = require('./seed/backfillProfileFeed')
+exports.backfillProfileFeed = backfillProfileFeed.backfillProfileFeed
+exports.backfillProfileFeedHTTP = backfillProfileFeed.backfillProfileFeedHTTP
 
 // seed REAL test data - creates working video and song posts
 const seedRealData = require('./seed/seedRealTestData')

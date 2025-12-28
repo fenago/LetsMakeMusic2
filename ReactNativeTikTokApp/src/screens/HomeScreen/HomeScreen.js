@@ -14,6 +14,8 @@ import {
 } from '../../core/socialgraph/feed'
 import { setLocallyDeletedPost } from '../../core/socialgraph/feed/redux'
 import { useCurrentUser } from '../../core/onboarding'
+import { subscribeToUserSongs } from '../../services/songsService'
+import { getPlayableUrl, getPlayableImageUrl } from '../../utils/audioUtils'
 
 const FeedScreen = props => {
   const { navigation } = props
@@ -54,6 +56,8 @@ const FeedScreen = props => {
   })
   // NEW: Media type filter state (all/music/video)
   const [mediaFilter, setMediaFilter] = useState('all')
+  // User's own songs (from songs collection, not posts)
+  const [userSongs, setUserSongs] = useState([])
 
   useEffect(() => {
     if (isFocused) {
@@ -84,6 +88,73 @@ const FeedScreen = props => {
     }
   }, [currentUser?.id])
 
+  // Subscribe to user's own songs from songs collection
+  // These are songs that may not have been shared as posts yet
+  useEffect(() => {
+    if (!currentUser?.id) {
+      console.log('[HomeScreen] No userId, skipping user songs subscription')
+      return
+    }
+
+    console.log('[HomeScreen] Subscribing to user songs for:', currentUser.id)
+    const unsubscribe = subscribeToUserSongs(currentUser.id, (songs) => {
+      console.log('[HomeScreen] Received user songs:', songs.length)
+      setUserSongs(songs)
+    })
+
+    return () => {
+      console.log('[HomeScreen] Unsubscribing from user songs')
+      if (unsubscribe) unsubscribe()
+    }
+  }, [currentUser?.id])
+
+  /**
+   * Transform a song from songs collection to post format for the Stage feed
+   * This allows user's songs to appear alongside posts in the vertical feed
+   */
+  const songToPostFormat = useCallback((song) => {
+    const imageUrl = getPlayableImageUrl(song)
+    const audioUrl = getPlayableUrl(song)
+    const timestamp = song.createdAt?.seconds || Math.floor(Date.now() / 1000)
+
+    return {
+      id: `song_${song.id}`, // Prefix to avoid ID collision with posts
+      authorID: currentUser?.id,
+      author: {
+        id: currentUser?.id,
+        firstName: currentUser?.firstName || '',
+        lastName: currentUser?.lastName || '',
+        username: currentUser?.username || '',
+        profilePictureURL: currentUser?.profilePictureURL || '',
+        stageName: currentUser?.stageName || song.author?.stageName,
+      },
+      postMedia: [{
+        url: song.firebaseVideoUrl || song.videoUrl || audioUrl,
+        thumbnailURL: imageUrl,
+        type: song.firebaseVideoUrl || song.videoUrl ? 'video/mp4' : 'audio/mpeg',
+      }],
+      description: `🎵 ${song.title}`,
+      hashtags: song.style?.split(/[\s,]+/).filter(s => s.length > 2).slice(0, 5) || [],
+      reactionsCount: song.likesCount || 0,
+      commentsCount: 0,
+      createdAt: timestamp,
+      postType: 'song',
+      linkedSongId: song.id,
+      songData: {
+        id: song.id,
+        title: song.title,
+        imageUrl,
+        audioUrl,
+        videoUrl: song.firebaseVideoUrl || song.videoUrl,
+        style: song.style,
+        duration: song.duration,
+        artist: song.author?.stageName || currentUser?.stageName || currentUser?.username,
+        lyrics: song.rawLyrics || song.lyrics || '',
+        prompt: song.prompt || '',
+      },
+    }
+  }, [currentUser])
+
   useEffect(() => {
     console.log('[HomeScreen] Raw posts from useHomeFeedPosts:', posts?.length || 0)
     if (posts?.length > 0) {
@@ -110,19 +181,32 @@ const FeedScreen = props => {
 
   useEffect(() => {
     console.log('[HomeScreen] Raw discoverPosts (For You):', discoverPosts?.length || 0)
-    if (discoverPosts) {
-      const filteredOutPosts = filterOutUserPost(discoverPosts)
-      const feed = filterNonVideoFeed(filteredOutPosts)
-      console.log('[HomeScreen] Filtered For You posts:', feed.length)
+    console.log('[HomeScreen] User songs available:', userSongs?.length || 0)
+
+    // Transform user songs to post format
+    const userSongPosts = (userSongs || [])
+      .filter(song => !song.sharedToFeed) // Only include songs not already shared as posts
+      .map(songToPostFormat)
+
+    if (discoverPosts || userSongPosts.length > 0) {
+      // Filter for valid media posts first
+      const validMediaPosts = filterNonVideoFeed(discoverPosts || [])
+
+      // Combine discover posts with user's unshared songs
+      const combinedPosts = [...validMediaPosts, ...userSongPosts]
+
+      // Mix user's posts into the feed with balanced ratio
+      const mixedFeed = mixUserPostsIntoFeed(combinedPosts)
+      console.log('[HomeScreen] Mixed For You posts (including user songs):', mixedFeed.length)
       setFeed(prevFeed => ({
         ...prevFeed,
-        forYou: feed,
+        forYou: mixedFeed,
       }))
     } else {
-      console.log('[HomeScreen] No discoverPosts received')
-      setFeed({ forYou: [] })
+      console.log('[HomeScreen] No discoverPosts or user songs received')
+      setFeed(prevFeed => ({ ...prevFeed, forYou: [] }))
     }
-  }, [discoverPosts])
+  }, [discoverPosts, userSongs, songToPostFormat])
 
   useEffect(() => {
     const followingFeedLength = feed?.following?.length
@@ -140,10 +224,41 @@ const FeedScreen = props => {
     }
   }, [selectedItem])
 
-  const filterOutUserPost = feedPosts => {
-    return feedPosts.filter(post => {
-      return post && post.authorID != currentUser.id
-    })
+  /**
+   * Mix user's own posts into the feed with a balanced ratio
+   * Instead of filtering out user posts, we now include them with balance
+   * Inserts 1 user post every 4 other posts
+   */
+  const mixUserPostsIntoFeed = (feedPosts) => {
+    if (!feedPosts || !currentUser?.id) return feedPosts
+
+    const userPosts = feedPosts.filter(post => post?.authorID === currentUser.id)
+    const otherPosts = feedPosts.filter(post => post?.authorID !== currentUser.id)
+
+    if (!userPosts.length) return otherPosts
+    if (!otherPosts.length) return userPosts
+
+    // Insert user posts every 4 other posts for balance
+    const result = []
+    let userPostIndex = 0
+    const insertEveryN = 4
+
+    for (let i = 0; i < otherPosts.length; i++) {
+      result.push(otherPosts[i])
+
+      if ((i + 1) % insertEveryN === 0 && userPostIndex < userPosts.length) {
+        result.push(userPosts[userPostIndex])
+        userPostIndex++
+      }
+    }
+
+    // Add remaining user posts
+    while (userPostIndex < userPosts.length) {
+      result.push(userPosts[userPostIndex])
+      userPostIndex++
+    }
+
+    return result
   }
 
   /**

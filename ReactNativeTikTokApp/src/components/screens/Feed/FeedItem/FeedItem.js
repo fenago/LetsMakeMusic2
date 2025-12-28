@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, memo, useState } from 'react'
+import React, { useCallback, useEffect, useRef, memo, useState, useMemo } from 'react'
 import { View, Text, TouchableOpacity, Alert, Share, PanResponder, Dimensions } from 'react-native'
 import { useActionSheet } from '@expo/react-native-action-sheet'
 import { useIsFocused } from '@react-navigation/native'
@@ -12,8 +12,9 @@ import { add as followUserAPI, unfollow as unfollowUserAPI } from '../../../../c
 
 import VideoPlayer from '../VideoPlayer'
 import IMRichTextView from '../../../../core/mentions/IMRichTextView/IMRichTextView'
+import LyricsViewModal from '../../../ui/LyricsViewModal'
 import { DEFAULT_SONG_RIGHTS } from '../../../../constants/songRights'
-import styles from './styles'
+import { dynamicStyles, getStageColors } from './styles'
 
 const defaultAvatar =
   'https://www.iosapptemplates.com/wp-content/uploads/2019/06/empty-avatar.jpg'
@@ -45,10 +46,15 @@ const FeedItem = props => {
     onDeletePost,
     onUserReport,
     onMediaComplete,
+    stageTheme,
   } = props
 
   const { localized } = useTranslations()
   const { theme } = useTheme()
+
+  // Generate dynamic styles based on stage theme
+  const styles = useMemo(() => dynamicStyles(stageTheme), [stageTheme])
+  const stageColors = useMemo(() => getStageColors(stageTheme), [stageTheme])
 
   const isFocused = useIsFocused()
   const audioRef = useRef(null)
@@ -76,6 +82,9 @@ const FeedItem = props => {
   // Video playback timer state
   const [videoPosition, setVideoPosition] = useState(0)
   const [videoDuration, setVideoDuration] = useState(0)
+
+  // Lyrics modal state
+  const [lyricsModalVisible, setLyricsModalVisible] = useState(false)
 
   // Sync local state with props when they change (e.g., on initial load or pull-to-refresh)
   // But only if the values actually differ to avoid unnecessary re-renders
@@ -245,16 +254,10 @@ const FeedItem = props => {
         audioReadyRef.current = true
         console.log('[FeedItem] ✅ Audio ready for:', video.id?.substring(0, 8))
 
-        // Auto-play when audio loads if this is the visible item
-        const isVisibleItem = selected === index && isFocused
-        console.log('[FeedItem] Play conditions:', { selected, index, isFocused, isVisibleItem })
-        if (isVisibleItem) {
-          console.log('[FeedItem] ▶️ Auto-starting playback')
-          // Use setStatusAsync instead of playAsync (playAsync doesn't exist in this expo-av version)
-          await sound.setStatusAsync({ shouldPlay: true })
-          setPaused(false)
-          console.log('[FeedItem] ▶️ Playback started!')
-        }
+        // DISABLED: Auto-play when audio loads - users now tap to play
+        // Audio is loaded and ready, but won't auto-start
+        // User must tap to play via handlePress() which toggles paused state
+        console.log('[FeedItem] 🎵 Audio loaded, ready to play on tap:', video.id?.substring(0, 8))
       } catch (error) {
         console.log('[FeedItem] ❌ Error loading audio:', error.message || error)
       }
@@ -553,12 +556,7 @@ const FeedItem = props => {
         const selectedOption = options[buttonIndex]
 
         if (selectedOption === localized('View Lyrics')) {
-          const lyrics = songInfo?.lyrics || video.songData?.lyrics
-          if (lyrics) {
-            Alert.alert('Lyrics', lyrics, [{ text: 'Close' }])
-          } else {
-            Alert.alert('Lyrics', 'Lyrics are not available for this song.', [{ text: 'OK' }])
-          }
+          setLyricsModalVisible(true)
         } else if (selectedOption === localized('About the Song')) {
           const title = songInfo?.title || 'Unknown Title'
           const style = songInfo?.style || video.songData?.style || 'AI Generated'
@@ -641,6 +639,7 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
     : `@${firstname?.toLowerCase()}${lastname?.toLowerCase()}`
 
   return (
+    <>
     <TouchableOpacity
       activeOpacity={1}
       key={video.id}
@@ -650,12 +649,12 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
       <View style={styles.mediaTypeBadge}>
         {isVideoPost ? (
           <>
-            <Video size={14} color="#fff" />
+            <Video size={14} color={stageColors.text} />
             <Text style={styles.mediaTypeBadgeText}>Video</Text>
           </>
         ) : (
           <>
-            <Music size={14} color="#fff" />
+            <Music size={14} color={stageColors.text} />
             <Text style={styles.mediaTypeBadgeText}>Audio</Text>
           </>
         )}
@@ -837,7 +836,7 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
         <TouchableOpacity
           onPress={onMoreOptionsPress}
           style={styles.iconRightContainer}>
-          <MoreHorizontal size={30} color="#fff" style={{ opacity: 0.7 }} />
+          <MoreHorizontal size={30} color={stageColors.iconTint} style={{ opacity: stageColors.iconOpacity }} />
         </TouchableOpacity>
       </View>
       <View style={styles.contentLeftBottom}>
@@ -864,6 +863,16 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
         )}
       </View>
     </TouchableOpacity>
+
+    {/* Lyrics View Modal */}
+    <LyricsViewModal
+      visible={lyricsModalVisible}
+      onClose={() => setLyricsModalVisible(false)}
+      title={songInfo?.title || video.songData?.title || 'Unknown Track'}
+      rawLyrics={songInfo?.rawLyrics || songInfo?.lyrics || video.songData?.rawLyrics || video.songData?.lyrics}
+      timestampedLyrics={songInfo?.timestampedLyrics || video.songData?.timestampedLyrics}
+    />
+    </>
   )
 }
 

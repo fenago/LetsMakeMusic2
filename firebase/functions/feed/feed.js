@@ -465,6 +465,83 @@ exports.listComments = functions.https.onCall(async (data, context) => {
 })
 
 /**
+ * List posts from a user's profile feed
+ * Returns posts created by this user (their own content)
+ */
+exports.listProfileFeedPosts = functions.https.onCall(async (data, context) => {
+  const { userID, limit = 50, lastPostId, page = 0, size = 25 } = data
+
+  if (!userID) {
+    throw new functions.https.HttpsError('invalid-argument', 'User ID is required')
+  }
+
+  try {
+    // First try to get from profile_feed_live (fan-out collection)
+    let query = db
+      .collection('social_feeds')
+      .doc(userID)
+      .collection('profile_feed_live')
+      .orderBy('createdAt', 'desc')
+      .limit(size || limit)
+
+    if (lastPostId) {
+      const lastDoc = await db
+        .collection('social_feeds')
+        .doc(userID)
+        .collection('profile_feed_live')
+        .doc(lastPostId)
+        .get()
+      if (lastDoc.exists) {
+        query = query.startAfter(lastDoc)
+      }
+    }
+
+    const snapshot = await query.get()
+    let posts = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+
+    // If no posts in profile_feed_live, try querying main posts collection by authorID
+    if (posts.length === 0) {
+      console.log(`[listProfileFeedPosts] No posts in profile_feed_live for ${userID}, trying posts collection`)
+      const mainPostsQuery = db
+        .collection('posts')
+        .where('authorID', '==', userID)
+        .orderBy('createdAt', 'desc')
+        .limit(size || limit)
+
+      const mainSnapshot = await mainPostsQuery.get()
+      posts = mainSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+
+      // If found posts in main collection, backfill to profile_feed_live for future queries
+      if (posts.length > 0) {
+        console.log(`[listProfileFeedPosts] Found ${posts.length} posts in main collection, backfilling to profile_feed_live`)
+        const batch = db.batch()
+        posts.forEach(post => {
+          const profileFeedRef = db
+            .collection('social_feeds')
+            .doc(userID)
+            .collection('profile_feed_live')
+            .doc(post.id)
+          batch.set(profileFeedRef, post, { merge: true })
+        })
+        await batch.commit()
+      }
+    }
+
+    console.log(`[listProfileFeedPosts] Returning ${posts.length} posts for user ${userID}`)
+    return { posts, success: true }
+  } catch (error) {
+    console.error('[listProfileFeedPosts] Error:', error)
+    throw new functions.https.HttpsError('internal', error.message)
+  }
+})
+
+/**
  * List posts by hashtag
  */
 exports.listHashtagFeedPosts = functions.https.onCall(async (data, context) => {
