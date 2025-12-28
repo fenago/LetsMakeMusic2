@@ -20,6 +20,9 @@ export { default as BandDetailScreen } from './BandDetailScreen/BandDetailScreen
 export { default as BandSongsScreen } from './BandSongsScreen/BandSongsScreen'
 export { default as AddSongToBandScreen } from './AddSongToBandScreen/AddSongToBandScreen'
 export { default as AddMembersToBandScreen } from './AddMembersToBandScreen/AddMembersToBandScreen'
+export { default as CreatePlaylistScreen } from './CreatePlaylistScreen/CreatePlaylistScreen'
+export { default as PlaylistDetailScreen } from './PlaylistDetailScreen/PlaylistDetailScreen'
+export { default as AddSongToPlaylistScreen } from './AddSongToPlaylistScreen/AddSongToPlaylistScreen'
 
 // Song Features screens (FullPlayer expandable sections + Create menu)
 export {

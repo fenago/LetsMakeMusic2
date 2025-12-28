@@ -9,6 +9,7 @@ import React, {
 import { Audio } from 'expo-av'
 import { Alert } from 'react-native'
 import { subscribeToLikedSongs, toggleSongLike, incrementPlayCount } from '../services/songsService'
+import { logRecentlyPlayed } from '../services/recentlyPlayedService'
 import useCurrentUser from '../core/onboarding/hooks/useCurrentUser'
 
 const MediaPlayerContext = createContext(null)
@@ -249,6 +250,14 @@ export const MediaPlayerProvider = ({ children }) => {
           incrementPlayCount(item.id).catch(err =>
             console.warn('Failed to increment play count:', err)
           )
+
+          // Log to recently played history
+          if (userId) {
+            console.log('=== LOGGING TO RECENTLY PLAYED for user:', userId, '===')
+            logRecentlyPlayed(userId, item).catch(err =>
+              console.warn('Failed to log recently played:', err)
+            )
+          }
         }
       }
 

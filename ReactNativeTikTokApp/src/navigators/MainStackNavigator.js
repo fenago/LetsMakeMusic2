@@ -32,6 +32,10 @@ import {
   BandSongsScreen,
   AddSongToBandScreen,
   AddMembersToBandScreen,
+  // Playlist screens
+  CreatePlaylistScreen,
+  PlaylistDetailScreen,
+  AddSongToPlaylistScreen,
   // Song Features screens
   CreateMusicVideoScreen,
   ExtendSongScreen,
@@ -235,6 +239,30 @@ const MainStackNavigator = () => {
           ...TransitionPresets.ModalSlideFromBottomIOS,
         }}
         component={AddMembersToBandScreen}
+      />
+      {/* Playlist Screens */}
+      <MainStack.Screen
+        name="CreatePlaylist"
+        options={{
+          headerShown: true,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={CreatePlaylistScreen}
+      />
+      <MainStack.Screen
+        name="PlaylistDetail"
+        options={{
+          headerShown: false,
+        }}
+        component={PlaylistDetailScreen}
+      />
+      <MainStack.Screen
+        name="AddSongToPlaylist"
+        options={{
+          headerShown: false,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={AddSongToPlaylistScreen}
       />
       {/* Song Feature Screens */}
       <MainStack.Screen

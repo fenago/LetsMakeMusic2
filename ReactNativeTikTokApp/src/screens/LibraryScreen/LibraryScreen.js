@@ -19,7 +19,11 @@ import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserSongs, deleteSong } from '../../services/songsService'
 import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
 import { useBands } from '../../hooks/useBands'
+import { useRecentlyPlayed } from '../../hooks/useRecentlyPlayed'
+import { usePlaylists } from '../../hooks/usePlaylists'
+import { useRecommendations } from '../../hooks/useRecommendations'
 import { BandCard } from '../../components'
+import PlaylistCard from '../../components/ui/PlaylistCard'
 import EditSongModal from '../../components/ui/EditSongModal'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -99,6 +103,22 @@ const LibraryScreen = ({ navigation }) => {
 
   // Subscribe to user's bands
   const { bands, bandsLoading, bandsCount } = useBands(userId)
+
+  // Subscribe to recently played songs
+  const { recentlyPlayed, recentlyPlayedLoading, recentlyPlayedCount } = useRecentlyPlayed(userId)
+
+  // Subscribe to user's playlists
+  const { playlists, playlistsLoading, playlistsCount } = usePlaylists(userId)
+
+  // Get recommendations (will be fetched once songs are loaded)
+  const likedSongsList = songs.filter((song) => isLikedFn(song.id))
+  const { recommendations, recommendationsLoading, recommendationsCount, refreshRecommendations } =
+    useRecommendations(userId, {
+      likedSongs: likedSongsList,
+      userSongs: songs,
+      recentlyPlayed,
+      limit: 10,
+    })
 
   // Handle like button press - uses shared context
   const handleLikePress = async (song) => {
@@ -302,8 +322,11 @@ const LibraryScreen = ({ navigation }) => {
   }
 
   const handleNewPlaylist = () => {
-    // TODO: Open new playlist modal
-    console.log('Create new playlist')
+    navigation.navigate('CreatePlaylist')
+  }
+
+  const handlePlaylistPress = (playlist) => {
+    navigation.navigate('PlaylistDetail', { playlistId: playlist.id })
   }
 
   const renderHeader = () => (
@@ -587,6 +610,61 @@ const LibraryScreen = ({ navigation }) => {
     return songs.filter(song => isLikedFn(song.id))
   }, [songs, isLikedFn])
 
+  // Render recently played item (horizontal scroll style)
+  const renderRecentlyPlayedItem = ({ item: song, index }) => {
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(index * 50).springify()}
+        style={styles.gridItem}>
+        <TouchableOpacity
+          onPress={() => handleSongPress(song)}
+          activeOpacity={0.8}>
+          <View style={styles.imageContainer}>
+            {song.imageUrl ? (
+              <Image
+                source={{ uri: song.imageUrl }}
+                style={styles.songImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.songImagePlaceholder,
+                  { backgroundColor: colorSet.grey3 },
+                ]}>
+                <Image
+                  source={theme.icons.musicalNotes}
+                  style={[styles.placeholderIcon, { tintColor: colorSet.grey9 }]}
+                />
+              </View>
+            )}
+            {/* Play overlay icon */}
+            <View style={styles.recentlyPlayedOverlay}>
+              <Play size={24} color="#fff" fill="#fff" />
+            </View>
+          </View>
+        </TouchableOpacity>
+        <View style={styles.songInfoRow}>
+          <TouchableOpacity
+            style={styles.songTextContainer}
+            onPress={() => handleSongPress(song)}
+            activeOpacity={0.7}>
+            <Text
+              style={[styles.songTitle, { color: colorSet.primaryText }]}
+              numberOfLines={1}>
+              {song.title || 'Untitled'}
+            </Text>
+            <Text
+              style={[styles.songDescription, { color: colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {song.artist || 'Unknown Artist'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    )
+  }
+
   // Render Recently Played section
   const renderRecentlyPlayedSection = () => (
     <View style={styles.section}>
@@ -596,10 +674,88 @@ const LibraryScreen = ({ navigation }) => {
         iconColor="#3875e8"
         isExpanded={isRecentlyPlayedExpanded}
         onToggle={toggleRecentlyPlayed}
+        count={recentlyPlayedCount}
       />
-      {isRecentlyPlayedExpanded && renderComingSoonPlaceholder('Play history coming soon')}
+      {isRecentlyPlayedExpanded && (
+        recentlyPlayedLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : recentlyPlayed.length > 0 ? (
+          <FlatList
+            data={recentlyPlayed}
+            renderItem={renderRecentlyPlayedItem}
+            keyExtractor={(item) => item.recentlyPlayedId || item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContainer}
+            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+          />
+        ) : (
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Songs you play will appear here
+            </Text>
+          </View>
+        )
+      )}
     </View>
   )
+
+  // Render recommendation item (horizontal scroll style)
+  const renderRecommendationItem = ({ item: song, index }) => {
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(index * 50).springify()}
+        style={styles.gridItem}>
+        <TouchableOpacity
+          onPress={() => handleSongPress(song)}
+          activeOpacity={0.8}>
+          <View style={styles.imageContainer}>
+            {song.imageUrl ? (
+              <Image
+                source={{ uri: song.imageUrl }}
+                style={styles.songImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.songImagePlaceholder,
+                  { backgroundColor: colorSet.grey3 },
+                ]}>
+                <Image
+                  source={theme.icons.musicalNotes}
+                  style={[styles.placeholderIcon, { tintColor: colorSet.grey9 }]}
+                />
+              </View>
+            )}
+            {/* Recommendation badge */}
+            <View style={styles.recommendationBadge}>
+              <Sparkles size={12} color="#f59e0b" />
+            </View>
+          </View>
+        </TouchableOpacity>
+        <View style={styles.songInfoRow}>
+          <TouchableOpacity
+            style={styles.songTextContainer}
+            onPress={() => handleSongPress(song)}
+            activeOpacity={0.7}>
+            <Text
+              style={[styles.songTitle, { color: colorSet.primaryText }]}
+              numberOfLines={1}>
+              {song.title || 'Untitled'}
+            </Text>
+            <Text
+              style={[styles.songDescription, { color: colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {song.recommendationReason || song.style || 'Recommended'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    )
+  }
 
   // Render Recommended section
   const renderRecommendedSection = () => (
@@ -610,9 +766,31 @@ const LibraryScreen = ({ navigation }) => {
         iconColor="#f59e0b"
         isExpanded={isRecommendedExpanded}
         onToggle={toggleRecommended}
-        comingSoon
+        count={recommendationsCount}
       />
-      {isRecommendedExpanded && renderComingSoonPlaceholder('AI-powered recommendations coming soon')}
+      {isRecommendedExpanded && (
+        recommendationsLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : recommendations.length > 0 ? (
+          <FlatList
+            data={recommendations}
+            renderItem={renderRecommendationItem}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContainer}
+            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+          />
+        ) : (
+          <View style={styles.emptySection}>
+            <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+              Like some songs to get personalized recommendations
+            </Text>
+          </View>
+        )
+      )}
     </View>
   )
 
@@ -751,11 +929,34 @@ const LibraryScreen = ({ navigation }) => {
         iconColor="#8b5cf6"
         isExpanded={isYourPlaylistsExpanded}
         onToggle={toggleYourPlaylists}
-        count={0}
+        count={playlistsCount}
         showAddButton
         onAdd={handleNewPlaylist}
       />
-      {isYourPlaylistsExpanded && renderComingSoonPlaceholder('Create and manage playlists coming soon')}
+      {isYourPlaylistsExpanded && (
+        playlistsLoading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+          </View>
+        ) : (
+          <FlatList
+            data={[{ isCreateNew: true }, ...playlists]}
+            renderItem={({ item }) => (
+              <PlaylistCard
+                playlist={item.isCreateNew ? null : item}
+                onPress={item.isCreateNew ? handleNewPlaylist : handlePlaylistPress}
+                isCreateNew={item.isCreateNew}
+                size={140}
+              />
+            )}
+            keyExtractor={(item) => item.isCreateNew ? 'create-new' : item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContainer}
+            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+          />
+        )
+      )}
     </View>
   )
 
@@ -1172,6 +1373,28 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(56, 117, 232, 0.9)',
     borderRadius: 4,
     padding: 4,
+  },
+  recentlyPlayedOverlay: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recommendationBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listVideoBadge: {
     position: 'absolute',
