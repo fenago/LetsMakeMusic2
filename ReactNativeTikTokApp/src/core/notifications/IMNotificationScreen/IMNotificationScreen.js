@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { useNavigation } from '@react-navigation/native'
 import { useTheme, useTranslations } from '../../dopebase'
 import IMNotification from '../Notification/IMNotification'
 import {
@@ -10,6 +11,7 @@ import { setNotifications } from '../redux'
 import { useCurrentUser } from '../../onboarding'
 
 const IMNotificationScreen = props => {
+  const navigation = useNavigation()
   const { localized } = useTranslations()
   const { theme, appearance } = useTheme()
 
@@ -50,6 +52,32 @@ const IMNotificationScreen = props => {
       seen: true,
     })
 
+    const { type, metadata } = notification
+
+    // Handle mention notifications - navigate to the post
+    if (type === 'mention' && metadata?.postId) {
+      navigation.navigate('PostDetails', {
+        postId: metadata.postId,
+        commentId: metadata.commentId, // If mention was in a comment
+      })
+      return
+    }
+
+    // Handle other notification types (follow, like, comment, etc.)
+    if (type === 'follow' && metadata?.outBound) {
+      navigation.push('ProfileStack', {
+        screen: 'Profile',
+        params: { userID: metadata.outBound.id },
+      })
+      return
+    }
+
+    if ((type === 'like' || type === 'comment') && metadata?.postId) {
+      navigation.navigate('PostDetails', {
+        postId: metadata.postId,
+      })
+      return
+    }
   }
 
   const emptyStateConfig = {

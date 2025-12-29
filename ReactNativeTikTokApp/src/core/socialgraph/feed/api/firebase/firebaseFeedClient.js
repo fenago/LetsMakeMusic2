@@ -95,6 +95,31 @@ export const deletePost = async (postID, authorID) => {
   }
 }
 
+export const editPost = async (postID, authorID, newPostText) => {
+  console.log('[editPost] ========== STARTING ==========')
+  console.log('[editPost] Args:', { postID, authorID, newPostText: newPostText?.substring(0, 50) })
+
+  if (!postID || !authorID || newPostText === undefined) {
+    console.log('[editPost] ❌ Missing required args')
+    return { success: false, error: 'Missing required args' }
+  }
+
+  try {
+    console.log('[editPost] 📤 Calling editPost function...')
+    const instance = FeedFunctions().editPost
+    const res = await instance({
+      postId: postID,
+      authorId: authorID,
+      newPostText: newPostText,
+    })
+    console.log('[editPost] ✅ Success:', JSON.stringify(res?.data))
+    return { success: true, ...res?.data }
+  } catch (error) {
+    console.log('[editPost] ❌ Error:', error?.message)
+    return { success: false, error: error?.message || 'Unknown error' }
+  }
+}
+
 export const addStory = async (storyData, author) => {
   const instance = FeedFunctions().addStory
   try {
@@ -109,18 +134,84 @@ export const addStory = async (storyData, author) => {
   }
 }
 
-export const addStoryReaction = async (storyID, userID) => {
+export const addStoryReaction = async (storyID, userID, emoji = '❤️') => {
   const instance = FeedFunctions().addStoryReaction
   try {
     const res = await instance({
-      userID,
-      storyID,
+      storyId: storyID,
+      userId: userID,
+      emoji,
     })
     return res?.data
   } catch (error) {
-    console.log(error)
+    console.log('[addStoryReaction] Error:', error)
     return null
   }
+}
+
+export const listStories = async (userID, page = 0, size = 100) => {
+  console.log('[listStories] Fetching stories for user:', userID)
+  const instance = FeedFunctions().listStories
+  try {
+    const res = await instance({
+      userId: userID,
+      limit: size,
+    })
+    console.log('[listStories] Response:', res?.data?.stories?.length, 'story groups')
+    // Flatten the grouped stories for the client
+    const groups = res?.data?.stories || []
+    const allStories = []
+    groups.forEach(group => {
+      group.stories?.forEach(story => {
+        allStories.push({
+          ...story,
+          author: group.author,
+          authorID: group.authorId,
+        })
+      })
+    })
+    return allStories
+  } catch (error) {
+    console.log('[listStories] Error:', error)
+    return []
+  }
+}
+
+export const subscribeToStories = (userID, callback) => {
+  console.log('[subscribeToStories] Subscribing to stories_feed_live for user:', userID)
+  return DocRef(userID)
+    .storiesFeedLive.orderBy('createdAt', 'desc')
+    .onSnapshot(
+      { includeMetadataChanges: true },
+      querySnapshot => {
+        const isFromCache = querySnapshot?.metadata?.fromCache === true
+        const storyCount = querySnapshot?.docs?.length || 0
+        console.log(`[subscribeToStories] stories_feed_live snapshot: ${storyCount} stories, fromCache: ${isFromCache}`)
+
+        const stories = querySnapshot?.docs?.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        })) || []
+
+        // Filter out expired stories (older than 24 hours)
+        const now = Date.now()
+        const oneDay = 24 * 60 * 60 * 1000
+        const validStories = stories.filter(story => {
+          if (!story.createdAt) return false
+          const createdAt = story.createdAt.seconds
+            ? story.createdAt.seconds * 1000
+            : story.createdAt
+          return (now - createdAt) < oneDay
+        })
+
+        console.log(`[subscribeToStories] ${validStories.length} valid stories after filtering`)
+        callback && callback(validStories)
+      },
+      error => {
+        console.log('[subscribeToStories] Error:', error)
+        callback && callback([])
+      },
+    )
 }
 
 export const subscribeToHomeFeedPosts = (userID, callback) => {
@@ -167,39 +258,6 @@ export const listHomeFeedPosts = async (userID, page = 0, size = 1000) => {
     })
 
     return res?.data?.posts
-  } catch (error) {
-    console.log(error)
-    return null
-  }
-}
-
-export const subscribeToStories = (userID, callback) => {
-  return DocRef(userID)
-    .storiesFeedLive.orderBy('createdAt', 'desc')
-    .onSnapshot(
-      { includeMetadataChanges: true },
-      querySnapshot => {
-        // Still show stories even if from cache (removed early return)
-        const stories = querySnapshot?.docs?.map(doc => doc.data()) || []
-        callback && callback(stories)
-      },
-      error => {
-        console.log(error)
-        callback([])
-      },
-    )
-}
-
-export const listStories = async (userID, page = 0, size = 1000) => {
-  const instance = FeedFunctions().listStories
-  try {
-    const res = await instance({
-      userID,
-      page,
-      size,
-    })
-
-    return res?.data?.stories
   } catch (error) {
     console.log(error)
     return null
@@ -270,6 +328,57 @@ export const addComment = async (commentText, postID, authorID) => {
   } catch (fallbackError) {
     console.log('[addComment] ❌ Both methods failed:', fallbackError?.message)
     return { success: false, error: fallbackError?.message || 'Unknown error' }
+  }
+}
+
+export const deleteComment = async (postID, commentID, authorID) => {
+  console.log('[deleteComment] ========== STARTING ==========')
+  console.log('[deleteComment] Args:', { postID, commentID, authorID })
+
+  if (!postID || !commentID || !authorID) {
+    console.log('[deleteComment] ❌ Missing required args')
+    return { success: false, error: 'Missing required args' }
+  }
+
+  try {
+    console.log('[deleteComment] 📤 Calling deleteComment function...')
+    const instance = FeedFunctions().deleteComment
+    const res = await instance({
+      postId: postID,
+      commentId: commentID,
+      userId: authorID,
+    })
+    console.log('[deleteComment] ✅ Success:', JSON.stringify(res?.data))
+    return { success: true, ...res?.data }
+  } catch (error) {
+    console.log('[deleteComment] ❌ Error:', error?.message)
+    return { success: false, error: error?.message || 'Unknown error' }
+  }
+}
+
+export const editComment = async (postID, commentID, authorID, newText) => {
+  console.log('[editComment] ========== STARTING ==========')
+  console.log('[editComment] Args:', { postID, commentID, authorID, newText: newText?.substring(0, 50) })
+
+  if (!postID || !commentID || !authorID || newText === undefined) {
+    console.log('[editComment] ❌ Missing required args')
+    return { success: false, error: 'Missing required args' }
+  }
+
+  try {
+    console.log('[editComment] 📤 Calling editComment function...')
+    const instance = FeedFunctions().editComment
+    const res = await instance({
+      postId: postID,
+      commentId: commentID,
+      userId: authorID,
+      newText: newText,
+    })
+    console.log('[editComment] ✅ Success:', JSON.stringify(res?.data))
+    return { success: true, ...res?.data }
+  } catch (error) {
+    console.log('[editComment] ❌ Error:', error?.message)
+    return { success: false, error: error?.message || 'Unknown error' }
   }
 }
 

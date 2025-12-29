@@ -5,6 +5,7 @@ import React, {
   useRef,
   useCallback,
   useEffect,
+  useMemo,
 } from 'react'
 import { Audio } from 'expo-av'
 import { Alert } from 'react-native'
@@ -13,6 +14,8 @@ import { logRecentlyPlayed } from '../services/recentlyPlayedService'
 import useCurrentUser from '../core/onboarding/hooks/useCurrentUser'
 
 const MediaPlayerContext = createContext(null)
+// Separate context for position - updates frequently (100ms) and should NOT cause main context re-renders
+const PositionContext = createContext({ position: 0, duration: 0 })
 
 /**
  * MediaPlayerProvider - Unified media player for both audio and video
@@ -54,6 +57,7 @@ export const MediaPlayerProvider = ({ children }) => {
   const currentLoadIdRef = useRef(0) // Track which load operation is current
   const lastPositionUpdateRef = useRef(0) // Throttle position updates to reduce re-renders
   const lastPositionValueRef = useRef(0) // Track last position value
+  const likedSongIdsRef = useRef(new Set()) // Ref for stable isLiked function (prevents re-renders)
 
   // Configure audio mode for background playback
   useEffect(() => {
@@ -75,17 +79,17 @@ export const MediaPlayerProvider = ({ children }) => {
   useEffect(() => {
     if (!userId) {
       setLikedSongIds(new Set())
+      likedSongIdsRef.current = new Set()
       return
     }
 
-    console.log('[MediaPlayerContext] Subscribing to liked songs for user:', userId)
     const unsubscribe = subscribeToLikedSongs(userId, (likedIds) => {
-      console.log('[MediaPlayerContext] Liked songs updated:', likedIds.size, 'songs')
+      // Update both state (for UI that needs to react) and ref (for stable isLiked)
       setLikedSongIds(likedIds)
+      likedSongIdsRef.current = likedIds
     })
 
     return () => {
-      console.log('[MediaPlayerContext] Unsubscribing from liked songs')
       unsubscribe()
     }
   }, [userId])
@@ -140,6 +144,10 @@ export const MediaPlayerProvider = ({ children }) => {
    */
   const loadMedia = useCallback(async (item, options = {}) => {
     const { addToQueueIfNotPresent = true, skipQueueUpdate = false } = options
+    const loadStartTime = Date.now()
+    global.DEBUG_LOAD_START = loadStartTime
+    console.log(`=== LOAD MEDIA START === ${loadStartTime}`)
+    console.log(`Song: ${item?.title || 'unknown'}`)
 
     if (!item) {
       Alert.alert('loadMedia Error', 'No item provided')
@@ -148,161 +156,111 @@ export const MediaPlayerProvider = ({ children }) => {
 
     // Generate unique ID for this load operation
     const loadId = ++currentLoadIdRef.current
-    console.log(`=== LOAD MEDIA START (loadId: ${loadId}) ===`)
-    console.log('Song:', item.title || item.name || item.id)
-    console.log('Available URLs:', {
-      audioUrl: item.audioUrl ? 'YES' : 'NO',
-      firebaseAudioUrl: item.firebaseAudioUrl ? 'YES' : 'NO',
-      streamUrl: item.streamUrl ? 'YES' : 'NO',
-      videoUrl: item.videoUrl ? 'YES (ignored for audio playback)' : 'NO',
-    })
 
     // For songs, ALWAYS play audio. A song's videoUrl is for the music video feature,
     // not for regular playback. Songs should always be played as audio.
     // The audioUrl takes priority; only fall back to videoUrl if no audioUrl exists.
     const type = 'audio'
     const mediaUrl = item.audioUrl || item.firebaseAudioUrl || item.streamUrl
+    console.log(`+${Date.now() - loadStartTime}ms: Got URL: ${mediaUrl?.substring(0, 50)}...`)
+
+    if (!mediaUrl) {
+      Alert.alert('Playback Error', 'No audio URL available for this song')
+      return
+    }
+
+    // IMMEDIATELY show mini-player with loading state
+    // This provides instant visual feedback while audio loads
+    console.log(`+${Date.now() - loadStartTime}ms: Setting state (miniPlayer, loading)`)
+    setMediaType(type)
+    setCurrentMedia(item)
+    setIsMiniPlayerVisible(true)
+    setIsLoading(true)
+    setPosition(0)
+    console.log(`+${Date.now() - loadStartTime}ms: State set, starting audio load`)
 
     try {
-      setIsLoading(true)
-
-      if (!mediaUrl) {
-        Alert.alert('Playback Error', 'No audio URL available for this song')
-        console.error('No audio URL found. Item has:', {
-          audioUrl: item.audioUrl,
-          firebaseAudioUrl: item.firebaseAudioUrl,
-          streamUrl: item.streamUrl,
-          videoUrl: item.videoUrl,
-        })
-        setIsLoading(false)
-        return
-      }
-
       // CRITICAL: Stop and unload any existing audio FIRST
       if (soundRef.current) {
-        console.log(`=== STOPPING AND UNLOADING PREVIOUS SOUND (loadId: ${loadId}) ===`)
+        console.log(`+${Date.now() - loadStartTime}ms: Unloading previous audio`)
         try {
-          // Stop playback immediately
           await soundRef.current.setStatusAsync({ shouldPlay: false })
           await soundRef.current.unloadAsync()
         } catch (e) {
-          console.log('Error unloading previous sound:', e)
+          // Ignore unload errors
         }
         soundRef.current = null
+        console.log(`+${Date.now() - loadStartTime}ms: Previous audio unloaded`)
       }
 
       // Check if this load is still the current one
       if (loadId !== currentLoadIdRef.current) {
-        console.log(`=== LOAD CANCELLED - NEWER LOAD EXISTS (loadId: ${loadId}, current: ${currentLoadIdRef.current}) ===`)
+        console.log(`+${Date.now() - loadStartTime}ms: ABORTED - newer load started`)
         return
       }
 
-      // If switching to audio, create new sound
-      if (type === 'audio') {
-        // Create and load new sound
-        console.log(`=== CREATING NEW SOUND (loadId: ${loadId}) ===`)
-        console.log('mediaUrl:', mediaUrl)
-        const result = await Audio.Sound.createAsync(
-          { uri: mediaUrl },
-          {
-            shouldPlay: false, // Don't auto-play until we verify this load is still current
-            progressUpdateIntervalMillis: 100, // Smoother timer updates (default is 500ms)
-          },
-          onPlaybackStatusUpdate
-        )
+      // Create new sound
+      console.log(`+${Date.now() - loadStartTime}ms: Creating Audio.Sound...`)
+      const result = await Audio.Sound.createAsync(
+        { uri: mediaUrl },
+        {
+          shouldPlay: false, // Don't auto-play until we verify this load is still current
+          progressUpdateIntervalMillis: 100, // Smoother timer updates (default is 500ms)
+        },
+        onPlaybackStatusUpdate
+      )
+      console.log(`+${Date.now() - loadStartTime}ms: Audio.Sound created!`)
 
-        // Check AGAIN if this load is still current after the async operation
-        if (loadId !== currentLoadIdRef.current) {
-          console.log(`=== LOAD CANCELLED AFTER CREATE - NEWER LOAD EXISTS (loadId: ${loadId}, current: ${currentLoadIdRef.current}) ===`)
-          // Unload the sound we just created since it's no longer needed
-          try {
-            await result.sound.unloadAsync()
-          } catch (e) {
-            console.log('Error unloading cancelled sound:', e)
-          }
-          return
+      // Check AGAIN if this load is still current after the async operation
+      if (loadId !== currentLoadIdRef.current) {
+        try {
+          await result.sound.unloadAsync()
+        } catch (e) {
+          // Ignore
         }
+        return
+      }
+      const { sound, status } = result
+      soundRef.current = sound
 
-        console.log(`=== SOUND CREATED (loadId: ${loadId}) ===`)
-        const { sound, status } = result
-        soundRef.current = sound
+      // Duration priority: 1) from audio status, 2) from song data (convert seconds to ms)
+      const audioDurationMs = status.durationMillis || 0
+      const itemDurationMs = item.duration ? item.duration * 1000 : 0
+      const finalDuration = audioDurationMs > 0 ? audioDurationMs : itemDurationMs
+      fallbackDurationRef.current = finalDuration
+      setDuration(finalDuration)
 
-        // Duration priority: 1) from audio status, 2) from song data (convert seconds to ms)
-        const audioDurationMs = status.durationMillis || 0
-        const itemDurationMs = item.duration ? item.duration * 1000 : 0
-        const finalDuration = audioDurationMs > 0 ? audioDurationMs : itemDurationMs
-        console.log('Duration: audio =', audioDurationMs, 'ms, item =', itemDurationMs, 'ms, using:', finalDuration, 'ms')
-        fallbackDurationRef.current = finalDuration
-        setDuration(finalDuration)
-        setPosition(0)
+      // Now start playback
+      console.log(`+${Date.now() - loadStartTime}ms: Starting playback...`)
+      await sound.setStatusAsync({ shouldPlay: true })
+      isPlayingRef.current = true
+      setIsPlaying(true)
+      setIsLoading(false)
+      console.log(`+${Date.now() - loadStartTime}ms: PLAYBACK STARTED!`)
 
-        // Now start playback - use setStatusAsync (playAsync doesn't exist in this expo-av version)
-        console.log('=== CALLING setStatusAsync({ shouldPlay: true }) ===')
-        await sound.setStatusAsync({ shouldPlay: true })
-        console.log('=== setStatusAsync COMPLETED ===')
-        isPlayingRef.current = true
-        setIsPlaying(true)
-        setIsMiniPlayerVisible(true)
-
-        // Track play count in database
-        if (item.id) {
-          console.log('=== INCREMENTING PLAY COUNT for song:', item.id, '===')
-          incrementPlayCount(item.id).catch(err =>
-            console.warn('Failed to increment play count:', err)
-          )
-
-          // Log to recently played history
-          console.log('[MediaPlayerContext] 📊 Recently Played check:', {
-            hasUserId: !!userId,
-            userId: userId || 'NULL',
-            itemId: item.id,
-            itemTitle: item.title,
-          })
-          if (userId) {
-            console.log('=== LOGGING TO RECENTLY PLAYED for user:', userId, '===')
-            logRecentlyPlayed(userId, item)
-              .then(result => {
-                console.log('[MediaPlayerContext] ✅ logRecentlyPlayed result:', result)
-              })
-              .catch(err => {
-                console.warn('[MediaPlayerContext] ❌ Failed to log recently played:', err)
-              })
-          } else {
-            console.log('[MediaPlayerContext] ⚠️ SKIPPING recently played - no userId available')
-          }
-        } else {
-          console.log('[MediaPlayerContext] ⚠️ SKIPPING play count/recently played - no item.id:', {
-            hasItemId: !!item.id,
-            itemTitle: item?.title,
-          })
+      // Track play count and recently played in background (silently)
+      if (item.id) {
+        incrementPlayCount(item.id).catch(() => {})
+        if (userId) {
+          logRecentlyPlayed(userId, item).catch(() => {})
         }
       }
-
-      setMediaType(type)
-      setCurrentMedia(item)
-      setIsLoading(false)
 
       // Add to queue if not already present (so playNext/playPrevious work)
       if (!skipQueueUpdate && addToQueueIfNotPresent) {
         setQueue(prevQueue => {
           const existingIndex = prevQueue.findIndex(q => q.id === item.id)
           if (existingIndex >= 0) {
-            // Song already in queue, just update queueIndex
-            console.log(`[MediaPlayerContext] Song already in queue at index ${existingIndex}`)
             setQueueIndex(existingIndex)
             return prevQueue
           } else {
-            // Song not in queue - add it at the end
-            console.log(`[MediaPlayerContext] Adding song to queue at index ${prevQueue.length}`)
-            setQueueIndex(prevQueue.length) // Point to the new song
+            setQueueIndex(prevQueue.length)
             return [...prevQueue, item]
           }
         })
       }
-
-      console.log(`=== LOAD MEDIA COMPLETE (loadId: ${loadId}) ===`)
     } catch (error) {
-      console.error('Error loading media:', error)
+      console.log(`+${Date.now() - loadStartTime}ms: ERROR - ${error.message}`)
       Alert.alert('loadMedia ERROR', `${error.message || error}`)
       setIsLoading(false)
     }
@@ -312,7 +270,7 @@ export const MediaPlayerProvider = ({ children }) => {
    * Playback status callback for audio
    * NOTE: We don't set isPlaying here to avoid race conditions with manual play/pause
    * Only update position when actually playing to prevent slider from moving when paused
-   * Position updates are throttled to 500ms to reduce re-renders in consuming components
+   * Position updates are throttled to 100ms for smooth karaoke sync while minimizing re-renders
    */
   const onPlaybackStatusUpdate = useCallback((status) => {
     if (status.isLoaded) {
@@ -322,8 +280,8 @@ export const MediaPlayerProvider = ({ children }) => {
         const timeSinceLastUpdate = now - lastPositionUpdateRef.current
         const positionChange = Math.abs(status.positionMillis - lastPositionValueRef.current)
 
-        // Throttle updates to every 500ms, or if position changed by more than 1 second (seek)
-        if (timeSinceLastUpdate >= 500 || positionChange >= 1000) {
+        // Throttle updates to every 100ms for smooth karaoke, or if position changed by more than 500ms (seek)
+        if (timeSinceLastUpdate >= 100 || positionChange >= 500) {
           lastPositionUpdateRef.current = now
           lastPositionValueRef.current = status.positionMillis
           setPosition(status.positionMillis)
@@ -389,10 +347,7 @@ export const MediaPlayerProvider = ({ children }) => {
         // Revert on error
         isPlayingRef.current = true
         setIsPlaying(true)
-        console.error('Error pausing audio:', error)
       }
-    } else {
-      console.log('>>> SKIPPED - conditions not met')
     }
   }, [mediaType])
 
@@ -411,22 +366,12 @@ export const MediaPlayerProvider = ({ children }) => {
    * Stop playback and clear current media
    */
   const stop = useCallback(async () => {
-    console.log('=== STOP CALLED ===')
-    console.log('soundRef.current:', !!soundRef.current)
-
     if (soundRef.current) {
       try {
-        // Stop playback and reset position using setStatusAsync
-        console.log('>>> Calling setStatusAsync({ shouldPlay: false, positionMillis: 0 })')
         await soundRef.current.setStatusAsync({ shouldPlay: false, positionMillis: 0 })
-        console.log('>>> Audio stopped')
-
-        // Unload the sound to free resources
-        console.log('>>> Calling unloadAsync()')
         await soundRef.current.unloadAsync()
-        console.log('>>> Sound unloaded')
       } catch (error) {
-        console.error('Error stopping audio:', error)
+        // Ignore stop errors
       }
       soundRef.current = null
     }
@@ -438,7 +383,6 @@ export const MediaPlayerProvider = ({ children }) => {
     setDuration(0)
     setIsMiniPlayerVisible(false)
     setIsFullPlayerVisible(false)
-    console.log('=== STOP COMPLETED ===')
   }, [])
 
   /**
@@ -473,11 +417,7 @@ export const MediaPlayerProvider = ({ children }) => {
    * Play a specific item from the queue by index
    */
   const playQueueItem = useCallback(async (index) => {
-    if (index < 0 || index >= queue.length) {
-      console.log('[MediaPlayerContext] playQueueItem - invalid index:', index)
-      return
-    }
-    console.log('[MediaPlayerContext] playQueueItem - playing index:', index)
+    if (index < 0 || index >= queue.length) return
     setQueueIndex(index)
     await loadMedia(queue[index], { skipQueueUpdate: true })
   }, [queue, loadMedia])
@@ -508,9 +448,7 @@ export const MediaPlayerProvider = ({ children }) => {
    * @returns {boolean} - true if next song was played, false if at end of queue
    */
   const playNext = useCallback(async () => {
-    console.log('[MediaPlayerContext] playNext called. queue.length:', queue.length, 'queueIndex:', queueIndex, 'isShuffleEnabled:', isShuffleEnabled, 'repeatMode:', repeatMode)
     if (queue.length === 0) {
-      console.log('[MediaPlayerContext] playNext - no queue, returning false')
       return false
     }
 
@@ -529,19 +467,16 @@ export const MediaPlayerProvider = ({ children }) => {
     }
 
     if (nextIndex < queue.length) {
-      console.log('[MediaPlayerContext] playNext - playing song at index:', nextIndex)
       setQueueIndex(nextIndex)
       await loadMedia(queue[nextIndex], { skipQueueUpdate: true })
       return true
     } else if (repeatMode === 'all') {
       // Loop back to start of queue
-      console.log('[MediaPlayerContext] playNext - repeat all, looping to start')
       setQueueIndex(0)
       await loadMedia(queue[0], { skipQueueUpdate: true })
       return true
     } else {
       // End of queue - don't stop, just stay on current song
-      console.log('[MediaPlayerContext] playNext - at end of queue, no action taken')
       return false
     }
   }, [queue, queueIndex, loadMedia, isShuffleEnabled, repeatMode])
@@ -550,28 +485,23 @@ export const MediaPlayerProvider = ({ children }) => {
    * Play previous item in queue
    */
   const playPrevious = useCallback(async () => {
-    console.log('[MediaPlayerContext] playPrevious called. queueIndex:', queueIndex, 'position:', position, 'repeatMode:', repeatMode)
     // If we're more than 3 seconds into the track, restart it
     if (position > 3000) {
-      console.log('[MediaPlayerContext] playPrevious - restarting current song (position > 3s)')
       await seek(0)
       return
     }
 
     if (queueIndex > 0) {
       const prevIndex = queueIndex - 1
-      console.log('[MediaPlayerContext] playPrevious - going to previous song at index:', prevIndex)
       setQueueIndex(prevIndex)
       await loadMedia(queue[prevIndex], { skipQueueUpdate: true })
     } else if (repeatMode === 'all' && queue.length > 0) {
       // Loop to end of queue
       const lastIndex = queue.length - 1
-      console.log('[MediaPlayerContext] playPrevious - repeat all, looping to end at index:', lastIndex)
       setQueueIndex(lastIndex)
       await loadMedia(queue[lastIndex], { skipQueueUpdate: true })
     } else {
       // At beginning of queue, just restart current song
-      console.log('[MediaPlayerContext] playPrevious - at beginning of queue, restarting current song')
       await seek(0)
     }
   }, [position, queueIndex, queue, loadMedia, seek, repeatMode])
@@ -581,22 +511,17 @@ export const MediaPlayerProvider = ({ children }) => {
    * Respects repeat mode and autoplay settings
    */
   const handlePlaybackComplete = useCallback(async () => {
-    console.log('[MediaPlayer] Playback complete. repeatMode:', repeatMode, 'autoPlayEnabled:', autoPlayEnabled)
-
     if (repeatMode === 'one') {
       // Repeat current song
-      console.log('[MediaPlayer] Repeat one - restarting current song')
       if (soundRef.current) {
         await soundRef.current.setStatusAsync({ positionMillis: 0, shouldPlay: true })
         setPosition(0)
       }
     } else if (autoPlayEnabled) {
       // Auto-play next song (playNext handles shuffle and repeat-all)
-      console.log('[MediaPlayer] Auto-play enabled - playing next')
       await playNext()
     } else {
       // No autoplay - just stop
-      console.log('[MediaPlayer] Auto-play disabled - stopping')
       isPlayingRef.current = false
       setIsPlaying(false)
     }
@@ -606,24 +531,15 @@ export const MediaPlayerProvider = ({ children }) => {
    * Toggle shuffle mode
    */
   const toggleShuffle = useCallback(() => {
-    console.log('[MediaPlayerContext] toggleShuffle called. Current:', isShuffleEnabled)
-    setIsShuffleEnabled(prev => {
-      console.log('[MediaPlayerContext] toggleShuffle - setting to:', !prev)
-      return !prev
-    })
-  }, [isShuffleEnabled])
+    setIsShuffleEnabled(prev => !prev)
+  }, [])
 
   /**
    * Cycle through repeat modes: off -> all -> one -> off
    */
   const cycleRepeatMode = useCallback(() => {
-    console.log('[MediaPlayerContext] cycleRepeatMode called. Current:', repeatMode)
-    setRepeatMode(prev => {
-      const next = prev === 'off' ? 'all' : (prev === 'all' ? 'one' : 'off')
-      console.log('[MediaPlayerContext] cycleRepeatMode - setting to:', next)
-      return next
-    })
-  }, [repeatMode])
+    setRepeatMode(prev => prev === 'off' ? 'all' : (prev === 'all' ? 'one' : 'off'))
+  }, [])
 
   /**
    * Toggle autoplay setting
@@ -636,22 +552,9 @@ export const MediaPlayerProvider = ({ children }) => {
    * Play a list of items (sets queue and starts playing)
    */
   const playList = useCallback(async (items, startIndex = 0) => {
-    console.log('[MediaPlayer] playList called:', {
-      itemsCount: items?.length,
-      startIndex,
-    })
     if (!items || items.length === 0) {
-      console.log('[MediaPlayer] playList: No items to play!')
       return
     }
-
-    const itemToPlay = items[startIndex]
-    console.log('[MediaPlayer] playList: Item to play:', {
-      id: itemToPlay?.id,
-      title: itemToPlay?.title || itemToPlay?.label || itemToPlay?.name,
-      audioUrl: itemToPlay?.audioUrl,
-      videoUrl: itemToPlay?.videoUrl,
-    })
 
     setQueue(items)
     setQueueIndex(startIndex)
@@ -696,11 +599,12 @@ export const MediaPlayerProvider = ({ children }) => {
   }, [loadMedia])
 
   /**
-   * Check if a song is liked (uses shared state)
+   * Check if a song is liked (uses ref for stable function - prevents re-renders)
+   * NOTE: Uses ref instead of state to keep this function stable across re-renders
    */
   const isLiked = useCallback((songId) => {
-    return likedSongIds.has(songId)
-  }, [likedSongIds])
+    return likedSongIdsRef.current.has(songId)
+  }, []) // Empty deps - uses ref for stable access
 
   /**
    * Stop playback if a specific song is currently playing
@@ -711,16 +615,24 @@ export const MediaPlayerProvider = ({ children }) => {
   const stopIfPlaying = useCallback(async (songId) => {
     if (!songId) return false
 
-    const isCurrentSong = currentMedia?.id === songId
-    console.log('[MediaPlayerContext] stopIfPlaying:', { songId, currentMediaId: currentMedia?.id, isCurrentSong })
-
-    if (isCurrentSong) {
-      console.log('[MediaPlayerContext] Stopping playback - deleted song is currently playing')
+    if (currentMedia?.id === songId) {
       await stop()
       return true
     }
     return false
   }, [currentMedia, stop])
+
+  /**
+   * Update current media with new properties (e.g., after fetching timestamped lyrics)
+   * @param {Object} updates - Properties to merge into currentMedia
+   */
+  const updateCurrentMedia = useCallback((updates) => {
+    if (!currentMedia) return
+    setCurrentMedia(prev => ({
+      ...prev,
+      ...updates,
+    }))
+  }, [currentMedia])
 
   /**
    * Toggle like status for a song (updates shared state via Firebase subscription)
@@ -729,33 +641,31 @@ export const MediaPlayerProvider = ({ children }) => {
    */
   const toggleLike = useCallback(async (song) => {
     if (!song?.id || !userId) {
-      console.warn('[MediaPlayerContext] toggleLike: Missing song.id or userId')
       return false
     }
 
-    try {
-      const nowLiked = await toggleSongLike(song.id, userId, {
-        title: song.title || song.name || song.label,
-        imageUrl: song.imageUrl || song.thumbnailUrl || song.coverUrl,
-        artist: song.artist || song.style || song.description || song.author?.firstName,
-      })
-      console.log('[MediaPlayerContext] toggleLike result:', nowLiked, 'for song:', song.id)
-      // Note: likedSongIds will update automatically via Firebase subscription
-      return nowLiked
-    } catch (error) {
-      console.error('[MediaPlayerContext] toggleLike error:', error)
-      throw error
-    }
+    const nowLiked = await toggleSongLike(song.id, userId, {
+      title: song.title || song.name || song.label,
+      imageUrl: song.imageUrl || song.thumbnailUrl || song.coverUrl,
+      artist: song.artist || song.style || song.description || song.author?.firstName,
+    })
+    // Note: likedSongIds will update automatically via Firebase subscription
+    return nowLiked
   }, [userId])
 
-  const value = {
-    // State
+  // Memoize position context value - only changes when position/duration change
+  const positionValue = useMemo(() => ({
+    position,
+    duration,
+  }), [position, duration])
+
+  // Memoize main context value - should NOT include position/duration to prevent re-renders
+  const value = useMemo(() => ({
+    // State (excluding position/duration - they're in PositionContext)
     mediaType,
     isPlaying,
     isLoading,
     currentMedia,
-    position,
-    duration,
     queue,
     queueIndex,
     isFullPlayerVisible,
@@ -766,13 +676,14 @@ export const MediaPlayerProvider = ({ children }) => {
     repeatMode,
     autoPlayEnabled,
 
-    // Likes - shared state for all components
-    likedSongIds,
-    isLiked,
+    // Likes - likedSongIds triggers re-renders, isLiked is stable (uses ref)
+    likedSongIds, // For components that need to update when likes change
+    isLiked,      // Stable function - uses ref for immediate access
     toggleLike,
 
     // Song management
     stopIfPlaying,
+    updateCurrentMedia,
 
     // Actions
     loadMedia,
@@ -805,17 +716,69 @@ export const MediaPlayerProvider = ({ children }) => {
 
     // Helpers
     formatTime,
-  }
+  }), [
+    mediaType,
+    isPlaying,
+    isLoading,
+    currentMedia,
+    queue,
+    queueIndex,
+    isFullPlayerVisible,
+    isMiniPlayerVisible,
+    isShuffleEnabled,
+    repeatMode,
+    autoPlayEnabled,
+    likedSongIds, // Triggers re-renders for like UI updates
+    // isLiked removed from deps - it's stable (uses ref)
+    toggleLike,
+    stopIfPlaying,
+    updateCurrentMedia,
+    loadMedia,
+    playSong,
+    play,
+    pause,
+    togglePlayPause,
+    stop,
+    seek,
+    addToQueue,
+    removeFromQueue,
+    clearQueue,
+    playNext,
+    playPrevious,
+    playList,
+    playQueueItem,
+    toggleShuffle,
+    cycleRepeatMode,
+    toggleAutoPlay,
+    showFullPlayer,
+    hideFullPlayer,
+    dismissPlayer,
+    formatTime,
+  ])
 
   return (
     <MediaPlayerContext.Provider value={value}>
-      {children}
+      <PositionContext.Provider value={positionValue}>
+        {children}
+      </PositionContext.Provider>
     </MediaPlayerContext.Provider>
   )
 }
 
 /**
- * Hook to access media player context
+ * Hook to access ONLY position updates - use this in components that need position
+ * (ProgressSection, KaraokeLyrics, MiniPlayer progress bar)
+ * This hook updates frequently (100ms) so only use where needed!
+ */
+export const usePlaybackPosition = () => {
+  return useContext(PositionContext)
+}
+
+/**
+ * Hook to access media player context (STABLE - no position, no frequent re-renders)
+ *
+ * IMPORTANT: This hook does NOT include position/duration to prevent re-renders.
+ * Components that need position should ALSO call usePlaybackPosition().
  */
 export const useMediaPlayer = () => {
   const context = useContext(MediaPlayerContext)

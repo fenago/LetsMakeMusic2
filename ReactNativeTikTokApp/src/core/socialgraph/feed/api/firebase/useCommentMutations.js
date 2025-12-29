@@ -1,4 +1,4 @@
-import { addComment as addCommentAPI } from './firebaseFeedClient'
+import { addComment as addCommentAPI, deleteComment as deleteCommentAPI } from './firebaseFeedClient'
 
 export const useCommentMutations = () => {
   const addComment = async (commentText, postID, authorID) => {
@@ -8,7 +8,15 @@ export const useCommentMutations = () => {
     return result
   }
 
+  const deleteComment = async (postID, commentID, authorID) => {
+    console.log('[useCommentMutations] deleteComment called:', { postID, commentID, authorID })
+    const result = await deleteCommentAPI(postID, commentID, authorID)
+    console.log('[useCommentMutations] deleteComment result:', result)
+    return result
+  }
+
   return {
     addComment,
+    deleteComment,
   }
 }

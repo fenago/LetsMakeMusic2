@@ -4,7 +4,7 @@ import { useActionSheet } from '@expo/react-native-action-sheet'
 import { useIsFocused } from '@react-navigation/native'
 import { Image } from 'expo-image'
 import { Audio } from 'expo-av'
-import { Video, Music, MoreHorizontal } from 'lucide-react-native'
+import { Video, Music, MoreHorizontal, Heart, MessageCircle, Send } from 'lucide-react-native'
 import { useTheme, useTranslations } from '../../../../core/dopebase'
 import { getPlayableImageUrl, getPlayableUrl } from '../../../../utils/audioUtils'
 import { addReaction as addReactionAPI } from '../../../../core/socialgraph/feed/api/firebase/firebaseFeedClient'
@@ -44,16 +44,23 @@ const FeedItem = props => {
     onTextFieldHashTagPress,
     user,
     onDeletePost,
+    onEditPost,
     onUserReport,
     onMediaComplete,
     stageTheme,
+    fullScreen = false,
+    // Dynamic height from actual safe area insets (passed from Feed)
+    feedItemHeight = null,
   } = props
 
   const { localized } = useTranslations()
   const { theme } = useTheme()
 
-  // Generate dynamic styles based on stage theme
-  const styles = useMemo(() => dynamicStyles(stageTheme), [stageTheme])
+  // Generate dynamic styles based on stage theme, full-screen mode, and custom height
+  const styles = useMemo(
+    () => dynamicStyles(stageTheme, fullScreen, feedItemHeight),
+    [stageTheme, fullScreen, feedItemHeight]
+  )
   const stageColors = useMemo(() => getStageColors(stageTheme), [stageTheme])
 
   const isFocused = useIsFocused()
@@ -97,7 +104,6 @@ const FeedItem = props => {
     }
   }, [video.id]) // Only sync when the video ID changes (different post)
 
-  const selectedIcon = localMyReaction ? 'filledHeart' : 'heartUnfilled'
   const reactionCount = localReactionsCount
 
   // Debug: Log post structure with full audio URL info
@@ -538,6 +544,7 @@ const FeedItem = props => {
     if (!isUserAuthor) {
       options.push(localized('Report'))
     } else {
+      options.push(localized('Edit'))
       options.push(localized('Delete'))
     }
 
@@ -617,6 +624,9 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           Alert.alert('Coming Soon', 'Library save feature will be available soon!', [{ text: 'OK' }])
         } else if (selectedOption === localized('Report')) {
           onUserReport(video, 'Report Track')
+        } else if (selectedOption === localized('Edit')) {
+          // Trigger edit mode for this post
+          onEditPost?.(video)
         } else if (selectedOption === localized('Delete')) {
           Alert.alert(
             'Delete Track',
@@ -787,18 +797,17 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           )}
         </View>
 
-        {/* 2. Heart/Like Button */}
+        {/* 2. Heart/Like Button - Lucide outlined icon per brand guidelines */}
         <TouchableOpacity
           onPress={onReactionPress}
           style={styles.iconRightContainer}>
-          <Image
-            style={[
-              styles.iconRight,
-              selectedIcon !== 'heartUnfilled' && styles.iconLike,
-            ]}
-            source={theme.icons.heartFilled}
+          <Heart
+            size={30}
+            color={localMyReaction ? stageColors.likeColor : stageColors.iconTint}
+            fill={localMyReaction ? stageColors.likeColor : 'transparent'}
+            strokeWidth={2}
+            style={{ opacity: localMyReaction ? 1 : stageColors.iconOpacity }}
           />
-
           <Text style={styles.contentRightText}>
             {reactionCount > 1000
               ? `${reactionCount / 1000}K`
@@ -808,11 +817,16 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           </Text>
         </TouchableOpacity>
 
-        {/* 3. Comments Button */}
+        {/* 3. Comments Button - Lucide outlined icon per brand guidelines */}
         <TouchableOpacity
           onPress={() => onComment(video)}
           style={styles.iconRightContainer}>
-          <Image style={styles.iconRight} source={theme.icons.commentFilled} />
+          <MessageCircle
+            size={30}
+            color={stageColors.iconTint}
+            strokeWidth={2}
+            style={{ opacity: stageColors.iconOpacity }}
+          />
           <Text style={styles.contentRightText}>
             {video.commentCount > 1000
               ? `${video.commentCount}K`
@@ -822,13 +836,15 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           </Text>
         </TouchableOpacity>
 
-        {/* 4. Share Button */}
+        {/* 4. Share Button - Lucide outlined icon per brand guidelines */}
         <TouchableOpacity
           onPress={onSharePress}
           style={styles.iconRightContainer}>
-          <Image
-            style={styles.iconRight}
-            source={theme.icons.share}
+          <Send
+            size={28}
+            color={stageColors.iconTint}
+            strokeWidth={2}
+            style={{ opacity: stageColors.iconOpacity }}
           />
         </TouchableOpacity>
 
@@ -853,6 +869,9 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           onHashTagPress={onTextFieldHashTag}>
           {video.postText || ' '}
         </IMRichTextView>
+        {video.isEdited && (
+          <Text style={styles.editedLabel}>{localized('(edited)')}</Text>
+        )}
         {(video.songData || video.song) && (
           <View style={styles.contentLeftBottomMusicContainer}>
             <Image source={theme.icons.musicalNotes} style={styles.musicIcon} />

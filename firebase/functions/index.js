@@ -95,6 +95,13 @@ exports.deleteComment = feed.deleteComment
 exports.listComments = feed.listComments
 exports.listHashtagFeedPosts = feed.listHashtagFeedPosts
 exports.listProfileFeedPosts = feed.listProfileFeedPosts
+exports.editPost = feed.editPost
+exports.editComment = feed.editComment
+
+// stories - ephemeral 24-hour content
+exports.addStory = feed.addStory
+exports.listStories = feed.listStories
+exports.addStoryReaction = feed.addStoryReaction
 
 // songs - song sharing to social feed
 const songs = require('./songs/createSongPost')

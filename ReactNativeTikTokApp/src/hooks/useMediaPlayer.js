@@ -42,4 +42,4 @@
  * } = useMediaPlayer()
  */
 
-export { useMediaPlayer } from '../contexts/MediaPlayerContext'
+export { useMediaPlayer, usePlaybackPosition } from '../contexts/MediaPlayerContext'

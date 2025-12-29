@@ -495,6 +495,41 @@ const dynamicStyles = (theme, appearance, outBound) => {
       fontSize: themeSize.m,
     },
 
+    // Mention link message styles
+    mentionLinkContainer: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      backgroundColor: colorSet.grey0,
+      borderRadius: 8,
+      padding: 10,
+      borderLeftWidth: 3,
+      borderLeftColor: '#2126A2',
+      minWidth: 200,
+    },
+    mentionLinkIconContainer: {
+      marginRight: 10,
+      marginTop: 2,
+    },
+    mentionLinkContent: {
+      flex: 1,
+    },
+    mentionLinkTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colorSet.primaryText,
+      marginBottom: 4,
+    },
+    mentionLinkPreview: {
+      fontSize: 13,
+      color: colorSet.secondaryText,
+      marginBottom: 4,
+    },
+    mentionLinkAction: {
+      fontSize: 12,
+      color: '#2126A2',
+      fontWeight: '500',
+    },
+
     // Audio media thread item
     audioMediaThreadItemContainer: {
       backgroundColor: 'transparent',

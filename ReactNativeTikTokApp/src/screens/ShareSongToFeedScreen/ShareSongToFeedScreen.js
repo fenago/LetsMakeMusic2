@@ -1,8 +1,7 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   Image,
   StyleSheet,
@@ -15,9 +14,12 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useRoute } from '@react-navigation/native'
-import { Play, Music2, ChevronLeft } from 'lucide-react-native'
+import { Play, Music2 } from 'lucide-react-native'
 import functions from '@react-native-firebase/functions'
 import HashtagChips from '../../components/ui/HashtagChips'
+import { IMRichTextInput, IMMentionList, EU } from '../../core/mentions'
+import { useSearchUsers } from '../../core/socialgraph/friendships'
+import { useCurrentUser } from '../../core/onboarding'
 
 /**
  * Auto-generate hashtags from song style
@@ -52,13 +54,47 @@ const ShareSongToFeedScreen = () => {
   const route = useRoute()
   const { song } = route.params || {}
 
+  const currentUser = useCurrentUser()
+  const { users: searchResults, search } = useSearchUsers(currentUser?.id)
+
   const [caption, setCaption] = useState('')
+  const [rawCaption, setRawCaption] = useState('')
   const [hashtags, setHashtags] = useState(() =>
     autoGenerateHashtags(song?.style)
   )
   const [isSharing, setIsSharing] = useState(false)
 
+  // Mention state
+  const [keyword, setKeyword] = useState('')
+  const [isTrackingStarted, setIsTrackingStarted] = useState(false)
+  const [mentionSuggestions, setMentionSuggestions] = useState([])
+  const [showUsersMention, setShowUsersMention] = useState(false)
+
+  const editorRef = useRef()
+  const textInputRef = useRef()
+
   const styles = getStyles(isDark)
+
+  // Search for users when keyword changes
+  useEffect(() => {
+    if (keyword && keyword.length > 0) {
+      search(keyword)
+    }
+  }, [keyword])
+
+  // Format search results for mention list
+  useEffect(() => {
+    if (searchResults) {
+      const formattedUsers = searchResults.map(user => {
+        const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
+        const username = user.username || `${user.firstName}.${user.lastName}`
+        const id = user.id || user.userID
+
+        return { id, name, username, ...user }
+      })
+      setMentionSuggestions(formattedUsers)
+    }
+  }, [searchResults])
 
   // Extract hashtags from caption as user types
   useEffect(() => {
@@ -71,6 +107,11 @@ const ShareSongToFeedScreen = () => {
       setHashtags((prev) => [...new Set([...prev, ...newTags])].slice(0, 10))
     }
   }, [caption])
+
+  const onCaptionChange = ({ displayText, text }) => {
+    setCaption(displayText)
+    setRawCaption(text) // Keep raw text with mention markup
+  }
 
   const handleRemoveTag = useCallback((tag) => {
     setHashtags((prev) => prev.filter((t) => t !== tag))
@@ -91,7 +132,7 @@ const ShareSongToFeedScreen = () => {
       const createSongPost = functions().httpsCallable('createSongPost')
       const result = await createSongPost({
         songId: song.id,
-        caption: caption.trim(),
+        caption: rawCaption.trim() || caption.trim(), // Use raw caption with mention markup
         hashtags: hashtags,
       })
 
@@ -114,7 +155,7 @@ const ShareSongToFeedScreen = () => {
     } finally {
       setIsSharing(false)
     }
-  }, [song, caption, hashtags, navigation])
+  }, [song, caption, rawCaption, hashtags, navigation])
 
   if (!song) {
     return (
@@ -164,17 +205,40 @@ const ShareSongToFeedScreen = () => {
           {/* Caption Input */}
           <View style={styles.captionSection}>
             <Text style={styles.sectionLabel}>Caption</Text>
-            <TextInput
-              style={styles.captionInput}
-              placeholder="Write a caption... (use #hashtags for more)"
-              placeholderTextColor={isDark ? '#666' : '#999'}
-              value={caption}
-              onChangeText={setCaption}
-              multiline
-              maxLength={500}
-              textAlignVertical="top"
-            />
+            <View style={styles.captionInputContainer}>
+              <IMRichTextInput
+                richTextInputRef={editorRef}
+                inputRef={textInputRef}
+                list={mentionSuggestions}
+                mentionListPosition={'bottom'}
+                onChange={onCaptionChange}
+                showEditor={true}
+                toggleEditor={() => {}}
+                editorStyles={{
+                  input: {
+                    color: isDark ? '#fff' : '#000',
+                    fontSize: 15,
+                    minHeight: 80,
+                  },
+                  mainContainer: {
+                    width: '100%',
+                  },
+                }}
+                showMentions={showUsersMention}
+                onHideMentions={() => setShowUsersMention(false)}
+                onUpdateSuggestions={setKeyword}
+                onTrackingStateChange={setIsTrackingStarted}
+                placeholder="Write a caption... (use @mentions and #hashtags)"
+              />
+            </View>
             <Text style={styles.charCount}>{caption.length}/500</Text>
+            <IMMentionList
+              containerStyle={styles.mentionListContainer}
+              list={mentionSuggestions}
+              keyword={keyword}
+              isTrackingStarted={isTrackingStarted}
+              onSuggestionTap={editorRef.current?.onSuggestionTap}
+            />
           </View>
 
           {/* Hashtags Section */}
@@ -295,15 +359,18 @@ const getStyles = (isDark) =>
       color: isDark ? '#8e8e93' : '#666',
       marginBottom: 8,
     },
-    captionInput: {
+    captionInputContainer: {
       backgroundColor: isDark ? '#1c1c1e' : '#f5f5f5',
       borderRadius: 12,
       padding: 14,
-      fontSize: 15,
-      color: isDark ? '#fff' : '#000',
       minHeight: 100,
       borderWidth: 1,
       borderColor: isDark ? '#333' : '#ddd',
+    },
+    mentionListContainer: {
+      backgroundColor: isDark ? '#1c1c1e' : '#fff',
+      borderRadius: 8,
+      marginTop: 4,
     },
     charCount: {
       fontSize: 12,

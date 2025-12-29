@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, useState, memo } from 'react'
+import React, { useCallback, useRef, useState, memo, useMemo } from 'react'
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   FlatList,
   ActivityIndicator,
 } from 'react-native'
-import BottomSheet, { BottomSheetScrollView, TouchableOpacity } from '@gorhom/bottom-sheet'
+// Using React Native's TouchableOpacity (RNTouchableOpacity is already imported above)
 import * as FileSystem from 'expo-file-system/legacy'
 import {
   ChevronDown,
@@ -56,10 +56,11 @@ import {
   Clock,
 } from 'lucide-react-native'
 import { useNavigation } from '@react-navigation/native'
-import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
+import { useMediaPlayer, usePlaybackPosition } from '../../../contexts/MediaPlayerContext'
 import { useCurrentUser } from '../../../core/onboarding'
 import { useTheme } from '../../../core/dopebase'
 import { usePlaylists } from '../../../hooks/usePlaylists'
+import { fetchAndSaveTimestampedLyrics } from '../../../services/songsService'
 import EditSongModal from '../EditSongModal'
 import LyricsViewModal from '../LyricsViewModal'
 
@@ -68,11 +69,12 @@ const ARTWORK_SIZE = SCREEN_WIDTH - 80
 const LYRICS_PREVIEW_LINES = 4
 
 /**
- * Separate Progress Section component - Subscribes directly to position from context
+ * Separate Progress Section component - Subscribes to position via usePlaybackPosition
  * This isolates position updates to this component only, preventing full parent re-renders
  */
 const ProgressSection = ({ styles }) => {
-  const { position, duration, seek, formatTime } = useMediaPlayer()
+  const { position, duration } = usePlaybackPosition()
+  const { seek, formatTime } = useMediaPlayer()
   const progress = duration > 0 ? (position / duration) * 100 : 0
 
   const handleProgressPress = useCallback((event) => {
@@ -127,7 +129,7 @@ const FullPlayerBottomSheet = () => {
   const themeContext = useTheme()
   const isDark = (themeContext?.appearance ?? 'light') === 'dark'
 
-  const bottomSheetRef = useRef(null)
+  // Note: BottomSheet ref and snapPoints removed - now using Modal
   const [isLikeLoading, setIsLikeLoading] = useState(false)
   const [isShuffleOn, setIsShuffleOn] = useState(false)
   const [repeatMode, setRepeatMode] = useState('off') // 'off' | 'all' | 'one'
@@ -148,6 +150,7 @@ const FullPlayerBottomSheet = () => {
   const [showPlaylistModal, setShowPlaylistModal] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
+  const [isFetchingKaraokeLyrics, setIsFetchingKaraokeLyrics] = useState(false)
 
   const navigation = useNavigation()
   const currentUser = useCurrentUser()
@@ -158,7 +161,8 @@ const FullPlayerBottomSheet = () => {
     mediaType,
     isPlaying,
     currentMedia,
-    position, // Still needed for hasPrevious and karaoke lyrics
+    // NOTE: Do NOT subscribe to position here - it updates every 100ms and would cause
+    // excessive re-renders. Use ProgressSection or other isolated components for position.
     isFullPlayerVisible,
     togglePlayPause,
     hideFullPlayer,
@@ -171,11 +175,19 @@ const FullPlayerBottomSheet = () => {
     // Shared like state from context
     isLiked: isLikedFn,
     toggleLike,
+    // Update current media
+    updateCurrentMedia,
   } = useMediaPlayer()
 
   // Get like status from shared context
   const isLiked = currentMedia?.id ? isLikedFn(currentMedia.id) : false
 
+  // TIMING: Log when FullPlayer becomes visible
+  useEffect(() => {
+    if (isFullPlayerVisible) {
+      console.log('[TIMING] FullPlayer VISIBLE:', Date.now())
+    }
+  }, [isFullPlayerVisible])
 
   // Handle like button press - uses shared context
   const handleLikePress = useCallback(async () => {
@@ -194,20 +206,7 @@ const FullPlayerBottomSheet = () => {
     }
   }, [currentMedia, isLikeLoading, toggleLike])
 
-  // Handle visibility changes
-  useEffect(() => {
-    if (isFullPlayerVisible && bottomSheetRef.current) {
-      bottomSheetRef.current.expand()
-    } else if (!isFullPlayerVisible && bottomSheetRef.current) {
-      bottomSheetRef.current.close()
-    }
-  }, [isFullPlayerVisible])
-
-  const handleSheetChanges = useCallback((index) => {
-    if (index === -1) {
-      hideFullPlayer()
-    }
-  }, [hideFullPlayer])
+  // Note: Using Modal instead of BottomSheet - visibility controlled via visible prop
 
   // Toggle repeat mode
   const toggleRepeat = useCallback(() => {
@@ -353,6 +352,46 @@ const FullPlayerBottomSheet = () => {
     }
   }, [currentMedia])
 
+  // Handle fetch karaoke lyrics
+  const handleFetchKaraokeLyrics = useCallback(async () => {
+    if (!currentMedia?.id || !userId || isFetchingKaraokeLyrics) {
+      return
+    }
+
+    // Check if song has required Suno IDs
+    if (!currentMedia.sunoId && !currentMedia.sunoTaskId) {
+      Alert.alert(
+        'Not Available',
+        'Karaoke lyrics are only available for songs created with Suno AI.'
+      )
+      return
+    }
+
+    setIsFetchingKaraokeLyrics(true)
+    try {
+      const result = await fetchAndSaveTimestampedLyrics(currentMedia.id, userId)
+
+      if (result.success && result.data) {
+        // Update context with the fetched lyrics so UI updates immediately
+        updateCurrentMedia({
+          timestampedLyrics: result.data.timestampedLyrics,
+          rawLyrics: result.data.rawLyrics || currentMedia.rawLyrics,
+        })
+        Alert.alert(
+          'Karaoke Lyrics Ready!',
+          'Timestamped lyrics have been fetched. Open the lyrics modal to see karaoke mode.'
+        )
+      } else if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to fetch karaoke lyrics.')
+      }
+    } catch (error) {
+      console.error('[FullPlayer] Error fetching karaoke lyrics:', error)
+      Alert.alert('Error', error.message || 'Failed to fetch karaoke lyrics.')
+    } finally {
+      setIsFetchingKaraokeLyrics(false)
+    }
+  }, [currentMedia, userId, isFetchingKaraokeLyrics, updateCurrentMedia])
+
   // Handle share to feed with visibility check
   const handleShareToFeed = useCallback(() => {
     // Check if song is public (visibility can be 'public', true, or undefined defaults to public)
@@ -378,6 +417,9 @@ const FullPlayerBottomSheet = () => {
     navigateToFeature('ShareSongToFeed')
   }, [currentMedia, navigateToFeature])
 
+  // Memoize styles to prevent recreation on every render
+  const styles = useMemo(() => getStyles(isDark), [isDark])
+
   // Don't render if no media or wrong type
   if (mediaType !== 'audio' || !currentMedia) {
     return null
@@ -385,35 +427,33 @@ const FullPlayerBottomSheet = () => {
 
   const thumbnailUrl = currentMedia.thumbnailUrl || currentMedia.imageUrl || currentMedia.coverUrl || currentMedia.profilePictureURL
   const hasNext = queueIndex < queue.length - 1
-  const hasPrevious = queueIndex > 0 || position > 3000
+  // Previous button always enabled - playPrevious() handles restart vs prev track logic
+  const hasPrevious = true
 
-  const styles = getStyles(isDark)
-
+  // Use React Native Modal instead of BottomSheet for reliability
   return (
-    <BottomSheet
-      ref={bottomSheetRef}
-      index={-1}
-      snapPoints={['100%']}
-      enablePanDownToClose={true}
-      onChange={handleSheetChanges}
-      backgroundStyle={styles.sheetBackground}
-      handleIndicatorStyle={styles.handleIndicator}
+    <Modal
+      visible={isFullPlayerVisible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={hideFullPlayer}
     >
-      <BottomSheetScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Header */}
+      <View style={styles.modalContainer}>
+        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+          {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.headerButton}
             onPress={hideFullPlayer}
           >
             <ChevronDown size={28} color={isDark ? '#ffffff' : '#151723'} strokeWidth={2} />
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>
             Now Playing
           </Text>
-          <TouchableOpacity style={styles.headerButton} onPress={() => setShowOptionsMenu(true)}>
+          <RNTouchableOpacity style={styles.headerButton} onPress={() => setShowOptionsMenu(true)}>
             <MoreHorizontal size={24} color={isDark ? '#ffffff' : '#151723'} strokeWidth={2} />
-          </TouchableOpacity>
+          </RNTouchableOpacity>
         </View>
 
         {/* Artwork */}
@@ -501,9 +541,8 @@ const FullPlayerBottomSheet = () => {
           </Pressable>
 
           <Pressable
-            style={[styles.controlButton, !hasPrevious && styles.disabledButton]}
+            style={styles.controlButton}
             onPress={playPrevious}
-            disabled={!hasPrevious && position <= 3000}
             hitSlop={12}
           >
             <SkipBack
@@ -559,7 +598,7 @@ const FullPlayerBottomSheet = () => {
 
         {/* Lyrics Section */}
         <View style={styles.section}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.sectionHeader}
             activeOpacity={0.7}
             onPress={() => setShowLyrics(!showLyrics)}
@@ -570,21 +609,56 @@ const FullPlayerBottomSheet = () => {
             ) : (
               <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
             )}
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           {showLyrics && (
-            <TouchableOpacity
-              style={styles.lyricsContainer}
-              onPress={() => setShowLyricsModal(true)}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.lyricsText} numberOfLines={LYRICS_PREVIEW_LINES}>
-                {currentMedia.rawLyrics || currentMedia.lyrics ||
-                  "Lyrics not available for this track"}
-              </Text>
-              <View style={styles.lyricsExpandButton}>
-                <Text style={styles.lyricsExpandText}>Tap to see full lyrics</Text>
-              </View>
-            </TouchableOpacity>
+            <>
+              <RNTouchableOpacity
+                style={styles.lyricsContainer}
+                onPress={() => {
+                  console.log('[TIMING] Lyrics tap START:', Date.now())
+                  setShowLyricsModal(true)
+                }}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.lyricsText} numberOfLines={LYRICS_PREVIEW_LINES}>
+                  {currentMedia.rawLyrics || currentMedia.lyrics ||
+                    "Lyrics not available for this track"}
+                </Text>
+                <View style={styles.lyricsExpandButton}>
+                  <Text style={styles.lyricsExpandText}>Tap to see full lyrics</Text>
+                </View>
+              </RNTouchableOpacity>
+
+              {/* Get Karaoke Lyrics button - shows for Suno songs without timestamped lyrics */}
+              {(currentMedia.sunoId || currentMedia.sunoTaskId) && !(currentMedia.timestampedLyrics?.length > 0) && (
+                <RNTouchableOpacity
+                  style={[
+                    styles.karaokeButton,
+                    isFetchingKaraokeLyrics && styles.karaokeButtonLoading
+                  ]}
+                  onPress={handleFetchKaraokeLyrics}
+                  disabled={isFetchingKaraokeLyrics}
+                  activeOpacity={0.7}
+                >
+                  {isFetchingKaraokeLyrics ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Mic size={18} color="#ffffff" strokeWidth={2} />
+                  )}
+                  <Text style={styles.karaokeButtonText}>
+                    {isFetchingKaraokeLyrics ? 'Fetching...' : 'Get Karaoke Lyrics'}
+                  </Text>
+                </RNTouchableOpacity>
+              )}
+
+              {/* Karaoke mode indicator - shows when timestamped lyrics are available */}
+              {currentMedia.timestampedLyrics?.length > 0 && (
+                <View style={styles.karaokeReadyBadge}>
+                  <Mic size={14} color="#22c55e" strokeWidth={2} />
+                  <Text style={styles.karaokeReadyText}>Karaoke mode available</Text>
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -613,7 +687,7 @@ const FullPlayerBottomSheet = () => {
 
               <ScrollView style={styles.optionsModalScroll} showsVerticalScrollIndicator={false}>
                 {/* Analytics */}
-                <TouchableOpacity
+                <RNTouchableOpacity
                   style={styles.optionsMenuItem}
                   onPress={() => {
                     setShowOptionsMenu(false)
@@ -622,10 +696,10 @@ const FullPlayerBottomSheet = () => {
                 >
                   <BarChart3 size={22} color="#10b981" strokeWidth={2} />
                   <Text style={styles.optionsMenuText}>View Analytics</Text>
-                </TouchableOpacity>
+                </RNTouchableOpacity>
 
                 {/* Edit Song (includes details and rights) */}
-                <TouchableOpacity
+                <RNTouchableOpacity
                   style={styles.optionsMenuItem}
                   onPress={() => {
                     setShowOptionsMenu(false)
@@ -634,10 +708,10 @@ const FullPlayerBottomSheet = () => {
                 >
                   <Edit3 size={22} color="#6366f1" strokeWidth={2} />
                   <Text style={styles.optionsMenuText}>Edit Song</Text>
-                </TouchableOpacity>
+                </RNTouchableOpacity>
 
                 {/* Share (native share dialog) */}
-                <TouchableOpacity
+                <RNTouchableOpacity
                   style={styles.optionsMenuItem}
                   onPress={() => {
                     setShowOptionsMenu(false)
@@ -646,10 +720,10 @@ const FullPlayerBottomSheet = () => {
                 >
                   <Share2 size={22} color="#ec4899" strokeWidth={2} />
                   <Text style={styles.optionsMenuText}>Share</Text>
-                </TouchableOpacity>
+                </RNTouchableOpacity>
 
                 {/* Share with User */}
-                <TouchableOpacity
+                <RNTouchableOpacity
                   style={styles.optionsMenuItem}
                   onPress={() => {
                     setShowOptionsMenu(false)
@@ -658,10 +732,10 @@ const FullPlayerBottomSheet = () => {
                 >
                   <User size={22} color="#ec4899" strokeWidth={2} />
                   <Text style={styles.optionsMenuText}>Share with User</Text>
-                </TouchableOpacity>
+                </RNTouchableOpacity>
 
                 {/* Share to Feed */}
-                <TouchableOpacity
+                <RNTouchableOpacity
                   style={styles.optionsMenuItem}
                   onPress={() => {
                     setShowOptionsMenu(false)
@@ -670,10 +744,10 @@ const FullPlayerBottomSheet = () => {
                 >
                   <Music size={22} color="#ec4899" strokeWidth={2} />
                   <Text style={styles.optionsMenuText}>Share to Feed</Text>
-                </TouchableOpacity>
+                </RNTouchableOpacity>
 
                 {/* Download */}
-                <TouchableOpacity
+                <RNTouchableOpacity
                   style={[styles.optionsMenuItem, isDownloading && styles.optionsMenuItemDisabled]}
                   onPress={() => {
                     setShowOptionsMenu(false)
@@ -689,10 +763,10 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.optionsMenuText}>
                     {isDownloading ? `Downloading ${downloadProgress}%` : 'Download Song'}
                   </Text>
-                </TouchableOpacity>
+                </RNTouchableOpacity>
 
                 {/* Add to Playlist */}
-                <TouchableOpacity
+                <RNTouchableOpacity
                   style={styles.optionsMenuItem}
                   onPress={() => {
                     setShowOptionsMenu(false)
@@ -701,20 +775,19 @@ const FullPlayerBottomSheet = () => {
                 >
                   <ListPlus size={22} color="#3875e8" strokeWidth={2} />
                   <Text style={styles.optionsMenuText}>Add to Playlist</Text>
-                </TouchableOpacity>
+                </RNTouchableOpacity>
               </ScrollView>
             </View>
           </Pressable>
         </Modal>
 
-        {/* Full Lyrics Modal */}
+        {/* Full Lyrics Modal - KaraokeLyrics component inside subscribes directly to context */}
         <LyricsViewModal
           visible={showLyricsModal}
           onClose={() => setShowLyricsModal(false)}
           title={currentMedia?.title || currentMedia?.label || currentMedia?.name || 'Unknown Track'}
           rawLyrics={currentMedia?.rawLyrics || currentMedia?.lyrics}
           timestampedLyrics={currentMedia?.timestampedLyrics}
-          currentPosition={position}
         />
 
         {/* Analytics Modal */}
@@ -829,7 +902,7 @@ const FullPlayerBottomSheet = () => {
               </View>
 
               {/* Create New Playlist Button */}
-              <TouchableOpacity
+              <RNTouchableOpacity
                 style={styles.playlistModalCreateButton}
                 onPress={handleCreatePlaylist}
               >
@@ -837,7 +910,7 @@ const FullPlayerBottomSheet = () => {
                   <Plus size={24} color="#3875e8" strokeWidth={2} />
                 </View>
                 <Text style={styles.playlistModalCreateText}>Create New Playlist</Text>
-              </TouchableOpacity>
+              </RNTouchableOpacity>
 
               {/* Divider */}
               <View style={styles.playlistModalDivider}>
@@ -862,7 +935,7 @@ const FullPlayerBottomSheet = () => {
                   data={playlists}
                   keyExtractor={(item) => item.id}
                   renderItem={({ item }) => (
-                    <TouchableOpacity
+                    <RNTouchableOpacity
                       style={styles.playlistModalItem}
                       onPress={() => handleAddToPlaylist(item.id, item.name)}
                     >
@@ -885,7 +958,7 @@ const FullPlayerBottomSheet = () => {
                         </Text>
                       </View>
                       <Plus size={20} color="#888888" strokeWidth={2} />
-                    </TouchableOpacity>
+                    </RNTouchableOpacity>
                   )}
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={styles.playlistModalList}
@@ -898,7 +971,7 @@ const FullPlayerBottomSheet = () => {
         {/* Queue Section - Shows full queue with currently playing indicator */}
         {queue.length > 0 && (
           <View style={styles.section}>
-            <TouchableOpacity
+            <RNTouchableOpacity
               style={styles.sectionHeader}
               activeOpacity={0.7}
               onPress={() => setShowQueue(!showQueue)}
@@ -912,7 +985,7 @@ const FullPlayerBottomSheet = () => {
               ) : (
                 <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
               )}
-            </TouchableOpacity>
+            </RNTouchableOpacity>
             {showQueue && (
               <View style={styles.queueList}>
                 {queue.map((song, index) => {
@@ -958,12 +1031,12 @@ const FullPlayerBottomSheet = () => {
                         </Text>
                       </View>
                       {!isCurrentlyPlaying && (
-                        <TouchableOpacity
+                        <RNTouchableOpacity
                           style={styles.queueItemRemove}
                           onPress={() => removeFromQueue(index)}
                         >
                           <Trash2 size={16} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-                        </TouchableOpacity>
+                        </RNTouchableOpacity>
                       )}
                     </Pressable>
                   )
@@ -975,7 +1048,7 @@ const FullPlayerBottomSheet = () => {
 
         {/* Analytics Section */}
         <View style={styles.section}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.sectionHeader}
             activeOpacity={0.7}
             onPress={() => setShowAnalytics(!showAnalytics)}
@@ -989,7 +1062,7 @@ const FullPlayerBottomSheet = () => {
             ) : (
               <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
             )}
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           {showAnalytics && (
             <View style={styles.analyticsContainer}>
               <View style={styles.analyticsRow}>
@@ -1034,7 +1107,7 @@ const FullPlayerBottomSheet = () => {
 
         {/* Edit Song Section - Opens modal directly */}
         <View style={styles.section}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.sectionHeader}
             activeOpacity={0.7}
             onPress={() => setShowEditSongModal(true)}
@@ -1044,7 +1117,7 @@ const FullPlayerBottomSheet = () => {
               <Text style={styles.sectionTitle}>Edit Song</Text>
             </View>
             <ChevronRight size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           <Text style={styles.sectionSubtext}>
             Edit title, style, visibility, and rights
           </Text>
@@ -1052,7 +1125,7 @@ const FullPlayerBottomSheet = () => {
 
         {/* Share Section */}
         <View style={styles.section}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.sectionHeader}
             activeOpacity={0.7}
             onPress={() => setShowShareOptions(!showShareOptions)}
@@ -1066,10 +1139,10 @@ const FullPlayerBottomSheet = () => {
             ) : (
               <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
             )}
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           {showShareOptions && (
             <View style={styles.actionsList}>
-              <TouchableOpacity
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={handleShare}
               >
@@ -1078,8 +1151,8 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Share</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
-              <TouchableOpacity
+              </RNTouchableOpacity>
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('Friends')}
               >
@@ -1088,8 +1161,8 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Share with user</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
-              <TouchableOpacity
+              </RNTouchableOpacity>
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={handleShareToFeed}
               >
@@ -1098,14 +1171,14 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Share to feed</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
+              </RNTouchableOpacity>
             </View>
           )}
         </View>
 
         {/* About the Artist Section */}
         <View style={styles.section}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.sectionHeader}
             activeOpacity={0.7}
             onPress={() => setShowArtist(!showArtist)}
@@ -1116,7 +1189,7 @@ const FullPlayerBottomSheet = () => {
             ) : (
               <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
             )}
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           {showArtist && (
             <View style={styles.artistSection}>
               <View style={styles.artistInfo}>
@@ -1149,7 +1222,7 @@ const FullPlayerBottomSheet = () => {
 
         {/* Create Video Section */}
         <View style={styles.section}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.sectionHeader}
             activeOpacity={0.7}
             onPress={() => setShowCreateVideo(!showCreateVideo)}
@@ -1163,10 +1236,10 @@ const FullPlayerBottomSheet = () => {
             ) : (
               <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
             )}
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           {showCreateVideo && (
             <View style={styles.actionsList}>
-              <TouchableOpacity
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('CreateMusicVideo')}
               >
@@ -1175,14 +1248,14 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Create built-in music video</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
+              </RNTouchableOpacity>
             </View>
           )}
         </View>
 
         {/* Music Generation Section */}
         <View style={styles.section}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.sectionHeader}
             activeOpacity={0.7}
             onPress={() => setShowMusicGeneration(!showMusicGeneration)}
@@ -1196,10 +1269,10 @@ const FullPlayerBottomSheet = () => {
             ) : (
               <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
             )}
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           {showMusicGeneration && (
             <View style={styles.actionsList}>
-              <TouchableOpacity
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('ExtendSong')}
               >
@@ -1208,8 +1281,8 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Extend your song</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
-              <TouchableOpacity
+              </RNTouchableOpacity>
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('ReinterpretSong')}
               >
@@ -1218,8 +1291,8 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Reinterpret your song (new style)</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
-              <TouchableOpacity
+              </RNTouchableOpacity>
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('AddVocals')}
               >
@@ -1228,8 +1301,8 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Add vocals to an instrumental</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
-              <TouchableOpacity
+              </RNTouchableOpacity>
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('AddInstruments')}
               >
@@ -1238,8 +1311,8 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Add instruments to an acapella</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
-              <TouchableOpacity
+              </RNTouchableOpacity>
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('GetTimestampedLyrics')}
               >
@@ -1248,14 +1321,14 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Get timestamped lyrics</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
+              </RNTouchableOpacity>
             </View>
           )}
         </View>
 
         {/* Change Song Cover Section */}
         <View style={styles.section}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.sectionHeader}
             activeOpacity={0.7}
             onPress={() => setShowSongCover(!showSongCover)}
@@ -1269,10 +1342,10 @@ const FullPlayerBottomSheet = () => {
             ) : (
               <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
             )}
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           {showSongCover && (
             <View style={styles.actionsList}>
-              <TouchableOpacity
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('ChangeSongCover')}
               >
@@ -1281,8 +1354,8 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Upload a new image for song cover</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
-              <TouchableOpacity
+              </RNTouchableOpacity>
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('AddMediaForVideo')}
               >
@@ -1291,14 +1364,14 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Add pics and vids for custom video</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
+              </RNTouchableOpacity>
             </View>
           )}
         </View>
 
         {/* Audio Processing Section */}
         <View style={[styles.section, styles.lastSection]}>
-          <TouchableOpacity
+          <RNTouchableOpacity
             style={styles.sectionHeader}
             activeOpacity={0.7}
             onPress={() => setShowAudioProcessing(!showAudioProcessing)}
@@ -1312,10 +1385,10 @@ const FullPlayerBottomSheet = () => {
             ) : (
               <ChevronDown size={20} color={isDark ? '#c5c5c5' : '#7e7e7e'} strokeWidth={2} />
             )}
-          </TouchableOpacity>
+          </RNTouchableOpacity>
           {showAudioProcessing && (
             <View style={styles.actionsList}>
-              <TouchableOpacity
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('GetAcapella')}
               >
@@ -1324,8 +1397,8 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Get Acapella</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
-              <TouchableOpacity
+              </RNTouchableOpacity>
+              <RNTouchableOpacity
                 style={styles.actionItem}
                 onPress={() => navigateToFeature('StemSong')}
               >
@@ -1334,25 +1407,23 @@ const FullPlayerBottomSheet = () => {
                   <Text style={styles.actionItemText}>Stem your song</Text>
                 </View>
                 <ChevronRight size={18} color={isDark ? '#666666' : '#aaaaaa'} strokeWidth={2} />
-              </TouchableOpacity>
+              </RNTouchableOpacity>
             </View>
           )}
         </View>
 
         {/* Bottom spacing */}
         <View style={{ height: 40 }} />
-      </BottomSheetScrollView>
-    </BottomSheet>
+        </ScrollView>
+      </View>
+    </Modal>
   )
 }
 
 const getStyles = (isDark) => StyleSheet.create({
-  sheetBackground: {
+  modalContainer: {
+    flex: 1,
     backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
-  },
-  handleIndicator: {
-    backgroundColor: isDark ? '#666666' : '#cccccc',
-    width: 40,
   },
   container: {
     flex: 1,
@@ -1579,6 +1650,42 @@ const getStyles = (isDark) => StyleSheet.create({
     fontWeight: '600',
     color: '#3875e8',
     textAlign: 'center',
+  },
+  // Karaoke button styles
+  karaokeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#a855f7',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginTop: 12,
+    gap: 8,
+  },
+  karaokeButtonLoading: {
+    opacity: 0.7,
+  },
+  karaokeButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  karaokeReadyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.1)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 12,
+    gap: 6,
+  },
+  karaokeReadyText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#22c55e',
   },
   // Lyrics Modal Styles
   lyricsModalContainer: {

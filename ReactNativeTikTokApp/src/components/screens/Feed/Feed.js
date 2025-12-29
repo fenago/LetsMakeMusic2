@@ -13,7 +13,8 @@ import {
 } from 'react-native'
 import { useTheme } from '../../../core/dopebase'
 import FeedItem from './FeedItem/FeedItem'
-import { FEED_ITEM_HEIGHT } from './FeedItem/styles'
+import EditPostModal from '../../ui/EditPostModal'
+import { FEED_ITEM_HEIGHT, FEED_ITEM_FULL_HEIGHT, calculateFeedItemHeight } from './FeedItem/styles'
 import { dynamicStyles } from './styles'
 import { logInfo, logWarn, logError } from '../../../services/debugLogService'
 
@@ -46,6 +47,9 @@ export default function Feed(props) {
     isForYouFeed,
     isFollowingDisabled,
     isCommentsOpen = false,
+    onPostEdited,
+    // Dynamic height calculated from actual safe area insets
+    feedItemHeight = null,
   } = props
 
   const { theme } = useTheme()
@@ -53,11 +57,17 @@ export default function Feed(props) {
   // Get stage theme from user settings (default to 'Light')
   const stageTheme = user?.settings?.stage_theme || 'Light'
 
-  // Generate dynamic styles based on stage theme
+  // Use full-screen height when in custom feed mode (no bottom tab bar)
+  // Priority: feedItemHeight prop (dynamic) > isCustomFeed flag > default with stories
+  const currentItemHeight = feedItemHeight || (isCustomFeed ? FEED_ITEM_FULL_HEIGHT : FEED_ITEM_HEIGHT)
+
+  // Generate dynamic styles based on stage theme, passing the calculated height
   const styles = useMemo(() => dynamicStyles(stageTheme), [stageTheme])
 
   const [paused, setPaused] = useState(true) // Start paused - user must tap to play
   const [selected, setSelected] = useState(startIndex ?? 0)
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [postToEdit, setPostToEdit] = useState(null)
   const flatListRef = useRef(null)
   // Flag to ignore viewability changes during UI interactions (like, comment, etc.)
   const ignoreViewabilityChangesRef = useRef(false)
@@ -85,10 +95,10 @@ export default function Feed(props) {
         from: prevOffset,
         to: newOffset,
         change: Math.round(change),
-        index: Math.round(newOffset / FEED_ITEM_HEIGHT),
+        index: Math.round(newOffset / currentItemHeight),
       })
     }
-  }, [])
+  }, [currentItemHeight])
 
   // Check if auto-advance is enabled (default: On)
   const isAutoAdvanceEnabled = user?.settings?.auto_advance_feed !== 'Off'
@@ -144,13 +154,13 @@ export default function Feed(props) {
     // Capture EXACT scroll position BEFORE any state changes
     const savedOffset = scrollOffsetRef.current
     const currentIndex = currentIndexRef.current
-    const expectedOffset = currentIndex * FEED_ITEM_HEIGHT
+    const expectedOffset = currentIndex * currentItemHeight
 
     logInfo('[Feed] 💜💜💜 REACTION PRESSED 💜💜💜', {
       savedOffset,
       currentIndex,
       expectedOffset,
-      FEED_ITEM_HEIGHT,
+      currentItemHeight,
       hasFlatListRef: !!flatListRef.current,
     })
 
@@ -223,7 +233,7 @@ export default function Feed(props) {
     // Fourth attempt: much longer delay to catch FlatList's own scroll adjustments
     setTimeout(() => {
       const currentOffset = scrollOffsetRef.current
-      const expectedForIndex = currentIndex * FEED_ITEM_HEIGHT
+      const expectedForIndex = currentIndex * currentItemHeight
       logInfo('[Feed] 💜 [4/4] setTimeout(500) final check', {
         restoreOffset,
         expectedForIndex,
@@ -255,7 +265,7 @@ export default function Feed(props) {
         logInfo('[Feed] 💜 Viewability changes re-enabled')
       }, 100)
     }, 500)
-  }, [onReaction])
+  }, [onReaction, currentItemHeight])
 
   // Wrapper for comment handler - preserves scroll position during navigation
   // Saves offset so when user returns from comment screen, position is restored
@@ -291,6 +301,28 @@ export default function Feed(props) {
     }, 300)
   }, [onCommentPress])
 
+  // Handler for edit post - opens edit modal
+  const handleEditPost = useCallback((post) => {
+    logInfo('[Feed] ✏️ Edit post pressed', { postId: post?.id })
+    setPostToEdit(post)
+    setEditModalVisible(true)
+  }, [])
+
+  // Handler for when edit is saved
+  const handleEditPostSave = useCallback((newText) => {
+    logInfo('[Feed] ✏️ Post edited successfully', { postId: postToEdit?.id, newText: newText?.substring(0, 50) })
+    // Notify parent to update feed data
+    onPostEdited?.(postToEdit?.id, newText)
+    setEditModalVisible(false)
+    setPostToEdit(null)
+  }, [postToEdit, onPostEdited])
+
+  // Handler for closing edit modal
+  const handleEditModalClose = useCallback(() => {
+    setEditModalVisible(false)
+    setPostToEdit(null)
+  }, [])
+
   const renderFeedItem = useCallback(
     ({ item: video, index }) => {
       return (
@@ -302,6 +334,8 @@ export default function Feed(props) {
           selected={selected}
           index={index}
           stageTheme={stageTheme}
+          fullScreen={isCustomFeed}
+          feedItemHeight={currentItemHeight}
           onSharePost={onSharePost}
           onReaction={handleReaction}
           onFeedUserItemPress={onFeedUserItemPress}
@@ -310,6 +344,7 @@ export default function Feed(props) {
           onTextFieldUserPress={onTextFieldUserPress}
           onTextFieldHashTagPress={onTextFieldHashTagPress}
           onDeletePost={onDeletePost}
+          onEditPost={handleEditPost}
           onUserReport={onUserReport}
           onMediaComplete={onMediaComplete}
         />
@@ -320,6 +355,8 @@ export default function Feed(props) {
       paused,
       selected,
       stageTheme,
+      isCustomFeed,
+      currentItemHeight,
       onSharePost,
       handleReaction,
       onFeedUserItemPress,
@@ -327,6 +364,7 @@ export default function Feed(props) {
       onTextFieldUserPress,
       onTextFieldHashTagPress,
       onDeletePost,
+      handleEditPost,
       onUserReport,
       onMediaComplete,
     ],
@@ -401,9 +439,9 @@ export default function Feed(props) {
         removeClippedSubviews
         initialScrollIndex={startIndex}
         getItemLayout={(data, index) => ({
-          // Uses shared FEED_ITEM_HEIGHT for responsive sizing
-          length: FEED_ITEM_HEIGHT,
-          offset: FEED_ITEM_HEIGHT * index,
+          // Uses dynamic height based on context (full-screen vs with tab bar)
+          length: currentItemHeight,
+          offset: currentItemHeight * index,
           index,
         })}
         viewabilityConfig={VIEWABILITY_CONFIG}
@@ -413,8 +451,8 @@ export default function Feed(props) {
         }}
         onEndReachedThreshold={2}
         decelerationRate={'fast'}
-        // Use shared FEED_ITEM_HEIGHT for responsive snapping
-        snapToInterval={FEED_ITEM_HEIGHT}
+        // Use dynamic height for responsive snapping
+        snapToInterval={currentItemHeight}
         snapToAlignment="start"
         disableIntervalMomentum={true}
         onViewableItemsChanged={onViewableItemsChanged}
@@ -426,6 +464,14 @@ export default function Feed(props) {
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
         }}
+      />
+
+      {/* Edit Post Modal */}
+      <EditPostModal
+        visible={editModalVisible}
+        onClose={handleEditModalClose}
+        post={postToEdit}
+        onSave={handleEditPostSave}
       />
     </View>
   )

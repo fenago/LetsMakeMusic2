@@ -18,6 +18,7 @@ import SongDetailCard from '../SongDetailCard'
 import AlbumCard from '../AlbumCard'
 import ArtistCard from '../ArtistCard'
 import SongActionMenu from '../SongActionMenu'
+import { StoriesTray } from '../../../core/dopebase'
 import { FEED_ITEM_HEIGHT } from '../../screens/Feed/FeedItem/styles'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 import { prepareSongsForPlaylist } from '../../../utils/audioUtils'
@@ -70,6 +71,7 @@ const FILTER_TABS = [
 const MusicFeed = ({
   userName = 'John',
   currentUserId = null,
+  currentUser = null,
   todaysPicks = [],
   todaysPicksForYou = [],
   todaysPicksFollowing = [],
@@ -93,6 +95,11 @@ const MusicFeed = ({
   videoFeedComponent, // Existing video feed from HomeScreen
   // NEW: Filter callbacks from HomeScreen to filter the feed
   onFilterChange,
+  // Stories props
+  groupedStories = [],
+  myStories = null,
+  onStoryItemPress,
+  onAddStoryPress,
 }) => {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
@@ -457,6 +464,49 @@ const MusicFeed = ({
     </Modal>
   )
 
+  // Handle story item press - navigate to full story viewer
+  const handleStoryItemPress = useCallback((item, index) => {
+    console.log('[MusicFeed] Story pressed:', item?.firstName, 'index:', index)
+    onStoryItemPress?.(item, index)
+  }, [onStoryItemPress])
+
+  // Handle add story press - navigate to story creation
+  const handleAddStoryPress = useCallback((shouldOpenCamera, refIndex, index) => {
+    console.log('[MusicFeed] Add story pressed, openCamera:', shouldOpenCamera)
+    onAddStoryPress?.(shouldOpenCamera)
+  }, [onAddStoryPress])
+
+  // Render StoriesTray if there are stories
+  const renderStoriesTray = () => {
+    // Only show stories on All or Music tabs
+    if (feedFilter !== 'all' && feedFilter !== 'music') {
+      return null
+    }
+
+    // Only render if we have stories OR if we want to show the add story button
+    const hasStories = groupedStories && groupedStories.length > 0
+    const showAddStory = currentUser != null
+
+    if (!hasStories && !showAddStory) {
+      return null
+    }
+
+    return (
+      <View style={styles.storiesTrayContainer}>
+        <StoriesTray
+          data={groupedStories || []}
+          user={currentUser}
+          displayUserItem={showAddStory}
+          userItemShouldOpenCamera={true}
+          userStoryTitle="Add"
+          onStoryItemPress={handleStoryItemPress}
+          onUserItemPress={handleAddStoryPress}
+          displayVerifiedBadge={false}
+        />
+      </View>
+    )
+  }
+
   // NEW: Main layout - Full-screen social feed with header and filter tabs
   // This is now the PRIMARY view (inverted from before)
   const isComingSoonTab = ['podcast', 'radio', 'events'].includes(feedFilter)
@@ -465,6 +515,7 @@ const MusicFeed = ({
     <View style={styles.container}>
       {renderPrimaryHeader()}
       {renderFilterTabs()}
+      {renderStoriesTray()}
 
       {/* Main content area */}
       {isComingSoonTab ? (
@@ -851,6 +902,14 @@ const getStyles = (isDark) => StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     color: '#3875e8',
+  },
+
+  // ========== Stories Tray Styles ==========
+  storiesTrayContainer: {
+    height: 100,
+    backgroundColor: isDark ? '#0a0a0a' : '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: isDark ? '#1a1a1a' : '#f0f0f0',
   },
 
   // ========== NEW: Full-Screen Feed Styles ==========

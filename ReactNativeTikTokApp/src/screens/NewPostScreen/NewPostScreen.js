@@ -10,7 +10,7 @@ import { IMRichTextInput, IMMentionList, EU } from '../../core/mentions'
 import { NavBar } from '../../components'
 import dynamicStyles from './styles'
 import { usePostMutations } from '../../core/socialgraph/feed'
-import { useSocialGraphFriends } from '../../core/socialgraph/friendships'
+import { useSearchUsers } from '../../core/socialgraph/friendships'
 import { useCurrentUser } from '../../core/onboarding'
 
 export default function NewPost(props) {
@@ -25,11 +25,11 @@ export default function NewPost(props) {
   const currentUser = useCurrentUser()
 
   const { addPost } = usePostMutations()
-  const { friends } = useSocialGraphFriends(currentUser?.id)
+  const { users: searchResults, search } = useSearchUsers(currentUser?.id)
 
   const [keyword, setKeyword] = useState('')
   const [isTrackingStarted, setIsTrackingStarted] = useState(false)
-  const [friendshipData, setFriendshipData] = useState([])
+  const [mentionSuggestions, setMentionSuggestions] = useState([])
   const [showUsersMention, setShowUsersMention] = useState(false)
   const [shouldPlayVideo, setShouldPlayVideo] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -44,16 +44,26 @@ export default function NewPost(props) {
     }
   }, [])
 
+  // Search for users when keyword changes
   useEffect(() => {
-    const formattedFriends = friends?.map(friend => {
-      const name = `${friend.firstName} ${friend.lastName}`
-      const username = `${friend.firstName}.${friend.lastName}`
-      const id = friend.id || friend.userID
+    if (keyword && keyword.length > 0) {
+      search(keyword)
+    }
+  }, [keyword])
 
-      return { id, name, username, ...friend }
-    })
-    setFriendshipData(formattedFriends)
-  }, [friends])
+  // Format search results for mention list
+  useEffect(() => {
+    if (searchResults) {
+      const formattedUsers = searchResults.map(user => {
+        const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
+        const username = user.username || `${user.firstName}.${user.lastName}`
+        const id = user.id || user.userID
+
+        return { id, name, username, ...user }
+      })
+      setMentionSuggestions(formattedUsers)
+    }
+  }, [searchResults])
 
   const onDismiss = () => {
     navigation.goBack()
@@ -129,10 +139,8 @@ export default function NewPost(props) {
           <IMRichTextInput
             richTextInputRef={editorRef}
             inputRef={textInputRef}
-            list={friendshipData}
+            list={mentionSuggestions}
             mentionListPosition={'bottom'}
-            // initialValue={initialValue}
-            // clearInput={this.state.clearInput}
             onChange={onChangeText}
             showEditor={true}
             toggleEditor={() => {}}
@@ -147,7 +155,7 @@ export default function NewPost(props) {
         </View>
         <IMMentionList
           containerStyle={styles.container}
-          list={friendshipData}
+          list={mentionSuggestions}
           keyword={keyword}
           isTrackingStarted={isTrackingStarted}
           onSuggestionTap={editorRef.current?.onSuggestionTap}

@@ -23,6 +23,7 @@ export const FeedFunctions = () => {
   return {
     // feed
     addPost: functions().httpsCallable('addPost'),
+    editPost: functions().httpsCallable('editPost'),
     deletePost: functions().httpsCallable('deletePost'),
     addStory: functions().httpsCallable('addStory'),
     addStoryReaction: functions().httpsCallable('addStoryReaction'),
@@ -30,6 +31,8 @@ export const FeedFunctions = () => {
     listHomeFeedPosts: functions().httpsCallable('listHomeFeedPosts'),
     addReaction: functions().httpsCallable('addReaction'),
     addComment: functions().httpsCallable('addComment'),
+    editComment: functions().httpsCallable('editComment'),
+    deleteComment: functions().httpsCallable('deleteComment'),
     listComments: functions().httpsCallable('listComments'),
     listDiscoverFeedPosts: functions().httpsCallable('listDiscoverFeedPosts'),
     listHashtagFeedPosts: functions().httpsCallable('listHashtagFeedPosts'),

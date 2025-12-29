@@ -14,6 +14,7 @@ import {
   applyVideoClipToSong,
   updateVideoClip,
   getPendingVideoClips,
+  regenerateThumbnail,
   VIDEO_CLIP_STATUS,
 } from '../services/videoClipsService'
 
@@ -148,6 +149,24 @@ export const useVideoClips = (userId, author = null) => {
   )
 
   /**
+   * Regenerate thumbnail for a clip that's missing one
+   */
+  const handleRegenerateThumbnail = useCallback(
+    async (clipId) => {
+      if (!userId) return { success: false, error: 'Not logged in' }
+
+      try {
+        const result = await regenerateThumbnail(clipId, userId)
+        return result
+      } catch (err) {
+        console.error('[useVideoClips] Error regenerating thumbnail:', err)
+        return { success: false, error: err.message }
+      }
+    },
+    [userId]
+  )
+
+  /**
    * Get clips by generation mode
    */
   const getClipsByMode = useCallback(
@@ -201,6 +220,7 @@ export const useVideoClips = (userId, author = null) => {
     deleteVideoClip: handleDeleteVideoClip,
     applyToSong: handleApplyToSong,
     updateVideoClip: handleUpdateVideoClip,
+    regenerateThumbnail: handleRegenerateThumbnail,
     getClipsByMode,
     getClipsByStatus,
     clearError: () => setError(null),
@@ -232,15 +252,23 @@ export const useVideoClipDetail = (clipId) => {
     const { db } = require('../core/firebase/config')
 
     // Subscribe to real-time updates
+    console.log('[useVideoClipDetail] Subscribing to clip:', clipId)
     const unsubscribe = db
       .collection('video_clips')
       .doc(clipId)
       .onSnapshot(
         (doc) => {
+          console.log('[useVideoClipDetail] Snapshot received for:', clipId)
+          console.log('[useVideoClipDetail] Doc exists:', doc.exists)
           if (doc.exists) {
-            setClipDetail({ id: doc.id, ...doc.data() })
+            const data = doc.data()
+            console.log('[useVideoClipDetail] Raw Firestore data:', JSON.stringify(data, null, 2))
+            console.log('[useVideoClipDetail] videoUrl from Firestore:', data.videoUrl)
+            console.log('[useVideoClipDetail] videoUrl type:', typeof data.videoUrl)
+            setClipDetail({ id: doc.id, ...data })
             setError(null)
           } else {
+            console.error('[useVideoClipDetail] Document does not exist!')
             setError('Video clip not found')
             setClipDetail(null)
           }

@@ -15,7 +15,7 @@ const CommentsScreen = props => {
   const bottomSheetRef = useRef(null)
 
   const currentUser = useCurrentUser()
-  const { addComment } = useCommentMutations()
+  const { addComment, deleteComment } = useCommentMutations()
   const { comments, commentsLoading, loadMoreComments, subscribeToComments } =
     useComments()
 
@@ -68,6 +68,36 @@ const CommentsScreen = props => {
     [addComment, currentUser?.id, item?.id],
   )
 
+  const onCommentDelete = useCallback(
+    async commentID => {
+      console.log('[CommentsScreen] ========== onCommentDelete called ==========')
+      console.log('[CommentsScreen] commentID:', commentID)
+      console.log('[CommentsScreen] item.id:', item?.id)
+      console.log('[CommentsScreen] currentUser:', currentUser?.id)
+
+      if (!commentID || !item?.id || !currentUser?.id) {
+        console.log('[CommentsScreen] ❌ Missing required data for delete')
+        return
+      }
+
+      console.log('[CommentsScreen] ✅ Calling deleteComment...')
+      const result = await deleteComment(item.id, commentID, currentUser.id)
+      console.log('[CommentsScreen] 📥 Comment delete result:', result)
+      return result
+    },
+    [deleteComment, currentUser?.id, item?.id],
+  )
+
+  // Handler for when a comment is edited - just log for now
+  // The edit happens via Firebase cloud function and will sync via subscription
+  const onCommentEdited = useCallback(
+    (commentId, newText) => {
+      console.log('[CommentsScreen] ✏️ Comment edited:', { commentId, newText: newText?.substring(0, 50) })
+      // The comment list will auto-update via the subscribeToComments subscription
+    },
+    [],
+  )
+
   const handleSheetChanges = useCallback(
     index => {
       console.log('handleSheetChanges', index)
@@ -88,6 +118,8 @@ const CommentsScreen = props => {
         scrollViewRef={scrollViewRef}
         commentItems={comments}
         commentsLoading={commentsLoading}
+        currentUserId={currentUser?.id}
+        postId={item?.id}
         onCommentSend={async text => {
           console.log('[CommentsScreen] 🔔 Comment send triggered with text:', text)
           // Dismiss keyboard but DON'T dismiss bottom sheet - let user see result
@@ -97,6 +129,8 @@ const CommentsScreen = props => {
           // Don't auto-dismiss - let user see the comment appear in list
           return result
         }}
+        onCommentDelete={onCommentDelete}
+        onCommentEdited={onCommentEdited}
         insets={insets}
       />
     </BottomSheet>

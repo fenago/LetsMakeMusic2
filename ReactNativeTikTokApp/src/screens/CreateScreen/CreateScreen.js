@@ -93,6 +93,7 @@ import VoicePicker from '../../components/ui/VoicePicker'
 import { incrementVoiceUsage } from '../../services/artistVoiceService'
 import functions from '@react-native-firebase/functions'
 import { logInfo, logSuccess, logError, logWarn } from '../../services/debugLogService'
+import { User } from 'lucide-react-native'
 
 // Model version options for picker
 const MODEL_OPTIONS = Object.entries(MODEL_VERSIONS).map(([key, value]) => ({
@@ -590,7 +591,9 @@ export default function CreateScreen({ navigation, route }) {
             <Text style={styles.closeText}>Cancel</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Studio</Text>
-          <View style={styles.closeButton} />
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.closeButton}>
+            <User size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
 
         {/* Mode Toggle: Video / Song / Lyrics / Beats */}

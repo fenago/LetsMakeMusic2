@@ -3,6 +3,16 @@ const admin = require('firebase-admin')
 
 const db = admin.firestore()
 
+// Reference to the main posts collection
+const mainFeedRef = db.collection('posts')
+
+// Mention utilities
+const {
+  extractMentionIds,
+  extractHashtags,
+  processMentionNotifications,
+} = require('../mentions/mentions')
+
 /**
  * List posts from the user's home feed (Following feed)
  * Returns posts from users they follow
@@ -106,6 +116,11 @@ exports.addPost = functions.https.onCall(async (data, context) => {
     const userDoc = await db.collection('users').doc(userId).get()
     const userData = userDoc.exists ? userDoc.data() : {}
 
+    // Extract mentions and hashtags from description text
+    const mentionedUserIds = extractMentionIds(description)
+    const textHashtags = extractHashtags(description)
+    const allHashtags = [...new Set([...hashtags, ...textHashtags])]
+
     const postData = {
       authorID: userId,
       author: {
@@ -117,7 +132,11 @@ exports.addPost = functions.https.onCall(async (data, context) => {
       },
       postMedia,
       description: description || '',
-      hashtags,
+      hashtags: allHashtags,
+      mentionedUserIds,
+      notifiedMentions: [],
+      isEdited: false,
+      editedAt: null,
       location: location || {},
       postType,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -166,13 +185,34 @@ exports.addPost = functions.https.onCall(async (data, context) => {
     await batch.commit()
 
     // Fan out to hashtag feeds
-    for (const tag of hashtags) {
+    for (const tag of allHashtags) {
       await db
         .collection('hashtags')
         .doc(tag.toLowerCase())
         .collection('feed_live')
         .doc(postId)
         .set(postData)
+    }
+
+    // Send mention notifications (push + DM)
+    if (mentionedUserIds.length > 0) {
+      const notifiedMentions = await processMentionNotifications({
+        mentionerID: userId,
+        mentionerUser: userData,
+        mentionedUserIds,
+        postId,
+        commentId: null,
+        contentType: 'post',
+        contentText: description,
+        alreadyNotified: [],
+      })
+
+      // Update post with notified mentions for edit tracking
+      if (notifiedMentions.length > 0) {
+        await db.collection('posts').doc(postId).update({
+          notifiedMentions,
+        })
+      }
     }
 
     console.log(`[addPost] Created post ${postId} for user ${userId}, fanned to ${followersSnapshot.size} followers`)
@@ -341,6 +381,10 @@ exports.addComment = functions.https.onCall(async (data, context) => {
     const userDoc = await db.collection('users').doc(userId).get()
     const userData = userDoc.exists ? userDoc.data() : {}
 
+    // Extract mentions and hashtags from comment text
+    const mentionedUserIds = extractMentionIds(text)
+    const hashtags = extractHashtags(text)
+
     // Generate ID first so we can include it in the document
     const commentRef = db
       .collection('posts')
@@ -359,6 +403,11 @@ exports.addComment = functions.https.onCall(async (data, context) => {
         profilePictureURL: userData.profilePictureURL || '',
       },
       text,
+      mentionedUserIds,
+      hashtags,
+      notifiedMentions: [],
+      isEdited: false,
+      editedAt: null,
       parentCommentId: parentCommentId || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       reactions: { like: 0 },
@@ -366,10 +415,31 @@ exports.addComment = functions.https.onCall(async (data, context) => {
 
     await commentRef.set(commentData)
 
-    // Update comment count on post
-    await db.collection('posts').doc(postId).update({
+    // Update comment count on post (use set with merge to handle song posts that may not exist in posts collection)
+    await db.collection('posts').doc(postId).set({
       commentCount: admin.firestore.FieldValue.increment(1),
-    })
+    }, { merge: true })
+
+    // Send mention notifications (push + DM)
+    if (mentionedUserIds.length > 0) {
+      const notifiedMentions = await processMentionNotifications({
+        mentionerID: userId,
+        mentionerUser: userData,
+        mentionedUserIds,
+        postId,
+        commentId: commentRef.id,
+        contentType: 'comment',
+        contentText: text,
+        alreadyNotified: [],
+      })
+
+      // Update comment with notified mentions for edit tracking
+      if (notifiedMentions.length > 0) {
+        await commentRef.update({
+          notifiedMentions,
+        })
+      }
+    }
 
     console.log(`[addComment] Added comment ${commentRef.id} to post ${postId}`)
     return { commentId: commentRef.id, success: true }
@@ -407,10 +477,10 @@ exports.deleteComment = functions.https.onCall(async (data, context) => {
 
     await commentRef.delete()
 
-    // Update comment count on post
-    await db.collection('posts').doc(postId).update({
+    // Update comment count on post (use set with merge to handle song posts)
+    await db.collection('posts').doc(postId).set({
       commentCount: admin.firestore.FieldValue.increment(-1),
-    })
+    }, { merge: true })
 
     console.log(`[deleteComment] Deleted comment ${commentId} from post ${postId}`)
     return { success: true }
@@ -581,6 +651,450 @@ exports.listHashtagFeedPosts = functions.https.onCall(async (data, context) => {
     return { posts, success: true }
   } catch (error) {
     console.error('[listHashtagFeedPosts] Error:', error)
+    throw new functions.https.HttpsError('internal', error.message)
+  }
+})
+
+/**
+ * Edit an existing post
+ * Updates description, mentions, hashtags, and notifies only NEW mentions
+ */
+exports.editPost = functions.https.onCall(async (data, context) => {
+  const { postID, postAuthorID, description, hashtags: passedHashtags = [] } = data
+
+  if (!postID || !postAuthorID) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'postID and postAuthorID are required'
+    )
+  }
+
+  try {
+    // Fetch the existing post
+    const mainFeedPostRef = mainFeedRef.doc(postID)
+    const postSnap = await mainFeedPostRef.get()
+
+    if (!postSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Post not found')
+    }
+
+    const existingPost = postSnap.data()
+
+    // Verify ownership
+    if (existingPost.authorID !== postAuthorID) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Only the author can edit this post'
+      )
+    }
+
+    // Extract mentions and hashtags from new description
+    const newMentionedUserIds = extractMentionIds(description)
+    const extractedHashtags = extractHashtags(description)
+    const allHashtags = [...new Set([...passedHashtags, ...extractedHashtags])]
+      .map(tag => tag.toLowerCase())
+
+    // Prepare update data
+    const editedAt = Math.floor(Date.now() / 1000)
+    const updateData = {
+      description: description || '',
+      hashtags: allHashtags,
+      mentionedUserIds: newMentionedUserIds,
+      isEdited: true,
+      editedAt,
+    }
+
+    // Update in main feed
+    await mainFeedPostRef.update(updateData)
+
+    // Update in author's social feed
+    const authorFeedRef = socialFeedsRef
+      .doc(postAuthorID)
+      .collection('posts_live')
+      .doc(postID)
+    await authorFeedRef.update(updateData)
+
+    // Update in all followers' main feeds
+    const followersSnap = await socialGraphRef
+      .doc(postAuthorID)
+      .collection('inbound_users')
+      .get()
+
+    const followerUpdatePromises = followersSnap.docs.map(async (followerDoc) => {
+      const followerFeedRef = socialFeedsRef
+        .doc(followerDoc.id)
+        .collection('main_feed_live')
+        .doc(postID)
+      const followerPostSnap = await followerFeedRef.get()
+      if (followerPostSnap.exists) {
+        await followerFeedRef.update(updateData)
+      }
+    })
+    await Promise.all(followerUpdatePromises)
+
+    // Handle hashtag feeds - remove from old, add to new
+    const oldHashtags = existingPost.hashtags || []
+
+    // Remove from old hashtag feeds that are no longer present
+    const removedHashtags = oldHashtags.filter(tag => !allHashtags.includes(tag))
+    const removePromises = removedHashtags.map(async (tag) => {
+      await db
+        .collection('hashtags')
+        .doc(tag)
+        .collection('feed_live')
+        .doc(postID)
+        .delete()
+    })
+    await Promise.all(removePromises)
+
+    // Add to new hashtag feeds
+    const addedHashtags = allHashtags.filter(tag => !oldHashtags.includes(tag))
+    const addPromises = addedHashtags.map(async (tag) => {
+      const hashtagData = {
+        ...existingPost,
+        ...updateData,
+        id: postID,
+      }
+      await db
+        .collection('hashtags')
+        .doc(tag)
+        .collection('feed_live')
+        .doc(postID)
+        .set(hashtagData)
+    })
+    await Promise.all(addPromises)
+
+    // Update existing hashtag feeds with new data
+    const existingHashtags = allHashtags.filter(tag => oldHashtags.includes(tag))
+    const updateHashtagPromises = existingHashtags.map(async (tag) => {
+      await db
+        .collection('hashtags')
+        .doc(tag)
+        .collection('feed_live')
+        .doc(postID)
+        .update(updateData)
+    })
+    await Promise.all(updateHashtagPromises)
+
+    // Send notifications only to NEW mentions
+    const oldNotified = existingPost.notifiedMentions || []
+    const newMentionsToNotify = newMentionedUserIds.filter(
+      id => !oldNotified.includes(id)
+    )
+
+    if (newMentionsToNotify.length > 0) {
+      const author = await fetchUser(postAuthorID)
+
+      const notifiedUserIds = await processMentionNotifications({
+        mentionerID: postAuthorID,
+        mentionerUser: author,
+        mentionedUserIds: newMentionsToNotify,
+        postId: postID,
+        commentId: null,
+        contentType: 'post',
+        contentText: description,
+        alreadyNotified: oldNotified,
+      })
+
+      // Update notifiedMentions array
+      const allNotified = [...new Set([...oldNotified, ...notifiedUserIds])]
+      await mainFeedPostRef.update({ notifiedMentions: allNotified })
+      await authorFeedRef.update({ notifiedMentions: allNotified })
+    }
+
+    console.log(`[editPost] Successfully edited post ${postID}`)
+    return { success: true, postID }
+  } catch (error) {
+    console.error('[editPost] Error:', error)
+    throw new functions.https.HttpsError('internal', error.message)
+  }
+})
+
+/**
+ * Edit an existing comment
+ * Updates text, mentions, hashtags, and notifies only NEW mentions
+ */
+exports.editComment = functions.https.onCall(async (data, context) => {
+  // Support both naming conventions (client uses lowercase, legacy uses uppercase)
+  const postID = data.postID || data.postId
+  const commentID = data.commentID || data.commentId
+  const authorID = data.authorID || data.userId
+  const text = data.text || data.newText
+
+  if (!postID || !commentID || !authorID || !text) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'postID/postId, commentID/commentId, authorID/userId, and text/newText are required'
+    )
+  }
+
+  try {
+    // Fetch the existing comment
+    const commentRef = mainFeedRef
+      .doc(postID)
+      .collection('comments_live')
+      .doc(commentID)
+    const commentSnap = await commentRef.get()
+
+    if (!commentSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Comment not found')
+    }
+
+    const existingComment = commentSnap.data()
+
+    // Verify ownership
+    if (existingComment.authorID !== authorID) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Only the author can edit this comment'
+      )
+    }
+
+    // Extract mentions and hashtags from new text
+    const newMentionedUserIds = extractMentionIds(text)
+    const newHashtags = extractHashtags(text)
+
+    // Prepare update data
+    const editedAt = Math.floor(Date.now() / 1000)
+    const updateData = {
+      text,
+      mentionedUserIds: newMentionedUserIds,
+      hashtags: newHashtags,
+      isEdited: true,
+      editedAt,
+    }
+
+    // Update the comment
+    await commentRef.update(updateData)
+
+    // Send notifications only to NEW mentions
+    const oldNotified = existingComment.notifiedMentions || []
+    const newMentionsToNotify = newMentionedUserIds.filter(
+      id => !oldNotified.includes(id)
+    )
+
+    if (newMentionsToNotify.length > 0) {
+      const author = await fetchUser(authorID)
+
+      const notifiedUserIds = await processMentionNotifications({
+        mentionerID: authorID,
+        mentionerUser: author,
+        mentionedUserIds: newMentionsToNotify,
+        postId: postID,
+        commentId: commentID,
+        contentType: 'comment',
+        contentText: text,
+        alreadyNotified: oldNotified,
+      })
+
+      // Update notifiedMentions array
+      const allNotified = [...new Set([...oldNotified, ...notifiedUserIds])]
+      await commentRef.update({ notifiedMentions: allNotified })
+    }
+
+    console.log(`[editComment] Successfully edited comment ${commentID} on post ${postID}`)
+    return { success: true, commentID }
+  } catch (error) {
+    console.error('[editComment] Error:', error)
+    throw new functions.https.HttpsError('internal', error.message)
+  }
+})
+
+// ============================================
+// STORIES FUNCTIONS
+// ============================================
+
+/**
+ * Add a new story
+ * Stories are ephemeral content that expire after 24 hours
+ * Fans out to followers' stories_feed_live collections
+ */
+exports.addStory = functions.https.onCall(async (data, context) => {
+  const userId = context.auth?.uid || data.userId
+  if (!userId) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated')
+  }
+
+  const { storyMediaURL, storyType = 'image' } = data
+
+  if (!storyMediaURL) {
+    throw new functions.https.HttpsError('invalid-argument', 'Story must have a media URL')
+  }
+
+  const validTypes = ['image', 'video']
+  if (!validTypes.includes(storyType)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid story type')
+  }
+
+  try {
+    // Get author info
+    const userDoc = await db.collection('users').doc(userId).get()
+    const userData = userDoc.exists ? userDoc.data() : {}
+
+    const storyData = {
+      authorID: userId,
+      author: {
+        id: userId,
+        username: userData.username || userData.firstName || 'Anonymous',
+        firstName: userData.firstName || '',
+        lastName: userData.lastName || '',
+        profilePictureURL: userData.profilePictureURL || '',
+      },
+      storyMediaURL,
+      storyType,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+      reactions: {},
+      viewedBy: [],
+    }
+
+    // Create story in global stories collection
+    const storyRef = await db.collection('stories').add(storyData)
+    const storyId = storyRef.id
+    storyData.id = storyId
+
+    // Add to author's stories_feed_live (for their own story tray)
+    await db
+      .collection('social_feeds')
+      .doc(userId)
+      .collection('stories_feed_live')
+      .doc(storyId)
+      .set(storyData)
+
+    // Fan out to followers' stories_feed_live
+    const followersSnapshot = await db
+      .collection('social_graph')
+      .doc(userId)
+      .collection('inbound_users')
+      .get()
+
+    if (followersSnapshot.size > 0) {
+      const batch = db.batch()
+      followersSnapshot.docs.forEach(followerDoc => {
+        const followerId = followerDoc.id
+        const feedRef = db
+          .collection('social_feeds')
+          .doc(followerId)
+          .collection('stories_feed_live')
+          .doc(storyId)
+        batch.set(feedRef, storyData)
+      })
+      await batch.commit()
+    }
+
+    console.log(`[addStory] Created story ${storyId} for user ${userId}, fanned to ${followersSnapshot.size} followers`)
+    return { storyId, success: true }
+  } catch (error) {
+    console.error('[addStory] Error:', error)
+    throw new functions.https.HttpsError('internal', error.message)
+  }
+})
+
+/**
+ * List stories for the current user
+ * Returns stories from users they follow, grouped by author
+ * Filters out expired stories (older than 24 hours)
+ */
+exports.listStories = functions.https.onCall(async (data, context) => {
+  const userId = context.auth?.uid || data.userId
+  if (!userId) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated')
+  }
+
+  const { limit = 100 } = data
+
+  try {
+    // Calculate 24 hours ago
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+    // Query user's stories_feed_live
+    const snapshot = await db
+      .collection('social_feeds')
+      .doc(userId)
+      .collection('stories_feed_live')
+      .where('createdAt', '>', twentyFourHoursAgo)
+      .orderBy('createdAt', 'desc')
+      .limit(limit)
+      .get()
+
+    const stories = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+
+    // Group stories by author
+    const groupedStories = {}
+    stories.forEach(story => {
+      const authorId = story.authorID
+      if (!groupedStories[authorId]) {
+        groupedStories[authorId] = {
+          author: story.author,
+          stories: [],
+        }
+      }
+      groupedStories[authorId].stories.push(story)
+    })
+
+    // Convert to array format
+    const groupedArray = Object.entries(groupedStories).map(([authorId, data]) => ({
+      authorId,
+      author: data.author,
+      stories: data.stories,
+    }))
+
+    console.log(`[listStories] Returning ${stories.length} stories in ${groupedArray.length} groups for user ${userId}`)
+    return { stories: groupedArray, success: true }
+  } catch (error) {
+    console.error('[listStories] Error:', error)
+    throw new functions.https.HttpsError('internal', error.message)
+  }
+})
+
+/**
+ * Add a reaction (emoji) to a story
+ */
+exports.addStoryReaction = functions.https.onCall(async (data, context) => {
+  const userId = context.auth?.uid || data.userId
+  if (!userId) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated')
+  }
+
+  const { storyId, emoji } = data
+
+  if (!storyId || !emoji) {
+    throw new functions.https.HttpsError('invalid-argument', 'Story ID and emoji are required')
+  }
+
+  try {
+    // Get the story to verify it exists
+    const storyDoc = await db.collection('stories').doc(storyId).get()
+    if (!storyDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Story not found')
+    }
+
+    const storyData = storyDoc.data()
+    const storyAuthorId = storyData.authorID
+
+    // Update reactions in the main stories collection
+    // reactions is a map where key is emoji and value is array of userIds
+    await db.collection('stories').doc(storyId).update({
+      [`reactions.${emoji}`]: admin.firestore.FieldValue.arrayUnion(userId),
+    })
+
+    // Also update in author's stories_feed_live
+    await db
+      .collection('social_feeds')
+      .doc(storyAuthorId)
+      .collection('stories_feed_live')
+      .doc(storyId)
+      .update({
+        [`reactions.${emoji}`]: admin.firestore.FieldValue.arrayUnion(userId),
+      })
+
+    console.log(`[addStoryReaction] User ${userId} reacted with ${emoji} to story ${storyId}`)
+    return { success: true }
+  } catch (error) {
+    console.error('[addStoryReaction] Error:', error)
     throw new functions.https.HttpsError('internal', error.message)
   }
 })

@@ -579,19 +579,26 @@ export const extendSong = async ({
  * Get timestamped lyrics for a song
  * Perfect for karaoke-style lyric synchronization
  *
- * @param {string} songId - The Suno song ID
- * @returns {Promise<object>} Timestamped lyrics data
+ * API: POST /generate/get-timestamped-lyrics
+ * Docs: https://docs.sunoapi.org/suno-api/get-timestamped-lyrics
+ *
+ * @param {string} taskId - The task ID from song generation (sunoTaskId in our DB)
+ * @param {string} audioId - The Suno audio ID (sunoId in our DB)
+ * @returns {Promise<object>} { lyrics: [{text, startTime, endTime}], rawLyrics: string }
  */
-export const getTimestampedLyrics = async (songId) => {
+export const getTimestampedLyrics = async (taskId, audioId) => {
   try {
-    const response = await fetch(`${SUNO_API_BASE}/timestamped-lyrics`, {
+    console.log('[sunoApi] Fetching timestamped lyrics for:', { taskId, audioId })
+
+    const response = await fetch(`${SUNO_API_BASE}/generate/get-timestamped-lyrics`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${SUNO_API_KEY}`,
       },
       body: JSON.stringify({
-        songId: songId,
+        taskId: taskId,
+        audioId: audioId,
       }),
     })
 
@@ -606,14 +613,79 @@ export const getTimestampedLyrics = async (songId) => {
       throw new Error(data.msg || 'Failed to get timestamped lyrics')
     }
 
-    // Return formatted lyrics data
-    // Expected format: array of { text, startTime, endTime }
+    // Transform alignedWords to our format and group into lines
+    const alignedWords = data.data?.alignedWords || []
+
+    if (alignedWords.length === 0) {
+      console.log('[sunoApi] No aligned words returned')
+      return { lyrics: [], rawLyrics: '' }
+    }
+
+    // Filter only successful alignments and transform
+    const words = alignedWords
+      .filter(w => w.success !== false)
+      .map(w => ({
+        word: w.word,
+        startTime: w.startS,
+        endTime: w.endS,
+      }))
+
+    // Group words into lines based on pauses (> 0.3s gap = new line)
+    const lines = []
+    let currentLine = { words: [], startTime: 0, endTime: 0 }
+
+    words.forEach((word, index) => {
+      if (currentLine.words.length === 0) {
+        // First word of new line
+        currentLine.startTime = word.startTime
+        currentLine.words.push(word.word)
+        currentLine.endTime = word.endTime
+      } else {
+        // Check gap from previous word
+        const gap = word.startTime - currentLine.endTime
+
+        if (gap > 0.3) {
+          // New line - save current and start new
+          lines.push({
+            text: currentLine.words.join(' '),
+            startTime: currentLine.startTime,
+            endTime: currentLine.endTime,
+          })
+          currentLine = {
+            words: [word.word],
+            startTime: word.startTime,
+            endTime: word.endTime,
+          }
+        } else {
+          // Same line
+          currentLine.words.push(word.word)
+          currentLine.endTime = word.endTime
+        }
+      }
+    })
+
+    // Don't forget the last line
+    if (currentLine.words.length > 0) {
+      lines.push({
+        text: currentLine.words.join(' '),
+        startTime: currentLine.startTime,
+        endTime: currentLine.endTime,
+      })
+    }
+
+    // Build raw lyrics from lines
+    const rawLyrics = lines.map(l => l.text).join('\n')
+
+    console.log('[sunoApi] Processed', lines.length, 'lines from', words.length, 'words')
+    console.log('[sunoApi] Confidence score (hootCer):', data.data?.hootCer)
+
     return {
-      lyrics: data.data?.lyrics || [],
-      rawLyrics: data.data?.rawLyrics || '',
+      lyrics: lines,
+      rawLyrics: rawLyrics,
+      confidence: data.data?.hootCer || 0,
     }
   } catch (error) {
-    console.error('Error getting timestamped lyrics:', error)
+    console.error('[sunoApi] Error getting timestamped lyrics:', error)
     throw error
   }
 }

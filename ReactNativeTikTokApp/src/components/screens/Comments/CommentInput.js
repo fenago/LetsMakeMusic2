@@ -1,10 +1,12 @@
-import React, { useState, useRef } from 'react'
-import { TouchableOpacity, Image, View, TextInput, ActivityIndicator, Alert } from 'react-native'
+import React, { useState, useRef, useEffect } from 'react'
+import { TouchableOpacity, Image, View, ActivityIndicator, Alert } from 'react-native'
 import {
   useTheme,
   useTranslations,
-  BottomSheetTextInput,
 } from '../../../core/dopebase'
+import { IMRichTextInput, IMMentionList, EU } from '../../../core/mentions'
+import { useSearchUsers } from '../../../core/socialgraph/friendships'
+import { useCurrentUser } from '../../../core/onboarding'
 import dynamicStyles from './styles'
 
 function CommentInput(props) {
@@ -14,21 +16,61 @@ function CommentInput(props) {
   const { theme, appearance } = useTheme()
   const styles = dynamicStyles(theme, appearance)
 
-  const [value, setValue] = useState('')
-  const [isSending, setIsSending] = useState(false)
-  const textInputRef = useRef(null)
+  const currentUser = useCurrentUser()
+  const { users: searchResults, search } = useSearchUsers(currentUser?.id)
 
-  const onChangeText = value => {
-    setValue(value)
+  const [displayText, setDisplayText] = useState('')
+  const [rawText, setRawText] = useState('')
+  const [isSending, setIsSending] = useState(false)
+
+  // Mention state
+  const [keyword, setKeyword] = useState('')
+  const [isTrackingStarted, setIsTrackingStarted] = useState(false)
+  const [mentionSuggestions, setMentionSuggestions] = useState([])
+  const [showUsersMention, setShowUsersMention] = useState(false)
+
+  const textInputRef = useRef(null)
+  const editorRef = useRef(null)
+
+  // Search for users when keyword changes
+  useEffect(() => {
+    if (keyword && keyword.length > 0) {
+      search(keyword)
+    }
+  }, [keyword])
+
+  // Format search results for mention list
+  useEffect(() => {
+    if (searchResults) {
+      const formattedUsers = searchResults.map(user => {
+        const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
+        const username = user.username || `${user.firstName}.${user.lastName}`
+        const id = user.id || user.userID
+
+        return { id, name, username, ...user }
+      })
+      setMentionSuggestions(formattedUsers)
+    }
+  }, [searchResults])
+
+  const onChangeText = ({ displayText: display, text }) => {
+    setDisplayText(display)
+    setRawText(text) // Keep raw text with mention markup
   }
 
   const onSendComment = async () => {
-    if (!value.trim() || isSending) return
+    const textToSend = rawText.trim() || displayText.trim()
+    if (!textToSend || isSending) return
 
-    console.log('[CommentInput] 📝 Sending comment:', value)
-    const textToSend = value
+    console.log('[CommentInput] 📝 Sending comment:', textToSend)
     setIsSending(true)
-    setValue('') // Clear immediately for better UX
+
+    // Clear the editor
+    if (editorRef.current?.clear) {
+      editorRef.current.clear()
+    }
+    setDisplayText('')
+    setRawText('')
     // Don't blur - keep keyboard open for quick follow-up comments
 
     try {
@@ -38,15 +80,12 @@ function CommentInput(props) {
       // Check if the result indicates an error
       if (result && result.success === false) {
         console.log('[CommentInput] ❌ Server returned error:', result.error)
-        setValue(textToSend)
         Alert.alert('Comment Failed', result.error || 'Unknown error occurred')
       } else if (result && result.success) {
         console.log('[CommentInput] ✅ Comment saved successfully!')
       }
     } catch (error) {
       console.log('[CommentInput] ❌ Error sending comment:', error)
-      // Restore the text if sending failed
-      setValue(textToSend)
       Alert.alert('Error', `Failed to send comment: ${error?.message || 'Unknown error'}`)
     } finally {
       setIsSending(false)
@@ -54,27 +93,50 @@ function CommentInput(props) {
   }
 
   const isDisabled = () => {
-    if (/\S/.test(value)) {
+    if (/\S/.test(displayText)) {
       return false
     } else {
       return true
     }
   }
 
+  const editorStyles = {
+    input: {
+      color: theme.colors[appearance].primaryText,
+      fontSize: 14,
+      minHeight: 36,
+      maxHeight: 80,
+      paddingVertical: 8,
+    },
+    mainContainer: {
+      flex: 1,
+    },
+  }
+
   return (
     <View style={styles.commentInputContainer}>
       <View style={styles.commentTextInputContainer}>
-        <BottomSheetTextInput
-          ref={textInputRef}
-          underlineColorAndroid="transparent"
-          placeholder={localized('Leave a note on this track')}
-          placeholderTextColor={theme.colors[appearance].secondaryText}
-          value={value}
-          onChangeText={onChangeText}
-          onSubmitEditing={onSendComment}
-          returnKeyType="send"
-          blurOnSubmit={false}
-          style={styles.commentTextInput}
+        <IMRichTextInput
+          richTextInputRef={editorRef}
+          inputRef={textInputRef}
+          list={mentionSuggestions}
+          mentionListPosition={'top'}
+          onChange={onChangeText}
+          showEditor={true}
+          toggleEditor={() => {}}
+          editorStyles={editorStyles}
+          showMentions={showUsersMention}
+          onHideMentions={() => setShowUsersMention(false)}
+          onUpdateSuggestions={setKeyword}
+          onTrackingStateChange={setIsTrackingStarted}
+          placeholder={localized('Leave a note on this track... (use @mentions)')}
+        />
+        <IMMentionList
+          containerStyle={styles.mentionListContainer}
+          list={mentionSuggestions}
+          keyword={keyword}
+          isTrackingStarted={isTrackingStarted}
+          onSuggestionTap={editorRef.current?.onSuggestionTap}
         />
       </View>
       <TouchableOpacity

@@ -7,9 +7,10 @@ import {
   StyleSheet,
   Dimensions,
   useColorScheme,
+  ActivityIndicator,
 } from 'react-native'
 import { Play, Pause, X, Music, Heart } from 'lucide-react-native'
-import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
+import { useMediaPlayer, usePlaybackPosition } from '../../../contexts/MediaPlayerContext'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const MINI_PLAYER_HEIGHT = 72
@@ -29,13 +30,13 @@ const TAB_BAR_HEIGHT = 49 // Standard iOS tab bar height
 const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-
+  // Use separate hooks: useMediaPlayer for stable data, usePlaybackPosition for position updates
+  const { position, duration } = usePlaybackPosition()
   const {
     mediaType,
     isPlaying,
+    isLoading,
     currentMedia,
-    position,
-    duration,
     isMiniPlayerVisible,
     isFullPlayerVisible,
     togglePlayPause,
@@ -86,7 +87,10 @@ const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
           {/* Thumbnail + Track info - touchable to show full player */}
           <TouchableOpacity
             style={styles.trackArea}
-            onPress={showFullPlayer}
+            onPress={() => {
+              console.log('[TIMING] MiniPlayer tap START:', Date.now())
+              showFullPlayer()
+            }}
             activeOpacity={0.7}
           >
             {/* Thumbnail */}
@@ -132,9 +136,12 @@ const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
               style={styles.playButton}
               onPress={togglePlayPause}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              disabled={isLoading}
             >
               <View style={styles.playButtonCircle}>
-                {isPlaying ? (
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={isDark ? '#0a0a0a' : '#fafafa'} />
+                ) : isPlaying ? (
                   <Pause size={18} color={isDark ? '#0a0a0a' : '#fafafa'} fill={isDark ? '#0a0a0a' : '#fafafa'} />
                 ) : (
                   <Play size={18} color={isDark ? '#0a0a0a' : '#fafafa'} fill={isDark ? '#0a0a0a' : '#fafafa'} />

@@ -1,5 +1,6 @@
 import {
   addPost as addPostAPI,
+  editPost as editPostAPI,
   deletePost as deletePostAPI,
 } from './firebaseFeedClient'
 import { storageAPI } from '../../../../media'
@@ -14,6 +15,10 @@ export const usePostMutations = () => {
     // If we have a post with media, we first upload all the media to the storage server and then add the post into the database
     const postMedia = await remoteMediaAfterUploadingAllFiles(localMediaFiles)
     return await addPostAPI({ ...postData, postMedia }, author)
+  }
+
+  const editPost = async (postID, authorID, newPostText) => {
+    return await editPostAPI(postID, authorID, newPostText)
   }
 
   const deletePost = async (postID, authorID) => {
@@ -40,6 +45,7 @@ export const usePostMutations = () => {
 
   return {
     addPost,
+    editPost,
     deletePost,
   }
 }

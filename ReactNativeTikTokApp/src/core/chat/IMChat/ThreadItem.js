@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { View, TouchableOpacity, Text } from 'react-native'
 import { Image } from 'expo-image'
+import { useNavigation } from '@react-navigation/native'
+import { MessageCircle } from 'lucide-react-native'
 import {
   useTheme,
   useTranslations,
@@ -37,9 +39,13 @@ const ThreadItem = memo(props => {
     isRecentItem,
     onChatUserItemPress,
   } = props
+  const navigation = useNavigation()
   const { localized } = useTranslations()
   const { theme, appearance } = useTheme()
   const styles = dynamicStyles(theme, appearance)
+
+  // Check if this is a mention_link message type
+  const isMentionLink = item?.type === 'mention_link'
 
   const senderProfilePictureURL = item.senderProfilePictureURL
   const [seenFacepilePhotoURLs, setSeenFacepilePhotoURLs] = useState([])
@@ -271,6 +277,49 @@ const ThreadItem = memo(props => {
     )
   }, [])
 
+  const handleMentionLinkPress = useCallback(() => {
+    const { mentionData } = item || {}
+    if (mentionData?.postId) {
+      navigation.navigate('PostDetails', {
+        postId: mentionData.postId,
+        commentId: mentionData.commentId,
+      })
+    }
+  }, [item, navigation])
+
+  const renderMentionLinkMessage = useCallback((isMine) => {
+    const { mentionData } = item || {}
+    const mentionType = mentionData?.mentionType || 'post'
+    const postPreview = mentionData?.postPreview || ''
+
+    return (
+      <TouchableOpacity
+        onPress={handleMentionLinkPress}
+        style={styles.mentionLinkContainer}
+        activeOpacity={0.7}
+      >
+        <View style={styles.mentionLinkIconContainer}>
+          <MessageCircle size={20} color="#2126A2" />
+        </View>
+        <View style={styles.mentionLinkContent}>
+          <Text style={styles.mentionLinkTitle}>
+            {item?.content || (mentionType === 'post'
+              ? localized('mentioned you in a post')
+              : localized('mentioned you in a comment'))}
+          </Text>
+          {postPreview ? (
+            <Text style={styles.mentionLinkPreview} numberOfLines={2}>
+              {postPreview}
+            </Text>
+          ) : null}
+          <Text style={styles.mentionLinkAction}>
+            {localized('Tap to view')}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    )
+  }, [item, handleMentionLinkPress, localized])
+
   if (
     !(outBound && item?.missedCallMessage) &&
     !(
@@ -318,7 +367,9 @@ const ThreadItem = memo(props => {
                     {renderInReplyToIfNeeded(item, true)}
                     {renderInReplyToStory(item, true)}
                     <View style={[styles.itemContent, styles.sendItemContent]}>
-                      {item?.storyReaction ? (
+                      {isMentionLink ? (
+                        renderMentionLinkMessage(true)
+                      ) : item?.storyReaction ? (
                         <TouchableIcon
                           containerStyle={styles.storyReactionStickerContainer}
                           iconSource={assets[item?.storyReaction]}
@@ -393,7 +444,9 @@ const ThreadItem = memo(props => {
                   {renderInReplyToIfNeeded(item, false)}
                   {renderInReplyToStory(item, false)}
                   <View style={[styles.itemContent, styles.receiveItemContent]}>
-                    {!item?.missedCallMessage ? (
+                    {isMentionLink ? (
+                      renderMentionLinkMessage(false)
+                    ) : !item?.missedCallMessage ? (
                       item?.storyReaction ? (
                         <TouchableIcon
                           containerStyle={styles.storyReactionStickerContainer}

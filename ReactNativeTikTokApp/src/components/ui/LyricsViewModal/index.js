@@ -1,16 +1,81 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
   Modal,
   ScrollView,
   TouchableOpacity,
-  Pressable,
   useColorScheme,
   StyleSheet,
 } from 'react-native'
 import { X, Copy, CheckCircle } from 'lucide-react-native'
 import * as Clipboard from 'expo-clipboard'
+import { usePlaybackPosition } from '../../../contexts/MediaPlayerContext'
+
+/**
+ * KaraokeLyrics - Separate component that subscribes directly to position context
+ * This ensures real-time updates regardless of parent Modal re-render issues
+ */
+const KaraokeLyrics = ({ timestampedLyrics, isDark, scrollViewRef }) => {
+  // Subscribe directly to position from context (isolated from main context)
+  const { position } = usePlaybackPosition()
+  const lastActiveIndexRef = useRef(-1)
+  const linePositionsRef = useRef({})
+
+  const styles = getStyles(isDark)
+
+  // Position is in milliseconds from expo-av
+  // Timestamps from Suno are in seconds (startS, endS)
+  const positionMs = position || 0
+
+  // Find current active line index for auto-scroll
+  const activeLineIndex = timestampedLyrics.findIndex((line) => {
+    const lineStartMs = (line.startTime || 0) * 1000
+    const lineEndMs = (line.endTime || 0) * 1000
+    return positionMs >= lineStartMs && positionMs < lineEndMs
+  })
+
+  // Auto-scroll when active line changes
+  useEffect(() => {
+    if (activeLineIndex !== -1 && activeLineIndex !== lastActiveIndexRef.current && scrollViewRef?.current) {
+      const lineY = linePositionsRef.current[activeLineIndex]
+      if (typeof lineY === 'number') {
+        // Scroll to center the active line (offset by ~200px to center it)
+        scrollViewRef.current.scrollTo({ y: Math.max(0, lineY - 200), animated: true })
+      }
+      lastActiveIndexRef.current = activeLineIndex
+    }
+  }, [activeLineIndex, scrollViewRef])
+
+  return (
+    <View>
+      {timestampedLyrics.map((line, index) => {
+        // Timestamps are in seconds, convert to ms
+        const lineStartMs = (line.startTime || 0) * 1000
+        const lineEndMs = (line.endTime || 0) * 1000
+
+        const isActive = positionMs >= lineStartMs && positionMs < lineEndMs
+        const isPast = positionMs >= lineEndMs
+
+        return (
+          <Text
+            key={index}
+            onLayout={(event) => {
+              linePositionsRef.current[index] = event.nativeEvent.layout.y
+            }}
+            style={[
+              styles.timestampedLine,
+              isPast && styles.timestampedLinePast,
+              isActive && styles.timestampedLineActive,
+            ]}
+          >
+            {line.text || ''}
+          </Text>
+        )
+      })}
+    </View>
+  )
+}
 
 /**
  * Reusable Lyrics View Modal
@@ -20,7 +85,6 @@ import * as Clipboard from 'expo-clipboard'
  * @param {string} title - Song title to display
  * @param {string} rawLyrics - Plain text lyrics
  * @param {Array} timestampedLyrics - Array of {text, startTime, endTime} for karaoke
- * @param {number} currentPosition - Current playback position in ms (for karaoke highlighting)
  */
 export default function LyricsViewModal({
   visible,
@@ -28,7 +92,6 @@ export default function LyricsViewModal({
   title = 'Unknown Track',
   rawLyrics,
   timestampedLyrics,
-  currentPosition = 0,
 }) {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
@@ -36,6 +99,7 @@ export default function LyricsViewModal({
 
   const [lyricsTab, setLyricsTab] = useState('raw')
   const [copied, setCopied] = useState(false)
+  const scrollViewRef = useRef(null)
 
   const hasTimestampedLyrics = timestampedLyrics &&
     Array.isArray(timestampedLyrics) &&
@@ -43,78 +107,19 @@ export default function LyricsViewModal({
 
   const lyricsText = rawLyrics || 'Lyrics not available for this track.'
 
+  // TIMING: Log when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      console.log('[TIMING] LyricsViewModal VISIBLE:', Date.now())
+    }
+  }, [visible])
+
   const handleCopyLyrics = async () => {
     if (rawLyrics) {
       await Clipboard.setStringAsync(rawLyrics)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
-  }
-
-  const renderKaraokeLyrics = () => {
-    if (!hasTimestampedLyrics) {
-      return (
-        <Text style={styles.lyricsText}>
-          Timestamped lyrics not available for this track.
-        </Text>
-      )
-    }
-
-    return timestampedLyrics.map((line, index) => {
-      const lineStartMs = (line.startTime || 0) * 1000
-      const lineEndMs = (line.endTime || 0) * 1000
-      const lineDuration = lineEndMs - lineStartMs
-      const isActive = currentPosition >= lineStartMs && currentPosition < lineEndMs
-      const isPast = currentPosition >= lineEndMs
-
-      // Split line into words for karaoke-style highlighting
-      const words = (line.text || '').split(/(\s+)/)
-      const wordCount = words.filter(w => w.trim()).length
-
-      // Calculate progress within the line (0 to 1)
-      const lineProgress = isActive
-        ? Math.min(1, Math.max(0, (currentPosition - lineStartMs) / lineDuration))
-        : isPast ? 1 : 0
-
-      // Calculate which word index we're currently on
-      const currentWordIndex = Math.floor(lineProgress * wordCount)
-
-      let actualWordIndex = 0
-
-      return (
-        <Text
-          key={index}
-          style={[
-            styles.timestampedLine,
-            isActive && styles.timestampedLineActive
-          ]}
-        >
-          {words.map((word, wordIdx) => {
-            if (!word.trim()) {
-              return <Text key={wordIdx}>{word}</Text>
-            }
-
-            const thisWordIndex = actualWordIndex
-            actualWordIndex++
-
-            const isWordSung = isPast || (isActive && thisWordIndex < currentWordIndex)
-            const isCurrentWord = isActive && thisWordIndex === currentWordIndex
-
-            return (
-              <Text
-                key={wordIdx}
-                style={[
-                  isWordSung && styles.karaokeWordSung,
-                  isCurrentWord && styles.karaokeWordCurrent,
-                ]}
-              >
-                {word}
-              </Text>
-            )
-          })}
-        </Text>
-      )
-    })
   }
 
   return (
@@ -127,14 +132,15 @@ export default function LyricsViewModal({
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
+          <View style={styles.headerSpacer} />
           <Text style={styles.headerTitle}>Lyrics</Text>
-          <Pressable
+          <TouchableOpacity
             style={styles.closeButton}
             onPress={onClose}
-            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            activeOpacity={0.7}
           >
             <X size={22} color={isDark ? '#ffffff' : '#151723'} strokeWidth={2.5} />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         {/* Track Name */}
@@ -165,6 +171,7 @@ export default function LyricsViewModal({
             <TouchableOpacity
               style={[styles.tab, lyricsTab === 'raw' && styles.tabActive]}
               onPress={() => setLyricsTab('raw')}
+              activeOpacity={0.7}
             >
               <Text style={[styles.tabText, lyricsTab === 'raw' && styles.tabTextActive]}>
                 Lyrics
@@ -173,6 +180,7 @@ export default function LyricsViewModal({
             <TouchableOpacity
               style={[styles.tab, lyricsTab === 'timestamped' && styles.tabActive]}
               onPress={() => setLyricsTab('timestamped')}
+              activeOpacity={0.7}
             >
               <Text style={[styles.tabText, lyricsTab === 'timestamped' && styles.tabTextActive]}>
                 Karaoke
@@ -183,6 +191,7 @@ export default function LyricsViewModal({
 
         {/* Lyrics Content */}
         <ScrollView
+          ref={scrollViewRef}
           style={styles.scrollView}
           showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
@@ -190,8 +199,12 @@ export default function LyricsViewModal({
         >
           {lyricsTab === 'raw' ? (
             <Text style={styles.lyricsText}>{lyricsText}</Text>
+          ) : hasTimestampedLyrics ? (
+            <KaraokeLyrics timestampedLyrics={timestampedLyrics} isDark={isDark} scrollViewRef={scrollViewRef} />
           ) : (
-            renderKaraokeLyrics()
+            <Text style={styles.lyricsText}>
+              Timestamped lyrics not available for this track.
+            </Text>
           )}
         </ScrollView>
       </View>
@@ -208,20 +221,24 @@ const getStyles = (isDark) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: isDark ? '#333333' : '#e0e0e0',
+  },
+  headerSpacer: {
+    width: 44,
+    height: 44,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: isDark ? '#ffffff' : '#151723',
+    flex: 1,
+    textAlign: 'center',
   },
   closeButton: {
-    position: 'absolute',
-    right: 16,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -266,7 +283,7 @@ const getStyles = (isDark) => StyleSheet.create({
     alignItems: 'center',
   },
   tabActive: {
-    backgroundColor: '#3875e8',
+    backgroundColor: '#1F979E',
   },
   tabText: {
     fontSize: 14,
@@ -290,28 +307,23 @@ const getStyles = (isDark) => StyleSheet.create({
     color: isDark ? '#ffffff' : '#151723',
     textAlign: 'center',
   },
+  // Upcoming lyrics - dimmed, waiting to be sung
   timestampedLine: {
-    fontSize: 18,
-    lineHeight: 32,
-    color: isDark ? '#888888' : '#aaaaaa',
+    fontSize: 16,
+    lineHeight: 28,
+    color: isDark ? '#666666' : '#aaaaaa',
     textAlign: 'center',
     marginBottom: 8,
   },
+  // Past lyrics - already sung, slightly more visible than upcoming
+  timestampedLinePast: {
+    color: isDark ? '#999999' : '#888888',
+  },
+  // Active/current line - highlighted, larger, bold (brand teal color)
   timestampedLineActive: {
     fontSize: 22,
     fontWeight: '700',
-    color: isDark ? '#ffffff' : '#151723',
-    transform: [{ scale: 1.05 }],
-  },
-  karaokeWordSung: {
-    color: isDark ? '#ffffff' : '#151723',
-    fontWeight: '700',
-  },
-  karaokeWordCurrent: {
-    color: '#3875e8',
-    fontWeight: '700',
-    textShadowColor: 'rgba(56, 117, 232, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    color: '#1F979E',
+    marginVertical: 8,
   },
 })

@@ -91,10 +91,6 @@ const VideoClipDetailScreen = ({ navigation, route }) => {
 
     const timeoutId = setTimeout(() => {
       if (videoLoading && !videoError) {
-        console.error('[VideoClipDetail] Video loading timeout after 20 seconds')
-        console.error('[VideoClipDetail] URL was:', clip?.videoUrl)
-        console.error('[VideoClipDetail] Is Firebase URL:', isValidFirebaseUrl(clip?.videoUrl))
-        console.error('[VideoClipDetail] Is Veo URI:', isVeoUri(clip?.videoUrl))
         setVideoLoading(false)
 
         // Provide more specific error based on URL type
@@ -112,47 +108,58 @@ const VideoClipDetailScreen = ({ navigation, route }) => {
     return () => clearTimeout(timeoutId)
   }, [videoLoading, videoError, clip?.videoUrl])
 
-  // Log video URL for debugging and check validity
+  // Check video URL validity and handle expired Veo URLs
   React.useEffect(() => {
     if (clip?.videoUrl) {
-      console.log('[VideoClipDetail] Video URL:', clip.videoUrl)
-      console.log('[VideoClipDetail] Is Firebase URL:', isValidFirebaseUrl(clip.videoUrl))
-      console.log('[VideoClipDetail] Is Veo URI:', isVeoUri(clip.videoUrl))
-
       // Reset states when URL changes
       setVideoLoading(true)
       setVideoError(null)
       setIsExpiredVeoUrl(false)
 
       if (isVeoUri(clip.videoUrl)) {
-        console.warn('[VideoClipDetail] This video has a Veo temporary URI that may have expired')
         setVideoLoading(false)
         setIsExpiredVeoUrl(true)
         setVideoError('This video was saved with a temporary URL that has expired. Please delete this video and generate a new one.')
-      } else if (!isValidFirebaseUrl(clip.videoUrl)) {
-        console.warn('[VideoClipDetail] URL is not a valid Firebase Storage URL:', clip.videoUrl)
-        // Don't immediately error - let the video component try to load it
-        // The timeout will catch it if it fails
       }
     }
   }, [clip?.videoUrl])
 
   // Toggle playback
   const togglePlayback = useCallback(async () => {
-    if (videoRef.current) {
+    if (!videoRef.current) return
+
+    try {
       if (isPlaying) {
-        await videoRef.current.pauseAsync()
+        await videoRef.current.setStatusAsync({ shouldPlay: false })
+        setIsPlaying(false)
       } else {
-        await videoRef.current.playAsync()
+        await videoRef.current.setStatusAsync({ shouldPlay: true })
+        setIsPlaying(true)
       }
-      setIsPlaying(!isPlaying)
+    } catch (error) {
+      Alert.alert('Playback Error', error.message || String(error))
     }
   }, [isPlaying])
 
-  // Toggle mute
+  // Toggle mute - get actual status from video to avoid stale state issues
   const toggleMute = useCallback(async () => {
-    if (videoRef.current) {
-      await videoRef.current.setIsMutedAsync(!isMuted)
+    if (!videoRef.current) return
+
+    try {
+      // Get current status directly from video player
+      const status = await videoRef.current.getStatusAsync()
+      const currentlyPlaying = status.isLoaded && status.isPlaying
+      const newMutedState = !status.isMuted
+
+      // Only change isMuted, preserve current playback state
+      await videoRef.current.setStatusAsync({
+        isMuted: newMutedState,
+        shouldPlay: currentlyPlaying,
+      })
+      setIsMuted(newMutedState)
+    } catch (error) {
+      // Fallback to simple mute toggle
+      await videoRef.current.setStatusAsync({ isMuted: !isMuted })
       setIsMuted(!isMuted)
     }
   }, [isMuted])
@@ -393,15 +400,10 @@ const VideoClipDetailScreen = ({ navigation, route }) => {
                   }
                 }}
                 onError={(error) => {
-                  console.error('[VideoClipDetail] Video playback error:', error)
-                  console.error('[VideoClipDetail] Failed URL:', clip.videoUrl)
                   setVideoLoading(false)
                   setVideoError(`Failed to load video: ${error || 'Unknown error'}`)
                 }}
-                onLoad={() => {
-                  console.log('[VideoClipDetail] Video loaded successfully')
-                  setVideoLoading(false)
-                }}
+                onLoad={() => setVideoLoading(false)}
               />
               <View style={styles.videoControls}>
                 <TouchableOpacity style={styles.controlButton} onPress={togglePlayback}>

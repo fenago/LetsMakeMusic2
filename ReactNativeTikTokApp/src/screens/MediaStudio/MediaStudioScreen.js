@@ -93,12 +93,16 @@ const MediaStudioScreen = ({ navigation, route }) => {
     saveVideoClip,
     deleteVideoClip,
     applyToSong: applyVideoToSong,
+    regenerateThumbnail,
     clearError: clearVideoError,
   } = useVideoClips(currentUser?.id, {
     id: currentUser?.id,
     stageName: currentUser?.firstName || currentUser?.stageName || 'Unknown',
     profilePictureURL: currentUser?.profilePictureURL,
   })
+
+  // Track which clips are being regenerated to avoid duplicate calls
+  const regeneratingClips = useRef(new Set())
 
   // Local state
   const [filter, setFilter] = useState(mediaType === 'video' ? 'videos' : mediaType === 'image' ? 'images' : 'all')
@@ -119,6 +123,39 @@ const MediaStudioScreen = ({ navigation, route }) => {
       setShowImageGenerator(true)
     }
   }, [openGenerator])
+
+  // Auto-regenerate thumbnails for video clips that are missing them
+  useEffect(() => {
+    if (!completedClips?.length || !regenerateThumbnail) return
+
+    const clipsNeedingThumbnails = completedClips.filter(
+      (clip) => clip.videoUrl && !clip.thumbnailUrl && !regeneratingClips.current.has(clip.id)
+    )
+
+    if (clipsNeedingThumbnails.length === 0) return
+
+    console.log(`[MediaStudioScreen] Found ${clipsNeedingThumbnails.length} video clips needing thumbnails`)
+
+    // Regenerate thumbnails in background (one at a time to avoid overwhelming the device)
+    const regenerateNext = async (index) => {
+      if (index >= clipsNeedingThumbnails.length) return
+
+      const clip = clipsNeedingThumbnails[index]
+      regeneratingClips.current.add(clip.id)
+
+      try {
+        console.log(`[MediaStudioScreen] Regenerating thumbnail for clip: ${clip.id}`)
+        await regenerateThumbnail(clip.id)
+      } catch (err) {
+        console.warn(`[MediaStudioScreen] Failed to regenerate thumbnail for ${clip.id}:`, err.message)
+      }
+
+      // Continue with next clip after a small delay
+      setTimeout(() => regenerateNext(index + 1), 500)
+    }
+
+    regenerateNext(0)
+  }, [completedClips, regenerateThumbnail])
 
   // Combine and normalize media items
   const allMedia = useMemo(() => {
@@ -183,7 +220,7 @@ const MediaStudioScreen = ({ navigation, route }) => {
           onPress: () => setShowVideoGenerator(true),
         },
         {
-          text: 'AI Image (Imagen)',
+          text: 'AI Image',
           onPress: () => setShowImageGenerator(true),
         },
         {

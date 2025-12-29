@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, useMemo } from 'react'
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeInDown } from 'react-native-reanimated'
-import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users, ImageIcon, Mic, FileText, Copy, CheckCircle, Disc3 } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users, ImageIcon, Mic, FileText, Copy, CheckCircle, Disc3, User } from 'lucide-react-native'
 import { useTheme, useTranslations } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserSongs, deleteSong } from '../../services/songsService'
@@ -32,6 +32,7 @@ import { BandCard } from '../../components'
 import VoiceCard from '../../components/ui/VoiceCard'
 import PlaylistCard from '../../components/ui/PlaylistCard'
 import EditSongModal from '../../components/ui/EditSongModal'
+import SongActionMenu from '../../components/ui/SongActionMenu'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const HORIZONTAL_ITEM_WIDTH = 160 // Width for horizontal scroll items
@@ -124,6 +125,10 @@ const LibraryScreen = ({ navigation }) => {
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editingSong, setEditingSong] = useState(null)
 
+  // SongActionMenu state (for Share to Feed and other actions)
+  const [actionMenuVisible, setActionMenuVisible] = useState(false)
+  const [actionMenuSong, setActionMenuSong] = useState(null)
+
   // Like loading state (local) - shared like state comes from context
   const [likingInProgress, setLikingInProgress] = useState({})
 
@@ -177,20 +182,12 @@ const LibraryScreen = ({ navigation }) => {
     beatsCount,
   } = useBeats(userId)
 
-  // Debug logging for lyrics and beats
-  useEffect(() => {
-    console.log('[LibraryScreen] Debug Info:')
-    console.log('[LibraryScreen] - userId:', userId)
-    console.log('[LibraryScreen] - currentUser?.id:', currentUser?.id)
-    console.log('[LibraryScreen] - currentUser?.userID:', currentUser?.userID)
-    console.log('[LibraryScreen] - lyricsCount:', lyricsCount)
-    console.log('[LibraryScreen] - beatsCount:', beatsCount)
-    console.log('[LibraryScreen] - lyricsLoading:', lyricsLoading)
-    console.log('[LibraryScreen] - beatsLoading:', beatsLoading)
-  }, [userId, lyricsCount, beatsCount, lyricsLoading, beatsLoading])
+  // Debug logging removed for performance
 
-  // Get recommendations (will be fetched once songs are loaded)
-  const likedSongsList = songs.filter((song) => isLikedFn(song.id))
+  // Memoize liked songs list - only recalculate when songs or likes change
+  const likedSongsList = useMemo(() => {
+    return songs.filter((song) => isLikedFn(song.id))
+  }, [songs, isLikedFn])
   const { recommendations, recommendationsLoading, recommendationsCount, refreshRecommendations } =
     useRecommendations(userId, {
       likedSongs: likedSongsList,
@@ -232,8 +229,8 @@ const LibraryScreen = ({ navigation }) => {
     return () => unsubscribe && unsubscribe()
   }, [userId])
 
-  // Filter songs based on active tab
-  const filteredSongs = useCallback(() => {
+  // Memoize filtered songs based on active tab
+  const filteredSongs = useMemo(() => {
     switch (activeTab) {
       case 'songs':
       case 'ai':
@@ -249,18 +246,17 @@ const LibraryScreen = ({ navigation }) => {
     }
   }, [activeTab, songs])
 
-  // Sort songs based on sort option
-  const sortedSongs = useCallback(() => {
-    const filtered = filteredSongs()
+  // Memoize sorted songs based on sort option
+  const sortedSongs = useMemo(() => {
     switch (sortOption) {
       case 'alphabetical':
-        return [...filtered].sort((a, b) =>
+        return [...filteredSongs].sort((a, b) =>
           (a.title || '').localeCompare(b.title || '')
         )
       case 'added':
       case 'recent':
       default:
-        return filtered // Already sorted by createdAt desc from Firebase
+        return filteredSongs // Already sorted by createdAt desc from Firebase
     }
   }, [filteredSongs, sortOption])
 
@@ -288,7 +284,7 @@ const LibraryScreen = ({ navigation }) => {
   }
 
   // Handle song deletion with confirmation
-  const handleDeleteSong = (song) => {
+  const handleDeleteSong = useCallback((song) => {
     Alert.alert(
       'Delete Song',
       `Are you sure you want to delete "${song.title || 'Untitled'}"?\n\nThis cannot be undone.`,
@@ -300,38 +296,17 @@ const LibraryScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               await deleteSong(song.id, userId)
-              console.log('Song deleted:', song.id)
             } catch (error) {
-              console.error('Error deleting song:', error)
               Alert.alert('Error', 'Failed to delete song. Please try again.')
             }
           },
         },
       ]
     )
-  }
+  }, [userId])
 
   // Handle creating Synthetic Singer from a song
-  const handleCreateArtistVoice = (song) => {
-    // DEBUG: Log all song fields to trace task ID issue
-    console.log('[LibraryScreen] handleCreateArtistVoice called')
-    console.log('[LibraryScreen] Song object keys:', Object.keys(song))
-    console.log('[LibraryScreen] Song data:', {
-      id: song.id,
-      title: song.title,
-      sunoId: song.sunoId,
-      sunoTaskId: song.sunoTaskId,
-      taskId: song.taskId,
-      task_id: song.task_id,
-      model: song.model,
-      modelName: song.modelName,
-      model_name: song.model_name,
-      userId: song.userId,
-      authorID: song.authorID,
-      createdAt: song.createdAt,
-    })
-
-    // Navigate to CreateArtistVoice screen with full song data including owner
+  const handleCreateArtistVoice = useCallback((song) => {
     navigation.navigate('CreateArtistVoice', {
       song: {
         id: song.id,
@@ -355,85 +330,43 @@ const LibraryScreen = ({ navigation }) => {
         createdAt: song.createdAt,
       },
     })
-  }
+  }, [navigation])
 
-  // Long press handler - shows options menu
-  const handleSongLongPress = (song) => {
-    const options = [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete Song',
-        style: 'destructive',
-        onPress: () => handleDeleteSong(song),
-      },
-    ]
+  // Long press handler - opens SongActionMenu for full feature access
+  const handleSongLongPress = useCallback((song) => {
+    setActionMenuSong(song)
+    setActionMenuVisible(true)
+  }, [])
 
-    // Add play option if song is playable
-    if (isSongPlayable(song)) {
-      const audioUrl = getPlayableUrl(song)
-      options.unshift(
-        {
-          text: 'Play',
-          onPress: () => handleSongPress(song),
-        },
-        {
-          text: 'Add to Queue',
-          onPress: () => {
-            addToQueue({
-              id: song.id,
-              title: song.title || 'Untitled',
-              artist: currentUser?.username || 'You',
-              audioUrl: audioUrl,
-              imageUrl: song.imageUrl,
-              duration: song.duration,
-              rawLyrics: song.rawLyrics,
-              timestampedLyrics: song.timestampedLyrics,
-            })
-            Alert.alert('Added to Queue', `"${song.title || 'Untitled'}" has been added to your queue.`)
-          },
-        },
-        {
-          text: 'Create Synthetic Singer',
-          onPress: () => handleCreateArtistVoice(song),
-        }
-      )
+  // Close action menu handler
+  const handleCloseActionMenu = useCallback(() => {
+    setActionMenuVisible(false)
+    setActionMenuSong(null)
+  }, [])
+
+  // Handle add to playlist from action menu
+  const handleAddToPlaylist = useCallback((song) => {
+    // TODO: Implement playlist picker modal
+    Alert.alert('Add to Playlist', 'Playlist selection coming soon!')
+  }, [])
+
+  // Handle view artist from action menu
+  const handleViewArtist = useCallback((author) => {
+    if (author?.id) {
+      navigation.navigate('Profile', { user: author })
     }
+  }, [navigation])
 
-    Alert.alert(
-      song.title || 'Untitled',
-      song.style || 'AI Generated',
-      options
-    )
-  }
-
-  const handleSongPress = (song) => {
-    console.log('=== LIBRARY: Song pressed ===')
-    console.log('Song ID:', song.id)
-    console.log('Song title:', song.title)
-    console.log('Song audioUrl:', song.audioUrl)
-    console.log('Song streamUrl:', song.streamUrl)
-    console.log('Song sunoId:', song.sunoId)
-    console.log('Song imageUrl:', song.imageUrl)
-    console.log('Song rawLyrics:', song.rawLyrics ? 'present' : 'missing')
-    console.log('Song timestampedLyrics:', song.timestampedLyrics?.length || 0, 'lines')
-    console.log('Song duration:', song.duration)
-
-    // Get the best available audio URL (with fallback to CDN construction)
+  const handleSongPress = useCallback((song) => {
     const audioUrl = getPlayableUrl(song)
-    console.log('Resolved audioUrl:', audioUrl)
 
     if (audioUrl) {
-      console.log('Playing song with audioUrl:', audioUrl)
-
-      // Pass the full song data so player has access to all fields
       playSong({
-        ...song, // Spread all song data (imageUrl, rawLyrics, timestampedLyrics, etc.)
-        audioUrl, // Use resolved URL (could be from sunoId fallback)
+        ...song,
+        audioUrl,
         artist: currentUser?.username || 'You',
       })
     } else {
-      console.warn('Song has no audioUrl, streamUrl, or sunoId!', song)
-      // Show alert with option to delete unavailable song
       Alert.alert(
         'Song Unavailable',
         'This song cannot be played. The audio file is not available.',
@@ -448,7 +381,7 @@ const LibraryScreen = ({ navigation }) => {
         ]
       )
     }
-  }
+  }, [playSong, currentUser?.username, handleDeleteSong, navigation])
 
   const handleNewPlaylist = () => {
     navigation.navigate('CreatePlaylist')
@@ -464,6 +397,12 @@ const LibraryScreen = ({ navigation }) => {
         {localized('My Catalog')}
       </Text>
       <View style={styles.headerActions}>
+        {/* My Feed button */}
+        <TouchableOpacity
+          style={styles.viewToggleButton}
+          onPress={() => navigation.navigate('Profile')}>
+          <User size={22} color={colorSet.primaryText} />
+        </TouchableOpacity>
         {/* View mode toggle */}
         <TouchableOpacity
           style={styles.viewToggleButton}
@@ -738,10 +677,7 @@ const LibraryScreen = ({ navigation }) => {
     </View>
   )
 
-  // Get liked songs from user's songs (uses shared like state from context)
-  const getLikedSongs = useCallback(() => {
-    return songs.filter(song => isLikedFn(song.id))
-  }, [songs, isLikedFn])
+  // NOTE: getLikedSongs removed - use likedSongsList (memoized at top of component)
 
   // Render recently played item (horizontal scroll style)
   const renderRecentlyPlayedItem = ({ item: song, index }) => {
@@ -1039,7 +975,6 @@ const LibraryScreen = ({ navigation }) => {
 
   // Render Your Songs section
   const renderYourSongsSection = () => {
-    const sorted = sortedSongs()
     return (
       <View style={styles.section}>
         <CollapsibleSectionHeader
@@ -1048,7 +983,7 @@ const LibraryScreen = ({ navigation }) => {
           iconColor="#10b981"
           isExpanded={isYourSongsExpanded}
           onToggle={toggleYourSongs}
-          count={sorted.length}
+          count={sortedSongs.length}
           showAddButton
           onAdd={() => navigation.navigate('Create')}
         />
@@ -1058,7 +993,7 @@ const LibraryScreen = ({ navigation }) => {
               <ActivityIndicator size="small" color={colorSet.primaryForeground} />
             </View>
           ) : (
-            renderSongList(sorted, 'Create your first song')
+            renderSongList(sortedSongs, 'Create your first song')
           )
         )}
       </View>
@@ -1119,7 +1054,6 @@ const LibraryScreen = ({ navigation }) => {
 
   // Render Liked Songs section
   const renderLikedSongsSection = () => {
-    const likedSongs = getLikedSongs()
     return (
       <View style={styles.section}>
         <CollapsibleSectionHeader
@@ -1128,9 +1062,9 @@ const LibraryScreen = ({ navigation }) => {
           iconColor="#ef4444"
           isExpanded={isLikedSongsExpanded}
           onToggle={toggleLikedSongs}
-          count={likedSongs.length}
+          count={likedSongsList.length}
         />
-        {isLikedSongsExpanded && renderSongList(likedSongs, 'Songs you like will appear here')}
+        {isLikedSongsExpanded && renderSongList(likedSongsList, 'Songs you like will appear here')}
       </View>
     )
   }
@@ -2041,6 +1975,17 @@ const LibraryScreen = ({ navigation }) => {
         song={editingSong}
         onClose={handleCloseEditModal}
         onDeleteSong={handleDeleteSong}
+      />
+
+      {/* Song Action Menu - For Share to Feed and other actions */}
+      <SongActionMenu
+        visible={actionMenuVisible}
+        song={actionMenuSong}
+        currentUserId={userId}
+        onClose={handleCloseActionMenu}
+        onAddToPlaylist={handleAddToPlaylist}
+        onViewArtist={handleViewArtist}
+        onEditSong={handleEditSong}
       />
     </View>
   )

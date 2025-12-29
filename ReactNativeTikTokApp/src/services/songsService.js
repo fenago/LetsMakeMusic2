@@ -545,6 +545,94 @@ export const updateSong = async (songId, userId, updates) => {
 }
 
 /**
+ * Fetch timestamped lyrics from Suno API and save to song
+ * Use this to add karaoke support to songs that don't have it
+ *
+ * @param {string} songId - Song document ID in Firestore
+ * @param {string} userId - User ID (for authorization)
+ * @returns {Promise<Object>} Updated song data with lyrics
+ */
+export const fetchAndSaveTimestampedLyrics = async (songId, userId) => {
+  // Import here to avoid circular dependency
+  const { getTimestampedLyrics } = require('./sunoApi')
+
+  try {
+    console.log('[fetchAndSaveTimestampedLyrics] Starting for song:', songId)
+
+    // 1. Get the song from Firestore
+    const songDoc = await songsRef.doc(songId).get()
+
+    if (!songDoc.exists) {
+      throw new Error('Song not found')
+    }
+
+    const songData = songDoc.data()
+
+    // Check authorization
+    if (songData.userId !== userId) {
+      throw new Error('Unauthorized to update this song')
+    }
+
+    // Check if we have the required Suno IDs
+    if (!songData.sunoTaskId || !songData.sunoId) {
+      throw new Error('Song missing Suno IDs (sunoTaskId or sunoId). Cannot fetch timestamped lyrics.')
+    }
+
+    // Check if song is instrumental
+    if (songData.instrumental) {
+      throw new Error('Instrumental songs do not have lyrics')
+    }
+
+    console.log('[fetchAndSaveTimestampedLyrics] Fetching from Suno API:', {
+      taskId: songData.sunoTaskId,
+      audioId: songData.sunoId,
+    })
+
+    // 2. Fetch from Suno API
+    const { lyrics, rawLyrics, confidence } = await getTimestampedLyrics(
+      songData.sunoTaskId,
+      songData.sunoId
+    )
+
+    if (!lyrics || lyrics.length === 0) {
+      throw new Error('No timestamped lyrics returned from API')
+    }
+
+    console.log('[fetchAndSaveTimestampedLyrics] Got', lyrics.length, 'lines, confidence:', confidence)
+
+    // 3. Update the song in Firestore
+    const updateData = {
+      timestampedLyrics: lyrics,
+      rawLyrics: rawLyrics || songData.rawLyrics, // Keep existing if no new raw lyrics
+      lyricsConfidence: confidence,
+      lyricsUpdatedAt: ffirestore.FieldValue.serverTimestamp(),
+      updatedAt: ffirestore.FieldValue.serverTimestamp(),
+    }
+
+    await songsRef.doc(songId).update(updateData)
+    console.log('[fetchAndSaveTimestampedLyrics] Saved to Firestore')
+
+    // 4. Return success with updated song data
+    return {
+      success: true,
+      data: {
+        id: songId,
+        ...songData,
+        ...updateData,
+        timestampedLyrics: lyrics,
+        rawLyrics: rawLyrics || songData.rawLyrics,
+      },
+    }
+  } catch (error) {
+    console.error('[fetchAndSaveTimestampedLyrics] Error:', error.message)
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch timestamped lyrics',
+    }
+  }
+}
+
+/**
  * Add media assets to a song (for custom video creation)
  *
  * @param {string} songId - Song document ID

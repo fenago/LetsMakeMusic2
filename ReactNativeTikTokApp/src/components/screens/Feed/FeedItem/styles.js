@@ -4,17 +4,110 @@ import { StyleSheet, Dimensions, Platform, StatusBar } from 'react-native'
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0
 
-// Feed item height - responsive calculation based on screen size
-// Calculate available height: Screen - safe area top (~59) - header (~50) - tabs (48) - tab bar (~49) - safe area bottom (~34)
-// This ensures each feed item fills exactly the available space with no overlap
-// On iPhone 14 Pro (852pt height): 852 - 59 - 50 - 48 - 49 - 34 = 612, which is ~72% of screen
-// This value is EXPORTED so Feed.js and MusicFeed can use the exact same height
-export const FEED_ITEM_HEIGHT = Math.round(SCREEN_HEIGHT * 0.72)
+// Layout constants for MusicFeed/Stage screen structure
+// These match the actual heights in MusicFeed/index.js
+const LAYOUT = {
+  // Header with menu/search buttons - paddingTop: insets.top + 8, paddingBottom: 8, content ~40px
+  HEADER_CONTENT_HEIGHT: 48, // Just the header content (icon + title + icon + padding)
+  HEADER_PADDING_BOTTOM: 8,  // paddingBottom from primaryHeaderContainer style
+  // Filter tabs (All, Music, Video, etc.) - fixed height
+  FILTER_TABS_HEIGHT: 48,
+  // Stories tray when visible - fixed height in MusicFeed styles
+  STORIES_TRAY_HEIGHT: 100,
+  // Bottom tab bar - 83px total as per AppContent.js MiniPlayer tabBarHeight
+  TAB_BAR_TOTAL: 83,
+  // Minimal buffer - we have accurate insets now so don't need much
+  SAFETY_BUFFER: 0,
+}
+
+/**
+ * Calculate feed item height dynamically using actual safe area insets
+ * This is the PREFERRED method - use this when you have access to useSafeAreaInsets()
+ *
+ * @param {object} insets - Safe area insets from useSafeAreaInsets()
+ * @param {object} options - Configuration options
+ * @param {boolean} options.hasStories - Whether stories tray is visible (default: true)
+ * @param {boolean} options.hasTabBar - Whether bottom tab bar is visible (default: true)
+ * @param {number} options.screenHeight - Override screen height (for testing)
+ * @returns {number} Calculated feed item height
+ */
+export const calculateFeedItemHeight = (insets, options = {}) => {
+  const {
+    hasStories = true,
+    hasTabBar = true,
+    screenHeight = SCREEN_HEIGHT,
+  } = options
+
+  // Safe area top from actual device insets
+  const safeAreaTop = insets?.top || 0
+
+  // Safe area bottom is included in tab bar, but needed if no tab bar
+  const safeAreaBottom = hasTabBar ? 0 : (insets?.bottom || 0)
+
+  // Header height = safe area top + padding (8) + content height + padding bottom
+  const headerHeight = safeAreaTop + 8 + LAYOUT.HEADER_CONTENT_HEIGHT + LAYOUT.HEADER_PADDING_BOTTOM
+
+  // Calculate total overhead
+  let overhead = headerHeight + LAYOUT.FILTER_TABS_HEIGHT + LAYOUT.SAFETY_BUFFER
+
+  if (hasStories) {
+    overhead += LAYOUT.STORIES_TRAY_HEIGHT
+  }
+
+  if (hasTabBar) {
+    overhead += LAYOUT.TAB_BAR_TOTAL
+  } else {
+    overhead += safeAreaBottom
+  }
+
+  return Math.round(screenHeight - overhead)
+}
+
+// FALLBACK: Static heights for backward compatibility when insets aren't available
+// These use approximate values - prefer calculateFeedItemHeight() when possible
+const FALLBACK_SAFE_AREA_TOP = Platform.OS === 'ios' ? 59 : STATUS_BAR_HEIGHT
+
+// Calculate fallback overhead
+const FALLBACK_HEADER_HEIGHT = FALLBACK_SAFE_AREA_TOP + 8 + LAYOUT.HEADER_CONTENT_HEIGHT + LAYOUT.HEADER_PADDING_BOTTOM
+
+const FALLBACK_OVERHEAD_WITH_STORIES =
+  FALLBACK_HEADER_HEIGHT +
+  LAYOUT.FILTER_TABS_HEIGHT +
+  LAYOUT.STORIES_TRAY_HEIGHT +
+  LAYOUT.TAB_BAR_TOTAL +
+  LAYOUT.SAFETY_BUFFER
+
+const FALLBACK_OVERHEAD_WITHOUT_STORIES =
+  FALLBACK_HEADER_HEIGHT +
+  LAYOUT.FILTER_TABS_HEIGHT +
+  LAYOUT.TAB_BAR_TOTAL +
+  LAYOUT.SAFETY_BUFFER
+
+// Export static heights for backward compatibility
+// WITH stories: accounts for header + tabs + stories + tab bar + safe areas
+export const FEED_ITEM_HEIGHT = Math.round(SCREEN_HEIGHT - FALLBACK_OVERHEAD_WITH_STORIES)
+
+// WITHOUT stories: slightly taller when stories tray is hidden
+export const FEED_ITEM_HEIGHT_NO_STORIES = Math.round(SCREEN_HEIGHT - FALLBACK_OVERHEAD_WITHOUT_STORIES)
+
+// Full-screen feed item height - for screens WITHOUT bottom tab bar
+export const FEED_ITEM_FULL_HEIGHT = Math.round(
+  SCREEN_HEIGHT - FALLBACK_HEADER_HEIGHT - LAYOUT.FILTER_TABS_HEIGHT - LAYOUT.SAFETY_BUFFER
+)
 
 // Responsive calculations based on feed item height
-const BOTTOM_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.08) // 8% from bottom
+const BOTTOM_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.12) // 12% from bottom - increased for proper clearance
 const TOP_CONTROLS_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.12) // 12% from top
-const BOTTOM_CONTROLS_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.15) // 15% from bottom
+const BOTTOM_CONTROLS_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.18) // 18% from bottom - increased to match
+
+// Brand identity colors from LetsMake.Music guidelines
+const BRAND_COLORS = {
+  vibrantTeal: '#1F979E',      // Primary - key actions, active states
+  deepMagenta: '#C12D79',      // Secondary - likes, notifications, special CTAs
+  richPurple: '#9C27B0',       // Accent
+  tealLight: '#20B2AA',        // Primary 400 for dark theme
+  magentaLight: '#D81B60',     // Secondary 400 for dark theme
+}
 
 // Stage theme color definitions for FeedItem
 const stageThemeColors = {
@@ -25,8 +118,8 @@ const stageThemeColors = {
     textSecondary: '#ccc',
     iconTint: '#fff',
     iconOpacity: 0.7,
-    likeColor: '#df4a59',
-    plusBackground: '#f00',
+    likeColor: BRAND_COLORS.deepMagenta,           // Brand Deep Magenta for likes
+    plusBackground: BRAND_COLORS.vibrantTeal,      // Brand Teal for follow button
     userImageBackground: '#555',
     progressBarBg: 'rgba(255, 255, 255, 0.25)',
     progressBarFill: '#fff',
@@ -42,8 +135,8 @@ const stageThemeColors = {
     textSecondary: '#555',
     iconTint: '#333',
     iconOpacity: 0.8,
-    likeColor: '#df4a59',
-    plusBackground: '#1F979E',
+    likeColor: BRAND_COLORS.deepMagenta,           // Brand Deep Magenta for likes
+    plusBackground: BRAND_COLORS.vibrantTeal,      // Brand Teal for follow button
     userImageBackground: '#ddd',
     progressBarBg: 'rgba(0, 0, 0, 0.2)',
     progressBarFill: '#1F979E',
@@ -59,17 +152,20 @@ export const getStageColors = (stageTheme = 'Dark') => {
   return stageThemeColors[stageTheme.toLowerCase()] || stageThemeColors.dark
 }
 
-// Dynamic styles generator
-export const dynamicStyles = (stageTheme = 'Dark') => {
+// Dynamic styles generator - accepts stageTheme, fullScreen option, and optional custom height
+// When customHeight is provided (from calculateFeedItemHeight), it takes priority
+export const dynamicStyles = (stageTheme = 'Dark', fullScreen = false, customHeight = null) => {
   const colors = getStageColors(stageTheme)
+  // Priority: customHeight (dynamic) > fullScreen flag > default with stories
+  const itemHeight = customHeight || (fullScreen ? FEED_ITEM_FULL_HEIGHT : FEED_ITEM_HEIGHT)
 
   return StyleSheet.create({
     videoContent: {
-      height: FEED_ITEM_HEIGHT,
+      height: itemHeight,
       backgroundColor: colors.videoBackground,
     },
     videoImage: {
-      height: FEED_ITEM_HEIGHT,
+      height: itemHeight,
       backgroundColor: colors.videoBackground,
     },
     contentRight: {
@@ -183,6 +279,7 @@ export const dynamicStyles = (stageTheme = 'Dark') => {
       backgroundColor: colors.songPostBackground,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingTop: 90, // Space for media badge + progress bar at top
       paddingBottom: BOTTOM_OFFSET + 40, // Extra space for bottom content
     },
     songAlbumArt: {
@@ -335,6 +432,13 @@ export const dynamicStyles = (stageTheme = 'Dark') => {
       fontSize: 11,
       color: stageTheme.toLowerCase() === 'dark' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)',
       fontWeight: '400',
+    },
+    // Edited indicator label
+    editedLabel: {
+      fontSize: 12,
+      color: stageTheme.toLowerCase() === 'dark' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)',
+      fontStyle: 'italic',
+      marginTop: 4,
     },
   })
 }

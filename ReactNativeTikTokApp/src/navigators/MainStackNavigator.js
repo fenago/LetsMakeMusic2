@@ -19,6 +19,7 @@ import {
   HomeScreen,
   FeedSearchScreen,
   CameraScreen,
+  CreateStoryScreen,
   CreateScreen,
   NewPostScreen,
   SongPickerScreen,
@@ -64,6 +65,7 @@ import {
   BuildBeatsScreen,
   CreateArtistVoiceScreen,
   SyntheticSingerProfileScreen,
+  HashtagFeedScreen,
 } from '../screens'
 // import { Camera, NewPost, ComposerSongs } from '../components';
 import { InnerFriendsSearchNavigator } from './InnerStackNavigators'
@@ -113,6 +115,13 @@ const MainStackNavigator = () => {
         options={{
           headerTitle: localized('Hashtags'),
         }}
+      />
+      <MainStack.Screen
+        name="HashtagFeed"
+        options={{
+          headerShown: false,
+        }}
+        component={HashtagFeedScreen}
       />
       <MainStack.Screen
         options={{
@@ -180,6 +189,14 @@ const MainStackNavigator = () => {
           ...TransitionPresets.ModalSlideFromBottomIOS,
         }}
         component={CameraScreen}
+      />
+      <MainStack.Screen
+        name="CreateStory"
+        options={{
+          headerShown: false,
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+        }}
+        component={CreateStoryScreen}
       />
       <MainStack.Screen
         name="SongPicker"

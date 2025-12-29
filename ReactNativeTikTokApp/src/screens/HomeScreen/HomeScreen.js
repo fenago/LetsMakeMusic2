@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react'
 import { Share, StatusBar, View } from 'react-native'
 import { useIsFocused } from '@react-navigation/native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslations } from '../../core/dopebase'
 import { useDispatch } from 'react-redux'
 import { Feed, HomeFeed } from '../../components'
 import styles from './styles'
+import { calculateFeedItemHeight } from '../../components/screens/Feed/FeedItem/styles'
 import { useUserReportingMutations } from '../../core/user-reporting'
 import CommentsScreen from '../CommentsScreen/CommentsScreen'
 import {
@@ -23,10 +25,18 @@ const FeedScreen = props => {
   const dispatch = useDispatch()
 
   const isFocused = useIsFocused()
+  const insets = useSafeAreaInsets()
 
   const { localized } = useTranslations()
 
   const currentUser = useCurrentUser()
+
+  // Calculate feed item height dynamically using actual safe area insets
+  // This ensures proper layout on all device types (iPhone, iPad, Android)
+  const feedItemHeight = useMemo(
+    () => calculateFeedItemHeight(insets, { hasStories: true, hasTabBar: true }),
+    [insets]
+  )
 
   const {
     posts,
@@ -413,6 +423,7 @@ const FeedScreen = props => {
       pullToRefresh={onRefresh}
       feed={filteredFeed}
       isCustomFeed={true}
+      feedItemHeight={feedItemHeight}
       onCommentPress={onCommentPress}
       user={currentUser}
       onFeedUserItemPress={onFeedUserItemPress}
@@ -432,8 +443,8 @@ const FeedScreen = props => {
       isCommentsOpen={isVisible}
     />
   ), [
-    loading, refreshing, onRefresh, filteredFeed, feedType, onCommentPress,
-    currentUser, onFeedUserItemPress, onReaction, isLoadingBottom,
+    loading, refreshing, onRefresh, filteredFeed, feedType, feedItemHeight,
+    onCommentPress, currentUser, onFeedUserItemPress, onReaction, isLoadingBottom,
     onSharePost, onDeletePost, onUserReport, navigation,
     onTextFieldUserPress, onTextFieldHashTagPress,
     onFollowingFeedPress, onForYouFeedPress, feed.following, isVisible,

@@ -1,4 +1,5 @@
 import React, { memo, useState, useEffect, useCallback } from 'react'
+import { observer } from 'mobx-react'
 import {
   View,
   StyleSheet,
@@ -6,10 +7,14 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MusicFeed from '../MusicFeed'
+import FullStoriesModal from '../../../core/stories/FullStoriesModal/FullStoriesModal'
+import storyStore from '../../../core/stories/FullStories/Store'
 import { subscribeToAllSongs, subscribeToLikedSongs, subscribeToUserSongs } from '../../../services/songsService'
 import { getPlayableUrl, getPlayableImageUrl } from '../../../utils/audioUtils'
 import { useCurrentUser } from '../../../core/onboarding'
+import { useNavigation } from '@react-navigation/native'
 import { subscribeToHomeFeedPosts } from '../../../core/socialgraph/feed/api/firebase/firebaseFeedClient'
+import { useStories } from '../../../core/socialgraph/feed'
 
 /**
  * Fisher-Yates shuffle algorithm for randomizing array order
@@ -116,7 +121,7 @@ const SAMPLE_RADIO = [
   { id: 'r3', title: 'Electronic Beats', imageUrl: 'https://picsum.photos/200/200?random=r3', listeners: 890 },
 ]
 
-const HomeFeed = ({
+const HomeFeed = observer(({
   userName = 'John',
   currentUserId = null,
   todaysPicks: propsTodaysPicks,
@@ -140,7 +145,43 @@ const HomeFeed = ({
   const isDark = colorScheme === 'dark'
   const insets = useSafeAreaInsets()
   const currentUser = useCurrentUser()
+  const navigation = useNavigation()
   const userId = currentUserId || currentUser?.id
+
+  // Stories hook for ephemeral 24-hour content
+  const {
+    groupedStories,
+    myStories,
+    subscribeToStories,
+    loadMoreStories,
+  } = useStories()
+
+  // Subscribe to stories feed
+  useEffect(() => {
+    if (!userId) {
+      console.log('[HomeFeed] No userId, skipping stories subscription')
+      return
+    }
+
+    console.log('[HomeFeed] Subscribing to stories for user:', userId)
+    const unsubscribe = subscribeToStories(userId)
+
+    return () => {
+      console.log('[HomeFeed] Unsubscribing from stories')
+      if (unsubscribe) unsubscribe()
+    }
+  }, [userId, subscribeToStories])
+
+  // Sync stories to MobX store for FullStoriesModal
+  useEffect(() => {
+    if (groupedStories?.length > 0) {
+      console.log('[HomeFeed] Syncing stories to store:', groupedStories.length)
+      storyStore.setSories(groupedStories)
+    }
+    if (myStories) {
+      storyStore.updateUserStory(myStories)
+    }
+  }, [groupedStories, myStories])
 
   // State for real Firebase songs
   const [songs, setSongs] = useState([]) // All songs (For You)
@@ -328,6 +369,30 @@ const HomeFeed = ({
   // LOGIC: Personalized radio stations based on genres user listens to
   const radioStations = propsRadioStations?.length > 0 ? propsRadioStations : SAMPLE_RADIO
 
+  // Story interaction handlers
+  const handleStoryItemPress = useCallback((item, index) => {
+    console.log('[HomeFeed] Story item pressed:', item?.firstName, 'index:', index)
+
+    // Open the FullStoriesModal at the tapped story index
+    if (groupedStories?.length > 0) {
+      // Calculate offset for animation (center of screen)
+      const offset = { top: 200, left: 200 }
+      storyStore.openCarousel(index, offset)
+    }
+  }, [groupedStories])
+
+  const handleAddStoryPress = useCallback((shouldOpenCamera) => {
+    console.log('[HomeFeed] Add story pressed, openCamera:', shouldOpenCamera)
+    // Navigate to CreateStoryScreen
+    navigation.navigate('CreateStory', { openCamera: shouldOpenCamera })
+  }, [navigation])
+
+  // Handle closing the stories modal
+  const handleStoriesModalClose = useCallback(() => {
+    console.log('[HomeFeed] Closing stories modal')
+    storyStore.dismissCarousel()
+  }, [])
+
   const styles = getStyles(isDark, insets)
 
   // VStack className="flex-1 pt-safe bg-background-0"
@@ -336,6 +401,7 @@ const HomeFeed = ({
       <MusicFeed
         userName={userName}
         currentUserId={currentUserId}
+        currentUser={currentUser}
         todaysPicks={todaysPicks}
         todaysPicksForYou={todaysPicksForYou}
         todaysPicksFollowing={todaysPicksFollowing}
@@ -354,10 +420,21 @@ const HomeFeed = ({
         onRefresh={onRefresh}
         onFilterChange={onFilterChange}
         videoFeedComponent={videoFeedComponent}
+        // Stories props
+        groupedStories={groupedStories}
+        myStories={myStories}
+        onStoryItemPress={handleStoryItemPress}
+        onAddStoryPress={handleAddStoryPress}
+      />
+
+      {/* Full-screen stories viewer modal */}
+      <FullStoriesModal
+        isModalOpen={storyStore.carouselOpen}
+        onClosed={handleStoriesModalClose}
       />
     </View>
   )
-}
+})
 
 const getStyles = (isDark, insets) => StyleSheet.create({
   // VStack className="flex-1 bg-background-0"

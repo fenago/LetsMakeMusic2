@@ -128,13 +128,34 @@ export const downloadAndUploadVeoVideo = async (veoVideoOrUri, userId) => {
 
 /**
  * Generate a thumbnail from a video
+ * For remote URLs, downloads the video first since expo-video-thumbnails
+ * requires a local file on iOS.
+ *
  * @param {string} videoUri - Local or remote video URI
  * @param {number} timeMs - Timestamp in milliseconds (default: 1000ms)
  * @returns {Promise<{uri: string, base64?: string}>}
  */
 export const generateThumbnail = async (videoUri, timeMs = 1000) => {
   try {
-    const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
+    let localUri = videoUri
+
+    // If it's a remote URL, download it first
+    if (videoUri.startsWith('http')) {
+      console.log('[videoClipsService] Downloading video for thumbnail generation...')
+      const tempPath = `${FileSystem.cacheDirectory}temp_video_${Date.now()}.mp4`
+
+      const downloadResult = await FileSystem.downloadAsync(videoUri, tempPath)
+
+      if (downloadResult.status !== 200) {
+        console.error('[videoClipsService] Failed to download video for thumbnail:', downloadResult.status)
+        return null
+      }
+
+      localUri = downloadResult.uri
+      console.log('[videoClipsService] Video downloaded to:', localUri)
+    }
+
+    const { uri } = await VideoThumbnails.getThumbnailAsync(localUri, {
       time: timeMs,
       quality: 0.7,
     })
@@ -143,6 +164,15 @@ export const generateThumbnail = async (videoUri, timeMs = 1000) => {
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     })
+
+    // Clean up temp video file if we downloaded it
+    if (videoUri.startsWith('http') && localUri !== videoUri) {
+      try {
+        await FileSystem.deleteAsync(localUri, { idempotent: true })
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
+    }
 
     return { uri, base64 }
   } catch (error) {
@@ -177,20 +207,48 @@ export const saveVideoClip = async (clipData) => {
     // 1. Upload video to Storage
     let videoUrl
     let thumbnailUrl
-    let fileSizeBytes = 0
+    let fileSizeBytes = clipData.fileSizeBytes || 0
 
-    if (clipData.videoUri) {
-      // Read video file info
-      const fileInfo = await FileSystem.getInfoAsync(clipData.videoUri)
-      fileSizeBytes = fileInfo.size || 0
+    // Normalize: if videoUri is actually a URL (starts with http), treat it as videoUrl
+    const isVideoUriActuallyUrl = clipData.videoUri?.startsWith('http')
+    const actualVideoUri = isVideoUriActuallyUrl ? null : clipData.videoUri
+    const actualVideoUrl = clipData.videoUrl || (isVideoUriActuallyUrl ? clipData.videoUri : null)
 
-      // Upload video
+    if (actualVideoUrl) {
+      // Already have a URL (from Veo/Firebase Storage)
+      videoUrl = actualVideoUrl
+      thumbnailUrl = clipData.thumbnailUrl
+
+      // Generate thumbnail from remote URL if not provided
+      if (!thumbnailUrl) {
+        console.log('[videoClipsService] Generating thumbnail from remote video URL...')
+        try {
+          const thumbnailData = await generateThumbnail(videoUrl)
+          if (thumbnailData?.base64) {
+            const thumbnailPath = `video_clips/${clipData.userId}/thumb_${timestamp}.jpg`
+            const thumbnailRef = storage().ref(thumbnailPath)
+            await thumbnailRef.putString(thumbnailData.base64, 'base64', {
+              contentType: 'image/jpeg',
+            })
+            thumbnailUrl = await thumbnailRef.getDownloadURL()
+            console.log('[videoClipsService] Thumbnail generated and uploaded from remote URL')
+          }
+        } catch (thumbnailError) {
+          console.warn('[videoClipsService] Could not generate thumbnail from remote URL:', thumbnailError.message)
+          // Continue without thumbnail - not a fatal error
+        }
+      }
+
+      console.log('[videoClipsService] Using existing video URL')
+    } else if (actualVideoUri) {
+      // Local file - upload to Firebase Storage
+      // Note: putFile handles the file size internally
       const storageRef = storage().ref(storagePath)
-      await storageRef.putFile(clipData.videoUri)
+      await storageRef.putFile(actualVideoUri)
       videoUrl = await storageRef.getDownloadURL()
 
       // Generate and upload thumbnail
-      const thumbnailData = await generateThumbnail(clipData.videoUri)
+      const thumbnailData = await generateThumbnail(actualVideoUri)
       if (thumbnailData?.base64) {
         const thumbnailPath = `video_clips/${clipData.userId}/thumb_${timestamp}.jpg`
         const thumbnailRef = storage().ref(thumbnailPath)
@@ -208,10 +266,6 @@ export const saveVideoClip = async (clipData) => {
       })
       videoUrl = await storageRef.getDownloadURL()
       fileSizeBytes = Math.ceil((clipData.videoBase64.length * 3) / 4) // Approximate
-    } else if (clipData.videoUrl) {
-      // Already have a URL (from Veo direct)
-      videoUrl = clipData.videoUrl
-      thumbnailUrl = clipData.thumbnailUrl
     } else {
       throw new Error('No video data provided')
     }
@@ -386,10 +440,32 @@ export const completeVideoClipGeneration = async (clipId, userId, completionData
   try {
     const now = firestore.FieldValue.serverTimestamp()
 
+    // Generate thumbnail from video URL if not provided
+    let thumbnailUrl = completionData.thumbnailUrl || null
+    if (!thumbnailUrl && completionData.videoUrl) {
+      console.log('[videoClipsService] Generating thumbnail for completed video...')
+      try {
+        const thumbnailData = await generateThumbnail(completionData.videoUrl)
+        if (thumbnailData?.base64) {
+          const timestamp = Date.now()
+          const thumbnailPath = `video_clips/${userId}/thumb_${timestamp}.jpg`
+          const thumbnailRef = storage().ref(thumbnailPath)
+          await thumbnailRef.putString(thumbnailData.base64, 'base64', {
+            contentType: 'image/jpeg',
+          })
+          thumbnailUrl = await thumbnailRef.getDownloadURL()
+          console.log('[videoClipsService] Thumbnail generated for completed video')
+        }
+      } catch (thumbnailError) {
+        console.warn('[videoClipsService] Thumbnail generation failed:', thumbnailError.message)
+        // Continue without thumbnail
+      }
+    }
+
     const updateData = {
       status: VIDEO_CLIP_STATUS.COMPLETED,
       videoUrl: completionData.videoUrl,
-      thumbnailUrl: completionData.thumbnailUrl || null,
+      thumbnailUrl,
       fileSizeBytes: completionData.fileSizeBytes || 0,
       generationProgress: 100,
       updatedAt: now,
@@ -400,7 +476,7 @@ export const completeVideoClipGeneration = async (clipId, userId, completionData
     await userVideoClipsRef(userId).doc(clipId).update({
       status: VIDEO_CLIP_STATUS.COMPLETED,
       videoUrl: completionData.videoUrl,
-      thumbnailUrl: completionData.thumbnailUrl || null,
+      thumbnailUrl,
       generationProgress: 100,
     })
 
@@ -710,6 +786,65 @@ export const updateVideoClip = async (clipId, userId, updates) => {
   }
 }
 
+/**
+ * Regenerate thumbnail for a video clip that's missing one
+ * @param {string} clipId - Video clip document ID
+ * @param {string} userId - User ID (for authorization and storage path)
+ * @returns {Promise<{success: boolean, thumbnailUrl?: string, error?: string}>}
+ */
+export const regenerateThumbnail = async (clipId, userId) => {
+  try {
+    const doc = await videoClipsRef.doc(clipId).get()
+
+    if (!doc.exists) {
+      return { success: false, error: 'Video clip not found' }
+    }
+
+    const clipData = doc.data()
+
+    if (clipData.userId !== userId) {
+      return { success: false, error: 'Not authorized' }
+    }
+
+    if (!clipData.videoUrl) {
+      return { success: false, error: 'No video URL to generate thumbnail from' }
+    }
+
+    console.log('[videoClipsService] Regenerating thumbnail for clip:', clipId)
+
+    const thumbnailData = await generateThumbnail(clipData.videoUrl)
+    if (!thumbnailData?.base64) {
+      return { success: false, error: 'Could not generate thumbnail from video' }
+    }
+
+    const timestamp = Date.now()
+    const thumbnailPath = `video_clips/${userId}/thumb_${timestamp}.jpg`
+    const thumbnailRef = storage().ref(thumbnailPath)
+    await thumbnailRef.putString(thumbnailData.base64, 'base64', {
+      contentType: 'image/jpeg',
+    })
+    const thumbnailUrl = await thumbnailRef.getDownloadURL()
+
+    const now = firestore.FieldValue.serverTimestamp()
+
+    // Update both collections
+    await videoClipsRef.doc(clipId).update({
+      thumbnailUrl,
+      updatedAt: now,
+    })
+
+    await userVideoClipsRef(userId).doc(clipId).update({
+      thumbnailUrl,
+    })
+
+    console.log('[videoClipsService] Thumbnail regenerated for clip:', clipId)
+    return { success: true, thumbnailUrl }
+  } catch (error) {
+    console.error('[videoClipsService] Regenerate thumbnail error:', error)
+    return { success: false, error: error.message }
+  }
+}
+
 export default {
   downloadAndUploadVeoVideo,
   generateThumbnail,
@@ -725,5 +860,6 @@ export default {
   applyVideoClipToSong,
   deleteVideoClip,
   updateVideoClip,
+  regenerateThumbnail,
   VIDEO_CLIP_STATUS,
 }
