@@ -139,9 +139,11 @@ const HashtagFeedScreen = props => {
     navigation.goBack()
   }, [navigation])
 
-  // Handler for when a post is edited - updates feed state with new caption
-  const onPostEdited = useCallback((postId, newText) => {
-    updatePost(postId, newText)
+  // Handler for when a post is edited - updates feed state with new caption and hashtags
+  // Receives full update object: { postText, description, hashtags, isEdited }
+  const onPostEdited = useCallback((postId, updateData) => {
+    console.log('[HashtagFeedScreen] 📝 onPostEdited called:', { postId, updateData })
+    updatePost(postId, updateData?.description || updateData?.postText)
   }, [updatePost])
 
   // Loading state

@@ -409,20 +409,30 @@ const FeedScreen = props => {
     setFeedType('following')
   }
 
-  // Handler for when a post is edited - updates feed state with new caption
-  const onPostEdited = useCallback((postId, newText) => {
+  // Handler for when a post is edited - updates feed state with new caption and hashtags
+  // Receives full update object: { postText, description, hashtags, isEdited }
+  const onPostEdited = useCallback((postId, updateData) => {
+    console.log('[HomeScreen] 📝 onPostEdited called:', { postId, updateData })
     setFeed(prevFeed => {
       // Update the post in both following and forYou feeds
       const updatePost = (posts) =>
-        posts.map(post =>
+        posts?.map(post =>
           post.id === postId
-            ? { ...post, postText: newText, description: newText }
+            ? {
+                ...post,
+                postText: updateData.postText || updateData.description,
+                description: updateData.description || updateData.postText,
+                hashtags: updateData.hashtags || post.hashtags,
+                isEdited: updateData.isEdited ?? true,
+              }
             : post
-        )
-      return {
-        following: updatePost(prevFeed.following || []),
-        forYou: updatePost(prevFeed.forYou || []),
+        ) || []
+      const newFeed = {
+        following: updatePost(prevFeed.following),
+        forYou: updatePost(prevFeed.forYou),
       }
+      console.log('[HomeScreen] 📝 Feed updated, new following count:', newFeed.following?.length)
+      return newFeed
     })
   }, [])
 

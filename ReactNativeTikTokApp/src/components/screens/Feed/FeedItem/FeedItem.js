@@ -991,4 +991,33 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
   )
 }
 
-export default memo(FeedItem)
+// Custom memo comparator that detects content changes (postText, description, hashtags)
+// Without this, memo's shallow compare might miss updates when video object reference changes
+// but the component doesn't see the new data
+const feedItemPropsAreEqual = (prevProps, nextProps) => {
+  // Always re-render if post content changed (edit case)
+  if (prevProps.video?.postText !== nextProps.video?.postText) return false
+  if (prevProps.video?.description !== nextProps.video?.description) return false
+  if (prevProps.video?.isEdited !== nextProps.video?.isEdited) return false
+  // Check hashtags array
+  const prevHashtags = prevProps.video?.hashtags || []
+  const nextHashtags = nextProps.video?.hashtags || []
+  if (prevHashtags.length !== nextHashtags.length) return false
+  if (prevHashtags.join(',') !== nextHashtags.join(',')) return false
+
+  // Standard comparisons for other props
+  if (prevProps.selected !== nextProps.selected) return false
+  if (prevProps.index !== nextProps.index) return false
+  if (prevProps.paused !== nextProps.paused) return false
+  if (prevProps.stageTheme !== nextProps.stageTheme) return false
+  if (prevProps.fullScreen !== nextProps.fullScreen) return false
+  if (prevProps.feedItemHeight !== nextProps.feedItemHeight) return false
+  if (prevProps.video?.id !== nextProps.video?.id) return false
+  if (prevProps.video?.reactionsCount !== nextProps.video?.reactionsCount) return false
+  if (prevProps.video?.myReaction !== nextProps.video?.myReaction) return false
+  if (prevProps.user?.id !== nextProps.user?.id) return false
+
+  return true
+}
+
+export default memo(FeedItem, feedItemPropsAreEqual)

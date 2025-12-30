@@ -78,31 +78,66 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
     }
   }, [])
 
+  // Flatten nested user data from API (friends have {user: {...}} structure)
+  const flattenUserData = (users) => {
+    if (!users) return []
+    return users.map(item => {
+      // If user data is nested under 'user' key, flatten it
+      if (item.user) {
+        return {
+          ...item.user,
+          id: item.id || item.user.id,
+        }
+      }
+      return item
+    })
+  }
+
+  // Get display name for a user (handles various field name formats)
+  const getUserDisplayName = (user) => {
+    if (user.firstName || user.lastName) {
+      return `${user.firstName || ''} ${user.lastName || ''}`.trim()
+    }
+    if (user.first_name || user.last_name) {
+      return `${user.first_name || ''} ${user.last_name || ''}`.trim()
+    }
+    if (user.displayName) return user.displayName
+    if (user.name) return user.name
+    if (user.username) return user.username
+    if (user.stageName) return user.stageName
+    return 'Unknown'
+  }
+
+  // Get username for a user
+  const getUserUsername = (user) => {
+    if (user.username) return user.username
+    const name = getUserDisplayName(user)
+    return name.toLowerCase().replace(/\s+/g, '')
+  }
+
   // Debounced mention search - waits 300ms after typing stops
-  // Empty query shows friends list
   const debouncedSearchMentions = useCallback((query) => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current)
     }
 
-    setMentionSearching(true)
-    setShowMentions(true) // Show dropdown immediately
+    // Require at least 1 character to search (not just @)
+    if (!query || query.trim() === '') {
+      setShowMentions(false)
+      setMentionUsers([])
+      return
+    }
 
-    // Use shorter delay for empty query (show friends faster when @ is typed)
-    const delay = query ? 300 : 100
+    setMentionSearching(true)
+    setShowMentions(true)
 
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        let users
-        if (!query || query.trim() === '') {
-          // Empty query - show user's friends as suggestions
-          users = await fetchFriends(post?.authorID, 0, 10)
-        } else {
-          // Search by keyword
-          users = await searchUsers(post?.authorID, query, 0, 10)
-        }
-        setMentionUsers(users || [])
-        setShowMentions(users && users.length > 0)
+        // Search by keyword
+        const users = await searchUsers(post?.authorID, query, 0, 8)
+        const flattenedUsers = flattenUserData(users)
+        setMentionUsers(flattenedUsers)
+        setShowMentions(flattenedUsers.length > 0)
       } catch (error) {
         console.log('[EditPostModal] Mention search error:', error)
         setMentionUsers([])
@@ -110,7 +145,7 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
       } finally {
         setMentionSearching(false)
       }
-    }, delay)
+    }, 400) // 400ms debounce for better performance
   }, [post?.authorID])
 
   // Check if there are unsaved changes
@@ -200,10 +235,11 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
 
     // Support both prop names for compatibility
     // ManageFeedScreen uses onSaveSuccess, Feed.js uses onSave
+    // BOTH now receive the full updatedData object for proper UI updates
     if (onSaveSuccess) {
       onSaveSuccess(updatedData)
     } else if (onSave) {
-      onSave(updatedData.description) // Feed.js expects just the text
+      onSave(updatedData) // Pass full object with postText, description, hashtags, isEdited
     }
     onClose()
 
@@ -332,15 +368,15 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
                             onPress={() => handleSelectMention(item)}
                           >
                             <Image
-                              source={{ uri: item.profilePictureURL || defaultAvatar }}
+                              source={{ uri: item.profilePictureURL || item.profile_picture_url || defaultAvatar }}
                               style={styles.mentionAvatar}
                             />
                             <View style={styles.mentionInfo}>
                               <Text style={styles.mentionName} numberOfLines={1}>
-                                {item.firstName} {item.lastName}
+                                {getUserDisplayName(item)}
                               </Text>
                               <Text style={styles.mentionUsername} numberOfLines={1}>
-                                @{item.username || `${item.firstName}${item.lastName}`.toLowerCase()}
+                                @{getUserUsername(item)}
                               </Text>
                             </View>
                           </TouchableOpacity>

@@ -309,10 +309,15 @@ export default function Feed(props) {
   }, [])
 
   // Handler for when edit is saved
-  const handleEditPostSave = useCallback((newText) => {
-    logInfo('[Feed] ✏️ Post edited successfully', { postId: postToEdit?.id, newText: newText?.substring(0, 50) })
-    // Notify parent to update feed data
-    onPostEdited?.(postToEdit?.id, newText)
+  // Receives full update object: { postText, description, hashtags, isEdited }
+  const handleEditPostSave = useCallback((updateData) => {
+    logInfo('[Feed] ✏️ Post edited successfully', {
+      postId: postToEdit?.id,
+      text: updateData?.description?.substring(0, 50),
+      hashtags: updateData?.hashtags?.length,
+    })
+    // Notify parent to update feed data with full update object
+    onPostEdited?.(postToEdit?.id, updateData)
     setEditModalVisible(false)
     setPostToEdit(null)
   }, [postToEdit, onPostEdited])
@@ -436,7 +441,7 @@ export default function Feed(props) {
         initialNumToRender={2}
         enableEmptySections={true}
         maxToRenderPerBatch={3}
-        removeClippedSubviews
+        removeClippedSubviews={false}
         initialScrollIndex={startIndex}
         getItemLayout={(data, index) => ({
           // Uses dynamic height based on context (full-screen vs with tab bar)
