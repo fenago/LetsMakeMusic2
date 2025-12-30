@@ -4,11 +4,12 @@ import { useActionSheet } from '@expo/react-native-action-sheet'
 import { useIsFocused } from '@react-navigation/native'
 import { Image } from 'expo-image'
 import { Audio } from 'expo-av'
-import { Video, Music, MoreHorizontal, Heart, MessageCircle, Send } from 'lucide-react-native'
+import { Video, Music, MoreHorizontal, Heart, MessageCircle, Send, ThumbsDown } from 'lucide-react-native'
 import { useTheme, useTranslations } from '../../../../core/dopebase'
 import { getPlayableImageUrl, getPlayableUrl } from '../../../../utils/audioUtils'
 import { addReaction as addReactionAPI } from '../../../../core/socialgraph/feed/api/firebase/firebaseFeedClient'
 import { add as followUserAPI, unfollow as unfollowUserAPI } from '../../../../core/socialgraph/friendships/api/firebase/firebaseSocialGraphClient'
+import { swipeSong } from '../../../../services/songSwipesService'
 
 import VideoPlayer from '../VideoPlayer'
 import IMRichTextView from '../../../../core/mentions/IMRichTextView/IMRichTextView'
@@ -92,6 +93,10 @@ const FeedItem = props => {
 
   // Lyrics modal state
   const [lyricsModalVisible, setLyricsModalVisible] = useState(false)
+
+  // Song swipe (like/pass) state for music discovery
+  const [songSwipeAction, setSongSwipeAction] = useState(null) // 'like' | 'pass' | null
+  const [isSwipeLoading, setIsSwipeLoading] = useState(false)
 
   // Sync local state with props when they change (e.g., on initial load or pull-to-refresh)
   // But only if the values actually differ to avoid unnecessary re-renders
@@ -393,6 +398,23 @@ const FeedItem = props => {
     } else {
       setLocalMyReaction('like')
       setLocalReactionsCount(prev => prev + 1)
+
+      // For song posts: also save to personal library when hearting
+      if (isSongPost) {
+        const songId = getSongId()
+        if (songId && songSwipeAction !== 'like') {
+          setSongSwipeAction('like')
+          const songDataToSave = {
+            title: songInfo?.title || video.songData?.title || 'Unknown',
+            artist: songInfo?.artist || video.author?.stageName || video.author?.firstName,
+            imageUrl: songInfo?.imageUrl || getPlayableImageUrl(songInfo),
+            audioUrl: audioUrl,
+          }
+          swipeSong(songId, 'like', songDataToSave)
+            .then(() => console.log('[FeedItem] ✅ Song also saved to library'))
+            .catch(err => console.log('[FeedItem] ❌ Song save failed:', err))
+        }
+      }
     }
 
     // SYNC DIRECTLY TO FIREBASE - bypasses parent state entirely!
@@ -647,6 +669,38 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
     )
   }
 
+  // Song swipe handlers for music discovery
+  const getSongId = () => {
+    // Get song ID from songData, song, or video itself
+    return songInfo?.id || songInfo?.songId || video.songData?.songId || video.id
+  }
+
+  // Handle "not interested" - marks song as passed (filters from discovery)
+  const handleSongPass = async () => {
+    if (isSwipeLoading) return
+    const songId = getSongId()
+    if (!songId) return
+
+    setIsSwipeLoading(true)
+    setSongSwipeAction('pass')
+
+    try {
+      const songData = {
+        title: songInfo?.title || video.songData?.title || 'Unknown',
+        artist: songInfo?.artist || video.author?.stageName || video.author?.firstName,
+        imageUrl: songInfo?.imageUrl || getPlayableImageUrl(songInfo),
+        audioUrl: audioUrl,
+      }
+      await swipeSong(songId, 'pass', songData)
+      console.log('[FeedItem] ✅ Song marked as not interested:', songId)
+    } catch (error) {
+      console.log('[FeedItem] ❌ Pass error:', error)
+      setSongSwipeAction(null)
+    } finally {
+      setIsSwipeLoading(false)
+    }
+  }
+
   const firstname = video.author?.firstName ?? ''
   const lastname = video.author?.lastName ?? ''
 
@@ -763,7 +817,7 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           />
           <View style={styles.songOverlay}>
             <Text style={styles.songTitle} numberOfLines={2}>
-              {songInfo?.title || video.description || 'Untitled Song'}
+              {songInfo?.title || 'Untitled Song'}
             </Text>
             <Text style={styles.songArtist} numberOfLines={1}>
               {songInfo?.artist || video.author?.stageName || video.author?.firstName || 'Unknown Artist'}
@@ -842,7 +896,22 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           </Text>
         </TouchableOpacity>
 
-        {/* 4. Share Button - Lucide outlined icon per brand guidelines */}
+        {/* 4. "Not Interested" Button for Song Posts - filters from discovery */}
+        {isSongPost && (
+          <TouchableOpacity
+            onPress={handleSongPass}
+            disabled={isSwipeLoading}
+            style={[styles.iconRightContainer, isSwipeLoading && { opacity: 0.5 }]}>
+            <ThumbsDown
+              size={26}
+              color={songSwipeAction === 'pass' ? '#C12D79' : stageColors.iconTint}
+              strokeWidth={2}
+              style={{ opacity: songSwipeAction === 'pass' ? 1 : stageColors.iconOpacity }}
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* 5. Share Button - Lucide outlined icon per brand guidelines */}
         <TouchableOpacity
           onPress={onSharePress}
           style={styles.iconRightContainer}>
@@ -854,7 +923,7 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           />
         </TouchableOpacity>
 
-        {/* 5. More Options Button */}
+        {/* 6. More Options Button */}
         <TouchableOpacity
           onPress={onMoreOptionsPress}
           style={styles.iconRightContainer}>
@@ -873,12 +942,31 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           hashTagStyle={styles.hashTag}
           onUserPress={onTextFieldUser}
           onHashTagPress={onTextFieldHashTag}>
-          {video.postText || ' '}
+          {/* Caption display - prioritize user's caption, fallback to song title for song posts */}
+          {(video.postText && video.postText.trim()) ||
+           (video.description && video.description.trim()) ||
+           (isSongPost && songInfo?.title ? `🎵 ${songInfo.title}` : ' ')}
         </IMRichTextView>
+        {/* Display hashtags from array if present */}
+        {video.hashtags?.length > 0 && (
+          <View style={styles.hashtagsContainer}>
+            {video.hashtags.slice(0, 5).map((tag, idx) => (
+              <TouchableOpacity
+                key={idx}
+                onPress={() => onTextFieldHashTag(tag.startsWith('#') ? tag : `#${tag}`)}>
+                <Text style={styles.hashTagChip}>
+                  {tag.startsWith('#') ? tag : `#${tag}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         {video.isEdited && (
           <Text style={styles.editedLabel}>{localized('(edited)')}</Text>
         )}
-        {(video.songData || video.song) && (
+        {/* Music info row - hidden for video/song posts since they ARE the music content */}
+        {/* This row is for image posts that have background music attached */}
+        {!isSongPost && !isVideoPost && (video.songData || video.song) && (
           <View style={styles.contentLeftBottomMusicContainer}>
             <Image source={theme.icons.musicalNotes} style={styles.musicIcon} />
             <Text style={styles.contentLeftBottomMusic} numberOfLines={1}>

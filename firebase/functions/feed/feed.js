@@ -3,8 +3,16 @@ const admin = require('firebase-admin')
 
 const db = admin.firestore()
 
-// Reference to the main posts collection
+// Reference to collections
 const mainFeedRef = db.collection('posts')
+const socialFeedsRef = db.collection('social_feeds')
+const socialGraphRef = db.collection('social_graph')
+
+// Helper function to fetch user data
+const fetchUser = async (userId) => {
+  const userDoc = await db.collection('users').doc(userId).get()
+  return userDoc.exists ? userDoc.data() : {}
+}
 
 // Mention utilities
 const {
@@ -698,6 +706,7 @@ exports.editPost = functions.https.onCall(async (data, context) => {
     const editedAt = Math.floor(Date.now() / 1000)
     const updateData = {
       description: description || '',
+      postText: description || '', // Also update postText for backwards compatibility
       hashtags: allHashtags,
       mentionedUserIds: newMentionedUserIds,
       isEdited: true,
@@ -707,14 +716,17 @@ exports.editPost = functions.https.onCall(async (data, context) => {
     // Update in main feed
     await mainFeedPostRef.update(updateData)
 
-    // Update in author's social feed
+    // Update in author's profile feed
     const authorFeedRef = socialFeedsRef
       .doc(postAuthorID)
-      .collection('posts_live')
+      .collection('profile_feed_live')
       .doc(postID)
-    await authorFeedRef.update(updateData)
+    const authorFeedSnap = await authorFeedRef.get()
+    if (authorFeedSnap.exists) {
+      await authorFeedRef.update(updateData)
+    }
 
-    // Update in all followers' main feeds
+    // Update in all followers' home feeds
     const followersSnap = await socialGraphRef
       .doc(postAuthorID)
       .collection('inbound_users')
@@ -723,7 +735,7 @@ exports.editPost = functions.https.onCall(async (data, context) => {
     const followerUpdatePromises = followersSnap.docs.map(async (followerDoc) => {
       const followerFeedRef = socialFeedsRef
         .doc(followerDoc.id)
-        .collection('main_feed_live')
+        .collection('home_feed_live')
         .doc(postID)
       const followerPostSnap = await followerFeedRef.get()
       if (followerPostSnap.exists) {
@@ -764,15 +776,26 @@ exports.editPost = functions.https.onCall(async (data, context) => {
     })
     await Promise.all(addPromises)
 
-    // Update existing hashtag feeds with new data
+    // Update existing hashtag feeds with new data (use set with merge in case doc doesn't exist)
     const existingHashtags = allHashtags.filter(tag => oldHashtags.includes(tag))
     const updateHashtagPromises = existingHashtags.map(async (tag) => {
-      await db
+      const hashtagFeedRef = db
         .collection('hashtags')
         .doc(tag)
         .collection('feed_live')
         .doc(postID)
-        .update(updateData)
+      const hashtagSnap = await hashtagFeedRef.get()
+      if (hashtagSnap.exists) {
+        await hashtagFeedRef.update(updateData)
+      } else {
+        // Document doesn't exist, create it with full data
+        const hashtagData = {
+          ...existingPost,
+          ...updateData,
+          id: postID,
+        }
+        await hashtagFeedRef.set(hashtagData)
+      }
     })
     await Promise.all(updateHashtagPromises)
 
@@ -799,7 +822,11 @@ exports.editPost = functions.https.onCall(async (data, context) => {
       // Update notifiedMentions array
       const allNotified = [...new Set([...oldNotified, ...notifiedUserIds])]
       await mainFeedPostRef.update({ notifiedMentions: allNotified })
-      await authorFeedRef.update({ notifiedMentions: allNotified })
+      // Only update author feed if it exists
+      const authorFeedExists = (await authorFeedRef.get()).exists
+      if (authorFeedExists) {
+        await authorFeedRef.update({ notifiedMentions: allNotified })
+      }
     }
 
     console.log(`[editPost] Successfully edited post ${postID}`)

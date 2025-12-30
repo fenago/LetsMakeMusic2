@@ -12,8 +12,17 @@ import {
 import { useNavigation } from '@react-navigation/native'
 import { useActionSheet } from '@expo/react-native-action-sheet'
 import * as ImagePicker from 'expo-image-picker'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Theater, Settings } from 'lucide-react-native'
 
 import { useTheme, useTranslations, StoryItem } from '../../../core/dopebase'
+
+// Brand colors from design guidelines
+const BRAND_COLORS = {
+  vibrantTeal: '#1F979E',
+  deepMagenta: '#C12D79',
+  richPurple: '#9C27B0',
+}
 import dynamicStyles from './styles'
 import { VERSION_STRING } from '../../../config/appVersion'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
@@ -70,6 +79,7 @@ export default function Profile(props) {
   const { theme, appearance } = useTheme()
   const styles = dynamicStyles(theme, appearance)
   const { loadMedia, isPlaying, currentMedia } = useMediaPlayer()
+  const insets = useSafeAreaInsets()
 
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
 
@@ -100,12 +110,9 @@ export default function Profile(props) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerStyle: {
-        backgroundColor: theme.colors[appearance].primaryBackground,
-      },
-      headerTintColor: theme.colors[appearance].primaryText,
+      headerShown: false,
     })
-  }, [navigation, appearance])
+  }, [navigation])
 
   const onProfilePicturePress = () => {
     if (isOtherUser) {
@@ -354,8 +361,26 @@ export default function Profile(props) {
     )
   }
 
+  // Render Backstage header with icon
+  const renderBackstageHeader = () => (
+    <View style={backstageHeaderStyles.header}>
+      {/* Placeholder for centering */}
+      <View style={backstageHeaderStyles.placeholder} />
+      <View style={backstageHeaderStyles.titleContainer}>
+        <Theater size={22} color={BRAND_COLORS.vibrantTeal} strokeWidth={2.5} />
+        <Text style={backstageHeaderStyles.title}>Backstage</Text>
+      </View>
+      <TouchableOpacity
+        style={backstageHeaderStyles.settingsButton}
+        onPress={() => navigation.navigate('Settings')}>
+        <Settings size={22} color={theme.colors[appearance].primaryText} />
+      </TouchableOpacity>
+    </View>
+  )
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {renderBackstageHeader()}
       <FlatList
         data={profilePosts}
         style={hasBottomTab ? styles.scrollContainer : styles.container}
@@ -453,6 +478,40 @@ export default function Profile(props) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   )
+}
+
+// Styles for the Backstage header
+const backstageHeaderStyles = {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  placeholder: {
+    width: 40,
+    height: 40,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F979E',
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 }

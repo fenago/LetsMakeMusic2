@@ -1,133 +1,242 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   Text,
   Modal,
   TouchableOpacity,
-  Pressable,
-  useColorScheme,
   StyleSheet,
-  ActivityIndicator,
-  Alert,
+  useColorScheme,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  Alert,
+  Keyboard,
+  TextInput,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native'
-import { X, Check } from 'lucide-react-native'
-import { IMRichTextInput, IMMentionList } from '../../../core/mentions'
-import { useSearchUsers } from '../../../core/socialgraph/friendships'
-import { useCurrentUser } from '../../../core/onboarding'
-import { editPost as editPostAPI } from '../../../core/socialgraph/feed/api/firebase/firebaseFeedClient'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { Image } from 'expo-image'
+import { X } from 'lucide-react-native'
+import functions from '@react-native-firebase/functions'
+import { searchUsers, fetchFriends } from '../../../core/socialgraph/friendships/api/firebase/firebaseSocialGraphClient'
+import HashtagChips from '../HashtagChips'
+
+const defaultAvatar = 'https://www.iosapptemplates.com/wp-content/uploads/2019/06/empty-avatar.jpg'
 
 /**
- * Edit Post Modal - Allows editing post caption with @mention support
+ * EditPostModal - Edit caption and hashtags for a feed post
  *
- * @param {boolean} visible - Whether the modal is visible
- * @param {function} onClose - Callback when modal is closed
- * @param {object} post - The post object to edit
- * @param {function} onSave - Callback when post is saved successfully
+ * Performance-optimized version:
+ * - Uses native TextInput instead of heavy IMRichTextInput
+ * - @mentions with 500ms debounced search to prevent Firebase spam
  */
-export default function EditPostModal({
-  visible,
-  onClose,
-  post,
-  onSave,
-}) {
+const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const styles = getStyles(isDark)
+  const styles = useMemo(() => getStyles(isDark), [isDark])
 
-  const currentUser = useCurrentUser()
-  const { users: searchResults, search } = useSearchUsers(currentUser?.id)
+  // Caption state
+  const [caption, setCaption] = useState('')
+  const [hashtags, setHashtags] = useState([])
 
-  const [displayText, setDisplayText] = useState('')
-  const [rawText, setRawText] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
+  // Track original values for detecting changes
+  const [originalCaption, setOriginalCaption] = useState('')
+  const [originalHashtags, setOriginalHashtags] = useState([])
 
-  // Mention state
-  const [keyword, setKeyword] = useState('')
-  const [isTrackingStarted, setIsTrackingStarted] = useState(false)
-  const [mentionSuggestions, setMentionSuggestions] = useState([])
+  // @mentions state - debounced search for performance
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [mentionUsers, setMentionUsers] = useState([])
+  const [showMentions, setShowMentions] = useState(false)
+  const [mentionSearching, setMentionSearching] = useState(false)
+  const [mentionStartIndex, setMentionStartIndex] = useState(-1)
+  const searchTimeoutRef = useRef(null)
+  const inputRef = useRef(null)
 
-  const editorRef = useRef(null)
-  const textInputRef = useRef(null)
-
-  // Initialize text when post changes or modal opens
+  // Initialize with post data when modal opens
   useEffect(() => {
     if (visible && post) {
-      const initialText = post.postText || ''
-      setDisplayText(initialText)
-      setRawText(initialText)
-      // Reset the editor with the initial text
-      if (editorRef.current?.setText) {
-        editorRef.current.setText(initialText)
+      const postCaption = post.postText || post.description || ''
+      setCaption(postCaption)
+      setOriginalCaption(postCaption)
+      const tags = (post.hashtags || []).map(t => t.startsWith('#') ? t : `#${t}`)
+      setHashtags(tags)
+      setOriginalHashtags(tags)
+      // Reset mentions state
+      setShowMentions(false)
+      setMentionUsers([])
+      setMentionQuery('')
+    }
+  }, [visible, post])
+
+  // Cleanup search timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
       }
     }
-  }, [visible, post?.id])
+  }, [])
 
-  // Search for users when keyword changes
-  useEffect(() => {
-    if (keyword && keyword.length > 0) {
-      search(keyword)
+  // Debounced mention search - waits 300ms after typing stops
+  // Empty query shows friends list
+  const debouncedSearchMentions = useCallback((query) => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
     }
-  }, [keyword])
 
-  // Format search results for mention list
-  useEffect(() => {
-    if (searchResults) {
-      const formattedUsers = searchResults.map(user => {
-        const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
-        const username = user.username || `${user.firstName}.${user.lastName}`
-        const id = user.id || user.userID
-        return { id, name, username, ...user }
+    setMentionSearching(true)
+    setShowMentions(true) // Show dropdown immediately
+
+    // Use shorter delay for empty query (show friends faster when @ is typed)
+    const delay = query ? 300 : 100
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        let users
+        if (!query || query.trim() === '') {
+          // Empty query - show user's friends as suggestions
+          users = await fetchFriends(post?.authorID, 0, 10)
+        } else {
+          // Search by keyword
+          users = await searchUsers(post?.authorID, query, 0, 10)
+        }
+        setMentionUsers(users || [])
+        setShowMentions(users && users.length > 0)
+      } catch (error) {
+        console.log('[EditPostModal] Mention search error:', error)
+        setMentionUsers([])
+        setShowMentions(false)
+      } finally {
+        setMentionSearching(false)
+      }
+    }, delay)
+  }, [post?.authorID])
+
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = useMemo(() => {
+    const captionChanged = caption !== originalCaption
+    const hashtagsChanged = JSON.stringify([...hashtags].sort()) !== JSON.stringify([...originalHashtags].sort())
+    return captionChanged || hashtagsChanged
+  }, [caption, originalCaption, hashtags, originalHashtags])
+
+  // Handle caption text changes - detect @ mentions
+  const handleCaptionChange = useCallback((text) => {
+    setCaption(text)
+
+    // Find the last @ symbol to detect mention typing
+    const lastAtIndex = text.lastIndexOf('@')
+
+    if (lastAtIndex >= 0) {
+      // Check if there's text after @ (potential mention query)
+      const afterAt = text.slice(lastAtIndex + 1)
+      // Stop at space or end of string
+      const mentionText = afterAt.split(/\s/)[0]
+
+      // Only search if @ is recent (within last 20 chars typed)
+      const isRecentAt = text.length - lastAtIndex <= 20
+
+      // Check if there's a space after the mention (user finished typing mention)
+      const hasSpaceAfter = afterAt.includes(' ')
+
+      if (isRecentAt && !hasSpaceAfter) {
+        // Trigger search for any change (including empty string after @)
+        setMentionStartIndex(lastAtIndex)
+        setMentionQuery(mentionText)
+        debouncedSearchMentions(mentionText)
+      } else if (hasSpaceAfter && showMentions) {
+        // User typed space after @mention, hide dropdown
+        setShowMentions(false)
+        setMentionUsers([])
+        setMentionQuery('')
+      }
+    } else {
+      // No @ found, hide mentions
+      if (showMentions) {
+        setShowMentions(false)
+        setMentionUsers([])
+        setMentionQuery('')
+      }
+    }
+  }, [showMentions, debouncedSearchMentions])
+
+  // Handle selecting a user from mention dropdown
+  const handleSelectMention = useCallback((user) => {
+    const username = user.username || `${user.firstName || ''}${user.lastName || ''}`.toLowerCase()
+
+    // Replace @query with @username
+    if (mentionStartIndex >= 0) {
+      const beforeMention = caption.slice(0, mentionStartIndex)
+      const afterMention = caption.slice(mentionStartIndex + mentionQuery.length + 1) // +1 for @
+      const newCaption = `${beforeMention}@${username} ${afterMention}`
+      setCaption(newCaption)
+    }
+
+    // Hide dropdown
+    setShowMentions(false)
+    setMentionUsers([])
+    setMentionQuery('')
+    setMentionStartIndex(-1)
+  }, [caption, mentionStartIndex, mentionQuery])
+
+  const handleRemoveTag = useCallback((tag) => {
+    setHashtags(prev => prev.filter(t => t !== tag))
+  }, [])
+
+  const handleAddTag = useCallback((tag) => {
+    setHashtags(prev => [...new Set([...prev, tag])].slice(0, 10))
+  }, [])
+
+  const handleSave = useCallback(() => {
+    if (!post?.id) return
+
+    // Optimistic update - close immediately and update UI
+    const updatedData = {
+      postText: caption.trim(),
+      description: caption.trim(),
+      hashtags: hashtags.map(t => t.replace(/^#/, '')),
+      isEdited: true,
+    }
+
+    // Support both prop names for compatibility
+    // ManageFeedScreen uses onSaveSuccess, Feed.js uses onSave
+    if (onSaveSuccess) {
+      onSaveSuccess(updatedData)
+    } else if (onSave) {
+      onSave(updatedData.description) // Feed.js expects just the text
+    }
+    onClose()
+
+    // Save in background with feedback
+    console.log('[EditPostModal] 📤 Saving post:', post.id)
+    console.log('[EditPostModal] Description:', updatedData.description)
+    console.log('[EditPostModal] Hashtags:', updatedData.hashtags)
+
+    const editPost = functions().httpsCallable('editPost')
+    editPost({
+      postID: post.id,
+      postAuthorID: post.authorID,
+      description: updatedData.description,
+      hashtags: updatedData.hashtags,
+    })
+      .then(() => {
+        console.log('[EditPostModal] ✅ Save successful for post:', post.id)
       })
-      setMentionSuggestions(formattedUsers)
-    }
-  }, [searchResults])
+      .catch(error => {
+        console.error('[EditPostModal] ❌ Background save error:', error)
+        // Show error alert so user knows to retry
+        Alert.alert(
+          'Save Failed',
+          'Your changes may not have been saved. Please try editing again.',
+          [{ text: 'OK' }]
+        )
+      })
+  }, [post, caption, hashtags, onSaveSuccess, onSave, onClose])
 
-  const onChangeText = ({ displayText: display, text }) => {
-    setDisplayText(display)
-    setRawText(text)
-  }
+  const handleClose = useCallback(() => {
+    Keyboard.dismiss()
 
-  const handleSave = async () => {
-    if (isSaving) return
-
-    const textToSave = rawText.trim() || displayText.trim()
-
-    // Check if text actually changed
-    if (textToSave === (post?.postText || '').trim()) {
-      onClose()
-      return
-    }
-
-    setIsSaving(true)
-
-    try {
-      console.log('[EditPostModal] Saving post:', post?.id)
-      const result = await editPostAPI(post.id, currentUser?.id, textToSave)
-
-      if (result.success) {
-        console.log('[EditPostModal] Post saved successfully')
-        onSave?.(textToSave)
-        onClose()
-      } else {
-        console.log('[EditPostModal] Save failed:', result.error)
-        Alert.alert('Error', result.error || 'Failed to save changes')
-      }
-    } catch (error) {
-      console.log('[EditPostModal] Error saving:', error)
-      Alert.alert('Error', 'Failed to save changes. Please try again.')
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleClose = () => {
-    // Check if there are unsaved changes
-    const textToCheck = rawText.trim() || displayText.trim()
-    const originalText = (post?.postText || '').trim()
-
-    if (textToCheck !== originalText) {
+    if (hasUnsavedChanges) {
       Alert.alert(
         'Discard Changes?',
         'You have unsaved changes. Are you sure you want to discard them?',
@@ -139,166 +248,278 @@ export default function EditPostModal({
     } else {
       onClose()
     }
-  }
+  }, [hasUnsavedChanges, onClose])
 
-  const editorStyles = {
-    input: {
-      color: isDark ? '#ffffff' : '#151723',
-      fontSize: 16,
-      minHeight: 120,
-      maxHeight: 200,
-      paddingVertical: 12,
-      paddingHorizontal: 0,
-      textAlignVertical: 'top',
-    },
-    mainContainer: {
-      flex: 1,
-    },
-  }
+  if (!visible) return null
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="formSheet"
       onRequestClose={handleClose}
     >
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable
-            style={styles.headerButton}
-            onPress={handleClose}
-            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-          >
-            <X size={22} color={isDark ? '#ffffff' : '#151723'} strokeWidth={2.5} />
-          </Pressable>
-
-          <Text style={styles.headerTitle}>Edit Post</Text>
-
           <TouchableOpacity
-            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={isSaving}
+            onPress={handleClose}
+            style={styles.closeButton}
           >
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Check size={22} color="#ffffff" strokeWidth={2.5} />
-            )}
+            <X size={24} color={isDark ? '#fff' : '#000'} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Post</Text>
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={!hasUnsavedChanges}
+            style={[
+              styles.saveButton,
+              hasUnsavedChanges && styles.saveButtonActive,
+            ]}
+          >
+            <Text style={[
+              styles.saveButtonText,
+              hasUnsavedChanges && styles.saveButtonTextActive,
+            ]}>
+              Save
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Editor */}
-        <View style={styles.editorContainer}>
-          <View style={styles.mentionListWrapper}>
-            <IMMentionList
-              containerStyle={styles.mentionListContainer}
-              list={mentionSuggestions}
-              keyword={keyword}
-              isTrackingStarted={isTrackingStarted}
-              onSuggestionTap={editorRef.current?.onSuggestionTap}
-            />
-          </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Caption Input */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Caption</Text>
+              <Text style={styles.captionHint}>Tip: Use @ to mention users, # for hashtags</Text>
+              <View style={styles.captionInputContainer}>
+                <TextInput
+                  ref={inputRef}
+                  style={styles.captionInput}
+                  value={caption}
+                  onChangeText={handleCaptionChange}
+                  placeholder="Write a caption..."
+                  placeholderTextColor={isDark ? '#666' : '#999'}
+                  multiline
+                  maxLength={500}
+                  textAlignVertical="top"
+                />
 
-          <IMRichTextInput
-            richTextInputRef={editorRef}
-            inputRef={textInputRef}
-            list={mentionSuggestions}
-            mentionListPosition={'top'}
-            onChange={onChangeText}
-            showEditor={true}
-            toggleEditor={() => {}}
-            editorStyles={editorStyles}
-            showMentions={false}
-            onHideMentions={() => {}}
-            onUpdateSuggestions={setKeyword}
-            onTrackingStateChange={setIsTrackingStarted}
-            placeholder="Write your caption... (use @ to mention)"
-            initialValue={post?.postText || ''}
-          />
-        </View>
+                {/* @Mentions Dropdown */}
+                {showMentions && (
+                  <View style={styles.mentionsDropdown}>
+                    {mentionSearching ? (
+                      <View style={styles.mentionLoading}>
+                        <ActivityIndicator size="small" color="#2126A2" />
+                        <Text style={styles.mentionLoadingText}>Searching...</Text>
+                      </View>
+                    ) : (
+                      <FlatList
+                        data={mentionUsers}
+                        keyExtractor={(item) => item.id}
+                        keyboardShouldPersistTaps="handled"
+                        style={styles.mentionsList}
+                        renderItem={({ item }) => (
+                          <TouchableOpacity
+                            style={styles.mentionItem}
+                            onPress={() => handleSelectMention(item)}
+                          >
+                            <Image
+                              source={{ uri: item.profilePictureURL || defaultAvatar }}
+                              style={styles.mentionAvatar}
+                            />
+                            <View style={styles.mentionInfo}>
+                              <Text style={styles.mentionName} numberOfLines={1}>
+                                {item.firstName} {item.lastName}
+                              </Text>
+                              <Text style={styles.mentionUsername} numberOfLines={1}>
+                                @{item.username || `${item.firstName}${item.lastName}`.toLowerCase()}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                      />
+                    )}
+                  </View>
+                )}
+              </View>
+              <Text style={styles.charCount}>{caption.length}/500</Text>
+            </View>
 
-        {/* Helper text */}
-        <Text style={styles.helperText}>
-          Use @username to mention someone
-        </Text>
-      </KeyboardAvoidingView>
+            {/* Hashtags Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Hashtags</Text>
+              <HashtagChips
+                tags={hashtags}
+                onRemove={handleRemoveTag}
+                onAdd={handleAddTag}
+                editable={true}
+                maxTags={10}
+                placeholder="Add a hashtag..."
+              />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   )
 }
 
-const getStyles = (isDark) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: isDark ? '#333333' : '#e0e0e0',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: isDark ? '#ffffff' : '#151723',
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: isDark ? '#333333' : '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1F979E', // Brand teal
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  editorContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    position: 'relative',
-  },
-  mentionListWrapper: {
-    position: 'relative',
-    zIndex: 1000,
-  },
-  mentionListContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: isDark ? '#2c2c2e' : '#ffffff',
-    borderRadius: 8,
-    maxHeight: 200,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 1000,
-  },
-  helperText: {
-    fontSize: 13,
-    color: isDark ? '#888888' : '#999999',
-    textAlign: 'center',
-    paddingVertical: 16,
-    paddingBottom: 40,
-  },
-})
+const getStyles = (isDark) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#0a0a0a' : '#ffffff',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#1c1c1e' : '#e0e0e0',
+      minHeight: 56,
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: isDark ? '#fff' : '#000',
+    },
+    closeButton: {
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    saveButton: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 18,
+      backgroundColor: isDark ? '#333' : '#e0e0e0',
+    },
+    saveButtonActive: {
+      backgroundColor: '#1F979E',
+    },
+    saveButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: isDark ? '#666' : '#999',
+    },
+    saveButtonTextActive: {
+      color: '#fff',
+    },
+    keyboardView: {
+      flex: 1,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: 16,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionLabel: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? '#fff' : '#000',
+      marginBottom: 4,
+    },
+    captionHint: {
+      fontSize: 12,
+      color: isDark ? '#888' : '#666',
+      marginBottom: 8,
+    },
+    captionInputContainer: {
+      position: 'relative',
+    },
+    captionInput: {
+      backgroundColor: isDark ? '#1c1c1e' : '#f5f5f5',
+      borderRadius: 12,
+      padding: 14,
+      minHeight: 120,
+      borderWidth: 1,
+      borderColor: isDark ? '#333' : '#ddd',
+      color: isDark ? '#fff' : '#000',
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    charCount: {
+      fontSize: 12,
+      color: isDark ? '#666' : '#999',
+      textAlign: 'right',
+      marginTop: 4,
+    },
+    // Mentions dropdown styles
+    mentionsDropdown: {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      backgroundColor: isDark ? '#1c1c1e' : '#fff',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: isDark ? '#333' : '#ddd',
+      maxHeight: 200,
+      zIndex: 1000,
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      marginTop: 4,
+    },
+    mentionLoading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 16,
+      gap: 8,
+    },
+    mentionLoadingText: {
+      color: isDark ? '#888' : '#666',
+      fontSize: 14,
+    },
+    mentionsList: {
+      maxHeight: 200,
+    },
+    mentionItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#2c2c2e' : '#f0f0f0',
+      gap: 12,
+    },
+    mentionAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: isDark ? '#333' : '#e0e0e0',
+    },
+    mentionInfo: {
+      flex: 1,
+    },
+    mentionName: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? '#fff' : '#000',
+    },
+    mentionUsername: {
+      fontSize: 12,
+      color: isDark ? '#888' : '#666',
+      marginTop: 2,
+    },
+  })
+
+export default EditPostModal

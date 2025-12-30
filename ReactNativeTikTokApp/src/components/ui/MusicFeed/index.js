@@ -12,7 +12,14 @@ import {
 } from 'react-native'
 // Note: Reanimated entering animations removed to fix refresh crash
 // import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated'
-import { ChevronDown, ChevronUp, Music, Heart, ListMusic, Users, Radio, Search, LayoutGrid, List, Play, Video, Menu, X, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Music, Heart, ListMusic, Users, Radio, Search, LayoutGrid, List, Play, Video, Menu, X, ChevronRight, Mic2 } from 'lucide-react-native'
+
+// Brand colors from LetsMake.Music guidelines
+const BRAND_COLORS = {
+  vibrantTeal: '#1F979E',      // Primary - key actions, active states
+  deepMagenta: '#C12D79',      // Secondary - likes, notifications, special CTAs
+  richPurple: '#9C27B0',       // Accent
+}
 import TodaysPicks from '../TodaysPicks'
 import SongDetailCard from '../SongDetailCard'
 import AlbumCard from '../AlbumCard'
@@ -275,8 +282,11 @@ const MusicFeed = ({
         <Menu size={24} color={isDark ? '#e5e5e5' : '#171717'} />
       </TouchableOpacity>
 
-      {/* Title */}
-      <Text style={styles.primaryHeaderTitle}>Feed</Text>
+      {/* Title with mic icon */}
+      <View style={styles.primaryHeaderTitleContainer}>
+        <Mic2 size={22} color={BRAND_COLORS.vibrantTeal} strokeWidth={2.5} />
+        <Text style={styles.primaryHeaderTitle}>Stage</Text>
+      </View>
 
       {/* Search button */}
       <TouchableOpacity
@@ -766,10 +776,15 @@ const getStyles = (isDark) => StyleSheet.create({
     backgroundColor: isDark ? '#0a0a0a' : '#ffffff',
     // NOTE: paddingTop is applied dynamically via inline style with insets.top
   },
+  primaryHeaderTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   primaryHeaderTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: isDark ? '#e5e5e5' : '#171717',
+    color: '#1F979E', // Brand vibrant teal for "Stage" title
   },
 
   // ========== NEW: Filter Tabs Styles ==========
@@ -793,7 +808,7 @@ const getStyles = (isDark) => StyleSheet.create({
     backgroundColor: isDark ? '#262626' : '#f0f0f0',
   },
   filterTabActive: {
-    backgroundColor: '#3875e8',
+    backgroundColor: '#1F979E', // Brand vibrant teal
   },
   filterTabText: {
     fontSize: 14,

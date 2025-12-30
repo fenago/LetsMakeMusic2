@@ -409,6 +409,23 @@ const FeedScreen = props => {
     setFeedType('following')
   }
 
+  // Handler for when a post is edited - updates feed state with new caption
+  const onPostEdited = useCallback((postId, newText) => {
+    setFeed(prevFeed => {
+      // Update the post in both following and forYou feeds
+      const updatePost = (posts) =>
+        posts.map(post =>
+          post.id === postId
+            ? { ...post, postText: newText, description: newText }
+            : post
+        )
+      return {
+        following: updatePost(prevFeed.following || []),
+        forYou: updatePost(prevFeed.forYou || []),
+      }
+    })
+  }, [])
+
   // NEW: Apply media type filter to the feed
   const filteredFeed = useMemo(() => {
     const baseFeed = feed[feedType]
@@ -441,13 +458,14 @@ const FeedScreen = props => {
       isForYouFeed={feedType === 'forYou'}
       isFollowingDisabled={(feed.following ?? []).length < 1}
       isCommentsOpen={isVisible}
+      onPostEdited={onPostEdited}
     />
   ), [
     loading, refreshing, onRefresh, filteredFeed, feedType, feedItemHeight,
     onCommentPress, currentUser, onFeedUserItemPress, onReaction, isLoadingBottom,
     onSharePost, onDeletePost, onUserReport, navigation,
     onTextFieldUserPress, onTextFieldHashTagPress,
-    onFollowingFeedPress, onForYouFeedPress, feed.following, isVisible,
+    onFollowingFeedPress, onForYouFeedPress, feed.following, isVisible, onPostEdited,
   ])
 
   // Get user's display name for greeting (prefer stage name)

@@ -66,6 +66,8 @@ import {
   CreateArtistVoiceScreen,
   SyntheticSingerProfileScreen,
   HashtagFeedScreen,
+  ManageFeedScreen,
+  SongDiscoveryScreen,
 } from '../screens'
 // import { Camera, NewPost, ComposerSongs } from '../components';
 import { InnerFriendsSearchNavigator } from './InnerStackNavigators'
@@ -107,6 +109,13 @@ const MainStackNavigator = () => {
         }}
         name="CustomFeedScreen"
         component={CustomFeedScreen}
+      />
+      <MainStack.Screen
+        name="SongDiscovery"
+        options={{
+          headerShown: false,
+        }}
+        component={SongDiscoveryScreen}
       />
       <MainStack.Screen name="Comments" component={CommentsScreen} />
       <MainStack.Screen
@@ -506,6 +515,13 @@ const MainStackNavigator = () => {
           headerShown: false,
         }}
         component={SyntheticSingerProfileScreen}
+      />
+      <MainStack.Screen
+        name="ManageFeed"
+        options={{
+          headerShown: false,
+        }}
+        component={ManageFeedScreen}
       />
     </MainStack.Navigator>
   )

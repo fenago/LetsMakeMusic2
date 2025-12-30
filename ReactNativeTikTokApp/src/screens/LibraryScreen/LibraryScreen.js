@@ -14,7 +14,14 @@ import {
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeIn } from 'react-native-reanimated'
-import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users, ImageIcon, Mic, FileText, Copy, CheckCircle, Disc3, User } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users, ImageIcon, Mic, FileText, Copy, CheckCircle, Disc3, User, ListChecks, ThumbsUp, FolderOpen, Compass } from 'lucide-react-native'
+
+// Brand colors from design guidelines
+const BRAND_COLORS = {
+  vibrantTeal: '#1F979E',
+  deepMagenta: '#C12D79',
+  richPurple: '#9C27B0',
+}
 import { useTheme, useTranslations } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserSongs, deleteSong } from '../../services/songsService'
@@ -28,6 +35,7 @@ import { useArtistVoices } from '../../hooks/useArtistVoices'
 import { useVideoClips } from '../../hooks/useVideoClips'
 import { useLyrics } from '../../hooks/useLyrics'
 import { useBeats } from '../../hooks/useBeats'
+import { useSongSwipes } from '../../hooks/useSongSwipes'
 import { BandCard } from '../../components'
 import VoiceCard from '../../components/ui/VoiceCard'
 import PlaylistCard from '../../components/ui/PlaylistCard'
@@ -84,6 +92,7 @@ const LibraryScreen = ({ navigation }) => {
   const [isMediaStudioExpanded, setIsMediaStudioExpanded] = useState(true)
   const [isYourLyricsExpanded, setIsYourLyricsExpanded] = useState(true)
   const [isYourBeatsExpanded, setIsYourBeatsExpanded] = useState(true)
+  const [isDiscoveredLikesExpanded, setIsDiscoveredLikesExpanded] = useState(true)
 
   // Toggle handlers using useCallback to prevent re-creation
   const toggleRecentlyPlayed = useCallback(() => {
@@ -121,6 +130,9 @@ const LibraryScreen = ({ navigation }) => {
   }, [])
   const toggleYourBeats = useCallback(() => {
     setIsYourBeatsExpanded(prev => !prev)
+  }, [])
+  const toggleDiscoveredLikes = useCallback(() => {
+    setIsDiscoveredLikesExpanded(prev => !prev)
   }, [])
 
   // Edit modal state
@@ -183,6 +195,14 @@ const LibraryScreen = ({ navigation }) => {
     beatsLoading,
     beatsCount,
   } = useBeats(userId)
+
+  // Subscribe to songs liked via swipe (discovery feature)
+  const {
+    likedSongs: swipedLikedSongs,
+    likedSongsCount: swipedLikedSongsCount,
+    loading: swipedLikedSongsLoading,
+    fetchLikedSongs: fetchSwipedLikedSongs,
+  } = useSongSwipes(userId, { loadLikedSongs: true })
 
   // Debug logging removed for performance
 
@@ -395,11 +415,20 @@ const LibraryScreen = ({ navigation }) => {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={[styles.headerTitle, { color: colorSet.primaryText }]}>
-        {localized('My Catalog')}
-      </Text>
+      <View style={styles.headerTitleContainer}>
+        <FolderOpen size={22} color={BRAND_COLORS.vibrantTeal} strokeWidth={2.5} />
+        <Text style={[styles.headerTitle, { color: BRAND_COLORS.vibrantTeal }]}>
+          {localized('My Catalog')}
+        </Text>
+      </View>
       <View style={styles.headerActions}>
-        {/* My Feed button */}
+        {/* Manage Feed button */}
+        <TouchableOpacity
+          style={styles.viewToggleButton}
+          onPress={() => navigation.navigate('ManageFeed')}>
+          <ListChecks size={22} color={colorSet.primaryText} />
+        </TouchableOpacity>
+        {/* My Profile button */}
         <TouchableOpacity
           style={styles.viewToggleButton}
           onPress={() => navigation.navigate('Profile')}>
@@ -1054,7 +1083,7 @@ const LibraryScreen = ({ navigation }) => {
     </View>
   )
 
-  // Render Liked Songs section
+  // Render Liked Songs section (user's own songs marked as liked)
   const renderLikedSongsSection = () => {
     return (
       <View style={styles.section}>
@@ -1067,6 +1096,128 @@ const LibraryScreen = ({ navigation }) => {
           count={likedSongsList.length}
         />
         {isLikedSongsExpanded && renderSongList(likedSongsList, 'Songs you like will appear here')}
+      </View>
+    )
+  }
+
+  // Render Discovered Likes section (songs liked via swipe/discovery)
+  const renderDiscoveredLikesItem = ({ item, index }) => {
+    const songData = item.songData || {}
+    const displayImageUrl = songData.imageUrl
+    const title = songData.title || 'Unknown Song'
+    const artist = songData.artist || 'Unknown Artist'
+
+    return (
+      <Animated.View
+        entering={FadeIn.duration(200)}
+        style={styles.gridItem}>
+        <TouchableOpacity
+          onPress={() => {
+            // Play the song using songData
+            if (songData.audioUrl) {
+              playSong({
+                id: item.songId || item.id,
+                title,
+                artist,
+                audioUrl: songData.audioUrl,
+                imageUrl: displayImageUrl,
+              })
+            }
+          }}
+          activeOpacity={0.8}>
+          <View style={styles.imageContainer}>
+            {displayImageUrl ? (
+              <Image
+                source={{ uri: displayImageUrl }}
+                style={styles.songImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+              />
+            ) : (
+              <View
+                style={[
+                  styles.songImagePlaceholder,
+                  { backgroundColor: colorSet.grey3 },
+                ]}>
+                <ThumbsUp size={32} color="#22c55e" />
+              </View>
+            )}
+            {/* Liked badge */}
+            <View style={styles.discoveredLikeBadge}>
+              <ThumbsUp size={12} color="#fff" fill="#fff" />
+            </View>
+          </View>
+        </TouchableOpacity>
+        <View style={styles.songInfoRow}>
+          <View style={styles.songTextContainer}>
+            <Text
+              style={[styles.songTitle, { color: colorSet.primaryText }]}
+              numberOfLines={1}>
+              {title}
+            </Text>
+            <Text
+              style={[styles.songDescription, { color: colorSet.secondaryText }]}
+              numberOfLines={1}>
+              {artist}
+            </Text>
+          </View>
+        </View>
+      </Animated.View>
+    )
+  }
+
+  const renderDiscoveredLikesSection = () => {
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeaderWithAction}>
+          <CollapsibleSectionHeader
+            title="Songs You Like"
+            icon={ThumbsUp}
+            iconColor="#22c55e"
+            isExpanded={isDiscoveredLikesExpanded}
+            onToggle={toggleDiscoveredLikes}
+            count={swipedLikedSongsCount}
+          />
+          <TouchableOpacity
+            style={styles.discoverMoreButton}
+            onPress={() => navigation.navigate('SongDiscovery')}
+            activeOpacity={0.7}
+          >
+            <Compass size={16} color="#1F979E" />
+            <Text style={styles.discoverMoreText}>Discover</Text>
+          </TouchableOpacity>
+        </View>
+        {isDiscoveredLikesExpanded && (
+          swipedLikedSongsLoading ? (
+            <View style={styles.sectionLoading}>
+              <ActivityIndicator size="small" color={colorSet.primaryForeground} />
+            </View>
+          ) : swipedLikedSongs.length > 0 ? (
+            <FlatList
+              data={swipedLikedSongs}
+              renderItem={renderDiscoveredLikesItem}
+              keyExtractor={(item) => item.songId || item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalListContainer}
+              ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+            />
+          ) : (
+            <View style={styles.emptySection}>
+              <Text style={[styles.emptySectionText, { color: colorSet.secondaryText }]}>
+                Discover new songs and like the ones you love
+              </Text>
+              <TouchableOpacity
+                style={[styles.discoverButton, { backgroundColor: colorSet.primaryForeground }]}
+                onPress={() => navigation.navigate('SongDiscovery')}
+              >
+                <Compass size={18} color="#fff" />
+                <Text style={styles.discoverButtonText}>Discover Songs</Text>
+              </TouchableOpacity>
+            </View>
+          )
+        )}
       </View>
     )
   }
@@ -1966,6 +2117,7 @@ const LibraryScreen = ({ navigation }) => {
         {renderYourBeatsSection()}
         {renderMediaStudioSection()}
         {renderLikedSongsSection()}
+        {renderDiscoveredLikesSection()}
         {renderYourPlaylistsSection()}
         {renderRecentlyPlayedSection()}
         {renderRecommendedSection()}
@@ -2007,6 +2159,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
+  },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   headerTitle: {
     fontSize: 28,
@@ -2079,6 +2236,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  sectionHeaderWithAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 16,
+  },
+  discoverMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  discoverMoreText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F979E',
+  },
   comingSoonBadge: {
     backgroundColor: '#f59e0b',
     paddingHorizontal: 8,
@@ -2118,6 +2294,21 @@ const styles = StyleSheet.create({
   },
   emptySectionText: {
     fontSize: 14,
+    textAlign: 'center',
+  },
+  discoverButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 12,
+    gap: 8,
+  },
+  discoverButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   comingSoonPlaceholder: {
     height: 100,
@@ -2265,6 +2456,17 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  discoveredLikeBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(34, 197, 94, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
   },

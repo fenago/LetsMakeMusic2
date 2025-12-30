@@ -36,6 +36,7 @@ import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 import { useCurrentUser } from '../../../core/onboarding'
 import { useTheme } from '../../../core/dopebase'
 import { usePlaylists } from '../../../hooks/usePlaylists'
+import { useSongSwipes } from '../../../hooks/useSongSwipes'
 import { fetchAndSaveTimestampedLyrics } from '../../../services/songsService'
 import EditSongModal from '../EditSongModal'
 import LyricsViewModal from '../LyricsViewModal'
@@ -54,6 +55,7 @@ import EditSongButton from './sections/EditSongButton'
 import ShareSection from './sections/ShareSection'
 import ArtistSection from './sections/ArtistSection'
 import CreatorSections from './sections/CreatorSections'
+import SwipeButtons from './sections/SwipeButtons'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -99,6 +101,16 @@ const FullPlayerBottomSheet = () => {
   const { playlists, playlistsLoading, addSongToPlaylist } = usePlaylists(userId, {
     enabled: playlistsRequested || showPlaylistModal,
   })
+
+  // Song swipe (like/pass) functionality for music discovery
+  const {
+    like: likeSong,
+    pass: passSong,
+    undo: undoSwipe,
+    hasSwipedOn,
+    getSwipeAction,
+    canUndo: canUndoSwipe,
+  } = useSongSwipes(userId)
 
   // PERFORMANCE: Removed isPlaying and togglePlayPause from this destructuring.
   // FullPlayerControls component gets these from usePlaybackState() internally.
@@ -313,6 +325,32 @@ const FullPlayerBottomSheet = () => {
     navigateToFeature('ShareSongToFeed')
   }, [currentMedia, navigateToFeature])
 
+  // Song swipe handlers
+  const handleSwipeLike = useCallback(async () => {
+    if (!currentMedia?.id) return
+    const songData = {
+      title: currentMedia.title || currentMedia.label || currentMedia.name,
+      artist: currentMedia.artist || currentMedia.author?.stageName,
+      imageUrl: currentMedia.thumbnailUrl || currentMedia.imageUrl || currentMedia.coverUrl,
+      audioUrl: currentMedia.audioUrl,
+    }
+    await likeSong(currentMedia.id, songData)
+  }, [currentMedia, likeSong])
+
+  const handleSwipePass = useCallback(async () => {
+    if (!currentMedia?.id) return
+    const songData = {
+      title: currentMedia.title || currentMedia.label || currentMedia.name,
+      artist: currentMedia.artist || currentMedia.author?.stageName,
+      imageUrl: currentMedia.thumbnailUrl || currentMedia.imageUrl || currentMedia.coverUrl,
+    }
+    await passSong(currentMedia.id, songData)
+  }, [currentMedia, passSong])
+
+  const handleSwipeUndo = useCallback(async () => {
+    await undoSwipe()
+  }, [undoSwipe])
+
   const handleShareWithUser = useCallback(() => {
     navigateToFeature('Friends')
   }, [navigateToFeature])
@@ -390,6 +428,17 @@ const FullPlayerBottomSheet = () => {
             {/* DEFERRED SECTIONS: Only mount after modal animation completes */}
             {sectionsReady ? (
               <>
+                <SwipeButtons
+                  songId={currentMedia?.id}
+                  hasSwipedOn={hasSwipedOn}
+                  getSwipeAction={getSwipeAction}
+                  onLike={handleSwipeLike}
+                  onPass={handleSwipePass}
+                  onUndo={handleSwipeUndo}
+                  canUndo={canUndoSwipe}
+                  isDark={isDark}
+                />
+
                 <LyricsSection
                   rawLyrics={currentMedia.rawLyrics || currentMedia.lyrics}
                   timestampedLyrics={currentMedia.timestampedLyrics}

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useMemo, memo } from 'react'
 import {
   View,
   Text,
@@ -11,20 +11,6 @@ import { X, Plus } from 'lucide-react-native'
 
 /**
  * HashtagChips - Reusable component for displaying and editing hashtags
- *
- * Features:
- * - Display existing hashtags as removable chips
- * - Add new hashtags via input field
- * - Auto-format hashtags (lowercase, # prefix)
- * - Max tag limit with counter
- *
- * Props:
- * @param {string[]} tags - Array of hashtags (with or without # prefix)
- * @param {function} onRemove - Called with tag string when removed
- * @param {function} onAdd - Called with formatted tag when added
- * @param {boolean} editable - Whether tags can be added/removed (default: true)
- * @param {number} maxTags - Maximum number of tags allowed (default: 10)
- * @param {string} placeholder - Input placeholder text
  */
 const HashtagChips = ({
   tags = [],
@@ -38,32 +24,42 @@ const HashtagChips = ({
   const isDark = colorScheme === 'dark'
   const [inputValue, setInputValue] = useState('')
 
-  const styles = getStyles(isDark)
+  const styles = useMemo(() => getStyles(isDark), [isDark])
 
-  const handleAdd = useCallback(() => {
-    if (!inputValue.trim() || tags.length >= maxTags) return
-
-    // Clean and format hashtag
-    let tag = inputValue.trim().toLowerCase()
+  const formatTag = (text) => {
+    let tag = text.trim().toLowerCase()
     if (!tag.startsWith('#')) tag = `#${tag}`
-    tag = tag.replace(/[^#a-z0-9]/g, '')
+    return tag.replace(/[^#a-z0-9]/g, '')
+  }
 
-    // Validate and add if unique
+  const handleAdd = () => {
+    const trimmed = inputValue.trim()
+    if (!trimmed || tags.length >= maxTags) return
+
+    const tag = formatTag(trimmed)
     if (tag.length > 1 && !tags.includes(tag)) {
       onAdd?.(tag)
-      setInputValue('')
     }
-  }, [inputValue, tags, maxTags, onAdd])
+    setInputValue('')
+  }
 
-  const handleInputChange = useCallback((text) => {
+  const handleInputChange = (text) => {
     // If user types space or comma, treat as submit
     if (text.endsWith(' ') || text.endsWith(',')) {
-      setInputValue(text.slice(0, -1))
-      handleAdd()
+      const trimmed = text.slice(0, -1).trim()
+      if (trimmed && tags.length < maxTags) {
+        const tag = formatTag(trimmed)
+        if (tag.length > 1 && !tags.includes(tag)) {
+          onAdd?.(tag)
+        }
+      }
+      setInputValue('')
     } else {
       setInputValue(text)
     }
-  }, [handleAdd])
+  }
+
+  const canAdd = inputValue.trim().length > 0 && tags.length < maxTags
 
   return (
     <View style={styles.container}>
@@ -105,9 +101,9 @@ const HashtagChips = ({
             onPress={handleAdd}
             style={[
               styles.addBtn,
-              !inputValue.trim() && styles.addBtnDisabled,
+              !canAdd && styles.addBtnDisabled,
             ]}
-            disabled={!inputValue.trim()}
+            disabled={!canAdd}
           >
             <Plus size={18} color="#fff" />
           </TouchableOpacity>
@@ -183,4 +179,4 @@ const getStyles = (isDark) =>
     },
   })
 
-export default HashtagChips
+export default memo(HashtagChips)

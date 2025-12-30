@@ -17,10 +17,8 @@ function IMRichTextInput(props) {
     const { map, newValue } = EU.getMentionsWithInputText(props.initialValue)
     mentionsMap.current = map
     msg = newValue
-    formattedMsg = formatText(newValue)
-    setTimeout(() => {
-      sendMessageToFooter(newValue)
-    })
+    // formatText will be called in useEffect after component mounts
+    formattedMsg = newValue
   }
   const inputTextCopy = useRef(msg)
 
@@ -33,6 +31,34 @@ function IMRichTextInput(props) {
   const [isTrackingStarted, setIsTrackingStarted] = useState(false)
 
   const textInputRef = useRef()
+
+  // Format initial value after component mounts
+  useEffect(() => {
+    if (props.initialValue && props.initialValue !== '' && mentionsMap.current.size > 0) {
+      // Re-format with mentions highlighting - inline to avoid hoisting issues
+      const input = inputText
+      const map = mentionsMap.current
+      if (input === '' || !map.size) return
+      const newFormattedText = []
+      let lastIndex = 0
+      map.forEach((men, [start, end]) => {
+        const initialStr = start === 1 ? '' : input.substring(lastIndex, start)
+        lastIndex = end + 1
+        newFormattedText.push(initialStr)
+        const formattedMention = (
+          <Text key={`${start}-${men.id}-${end}`} style={mentionStyle.mention}>
+            @{men.username}
+          </Text>
+        )
+        newFormattedText.push(formattedMention)
+        if (EU.isKeysAreSame(EU.getLastKeyInMap(map), [start, end])) {
+          const lastStr = input.substr(lastIndex)
+          newFormattedText.push(lastStr)
+        }
+      })
+      setFormattedText(newFormattedText)
+    }
+  }, []) // Run once on mount
 
   const updateMentionsMap = (selc, count, shouldAdd) => {
     mentionsMap.current = EU.updateRemainingMentionsIndexes(

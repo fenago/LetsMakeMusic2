@@ -428,7 +428,7 @@ export default function Feed(props) {
         keyExtractor={(item, index) => item.id || index.toString()}
         onScrollToIndexFailed={() => {}}
         data={feed}
-        extraData={{ selected, paused }}
+        extraData={{ selected, paused, feed }}
         onRefresh={() => pullToRefresh(user.id)}
         refreshing={refreshing}
         renderItem={renderFeedItem}

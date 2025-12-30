@@ -101,7 +101,8 @@ exports.onSongCreated = functions.firestore
           stageName: user.stageName || song.author?.stageName,
         },
         postMedia,
-        description: `🎵 ${song.title}`,
+        postText: `Check out my new song: ${song.title} 🎵`, // Display text in Feed
+        description: `Check out my new song: ${song.title} 🎵`, // Backwards compatibility
         hashtags,
         reactionsCount: 0,
         commentsCount: 0,

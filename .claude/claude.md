@@ -75,6 +75,22 @@ React Native TikTok-style app with AI music generation (Suno API) on Instamobile
 
 ---
 
+## React Native Firebase Syntax
+
+**IMPORTANT:** This app uses `@react-native-firebase`, NOT the web SDK.
+
+```javascript
+// CORRECT - React Native Firebase
+const fn = functions().httpsCallable('functionName')
+const result = await fn({ data })
+
+// WRONG - Web SDK (will error: "_url is not a function")
+import { httpsCallable } from 'firebase/functions'
+const fn = httpsCallable(functions, 'functionName')
+```
+
+---
+
 ## Security Warning
 
 Firestore rules are WIDE OPEN (`allow read, write: if true`). **Secure before production!**

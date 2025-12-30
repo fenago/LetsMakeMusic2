@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useReactions } from './useReactions'
 
 // handles a static list of posts
@@ -11,8 +11,20 @@ export const useCustomPosts = originalPosts => {
     await handleFeedReaction(post, reaction, author)
   }
 
+  // Update a post's text fields after editing
+  const updatePost = useCallback((postId, newText) => {
+    setPosts(prevPosts =>
+      prevPosts?.map(post =>
+        post.id === postId
+          ? { ...post, postText: newText, description: newText }
+          : post
+      ) || []
+    )
+  }, [])
+
   return {
     posts,
     addReaction,
+    updatePost,
   }
 }

@@ -4,6 +4,9 @@ const { v4: uuidv4 } = require('uuid')
 
 const db = admin.firestore()
 
+// Import mention utilities for @mention notifications
+const { extractMentionIds, processMentionNotifications } = require('../mentions/mentions')
+
 /**
  * Auto-generate hashtags from song style
  * "electronic chill pop" -> ['electronic', 'chill', 'pop']
@@ -104,7 +107,8 @@ exports.createSongPost = functions.https.onCall(async (data, context) => {
         stageName: user.stageName || song.author?.stageName,
       },
       postMedia,
-      description: caption || `Check out my song: ${song.title} 🎵`,
+      postText: caption || `Check out my song: ${song.title} 🎵`, // Caption with @mentions and #hashtags
+      description: caption || `Check out my song: ${song.title} 🎵`, // Backwards compatibility
       hashtags: allTags,
       reactionsCount: 0,
       commentsCount: 0,
@@ -182,6 +186,20 @@ exports.createSongPost = functions.https.onCall(async (data, context) => {
       sharedToFeed: true,
       sharedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
+
+    // 12. Process @mention notifications
+    const mentionedUserIds = extractMentionIds(caption)
+    if (mentionedUserIds.length > 0) {
+      console.log(`[createSongPost] Processing mentions for ${mentionedUserIds.length} users`)
+      await processMentionNotifications({
+        mentionerID: userId,
+        mentionerUser: user,
+        mentionedUserIds,
+        postId: postID,
+        contentType: 'post',
+        contentText: caption,
+      })
+    }
 
     console.log(`Created song post ${postID} for song ${songId} by user ${userId}`)
 

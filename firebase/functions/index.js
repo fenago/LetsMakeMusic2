@@ -111,6 +111,15 @@ exports.createSongPost = songs.createSongPost
 const autoPostSong = require('./songs/autoPostSong')
 exports.onSongCreated = autoPostSong.onSongCreated
 
+// songs - swipe (like/pass) functionality for music discovery
+const songSwipes = require('./songs/songSwipes')
+exports.swipeSong = songSwipes.swipeSong
+exports.fetchLikedSongs = songSwipes.fetchLikedSongs
+exports.fetchSwipedSongIds = songSwipes.fetchSwipedSongIds
+exports.undoSwipe = songSwipes.undoSwipe
+exports.checkSwipe = songSwipes.checkSwipe
+exports.getSwipeStats = songSwipes.getSwipeStats
+
 // seed - LetsMakeMusic test users
 const musicSeed = require('./seed/musicAppSeed')
 exports.seedMusicTestUsers = musicSeed.seedMusicTestUsers

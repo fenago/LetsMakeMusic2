@@ -89,6 +89,17 @@ export const useHashtagPosts = (hashtag, userID) => {
     await handleFeedReaction(post, reaction, author)
   }
 
+  // Update a post's text fields after editing
+  const updatePost = (postId, newText) => {
+    setPosts(prevPosts =>
+      prevPosts?.map(post =>
+        post.id === postId
+          ? { ...post, postText: newText, description: newText }
+          : post
+      ) || []
+    )
+  }
+
   const deduplicatedPosts = (oldPosts, newPosts, appendToBottom) => {
     if (!oldPosts?.length || !newPosts?.length) {
       return oldPosts || newPosts || []
@@ -118,5 +129,6 @@ export const useHashtagPosts = (hashtag, userID) => {
     loadMorePosts,
     pullToRefresh,
     addReaction,
+    updatePost,
   }
 }

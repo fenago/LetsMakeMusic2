@@ -1,13 +1,29 @@
-import React, { useLayoutEffect, useState, useCallback } from 'react'
-import { SafeAreaView, ScrollView, Image, View, Text, TouchableOpacity, TextInput } from 'react-native'
+import React, { useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { SafeAreaView, ScrollView, Image, View, Text, TouchableOpacity, TextInput, Animated, PanResponder, Dimensions } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { Video } from 'expo-av'
 import { RefreshControl } from 'react-native'
-import { Heart, Film, ChevronDown, ChevronUp, Search, Clock, Sparkles, Music, Hash } from 'lucide-react-native'
+import { Heart, Film, ChevronDown, ChevronUp, Search, Clock, Sparkles, Music, Hash, Compass, User, LayoutGrid, Layers, ThumbsUp, ThumbsDown, Play, Pause, Undo2 } from 'lucide-react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Image as ExpoImage } from 'expo-image'
+
+// Brand colors from design guidelines
+const BRAND_COLORS = {
+  vibrantTeal: '#1F979E',
+  deepMagenta: '#C12D79',
+  richPurple: '#9C27B0',
+}
 import { useTheme, ActivityIndicator, EmptyStateView } from '../../../core/dopebase'
 import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
 import { prepareSongForPlayer } from '../../../utils/audioUtils'
+import { useSongSwipes } from '../../../hooks/useSongSwipes'
+import { useCurrentUser } from '../../../core/onboarding'
 import dynamicStyles from './styles'
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window')
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25
+const SWIPE_OUT_DURATION = 250
+const CARD_WIDTH = SCREEN_WIDTH - 40
 
 const GRID_PADDING = 16
 
@@ -35,6 +51,9 @@ export default function Discover(props) {
 
   const {
     playSong,
+    pauseSong,
+    currentSong,
+    isPlaying,
     // Shared like state from context
     isLiked: isLikedFn,
     toggleLike,
@@ -45,9 +64,33 @@ export default function Discover(props) {
   const styles = dynamicStyles(theme, appearance)
   const isDark = appearance === 'dark'
   const colorSet = theme.colors[appearance]
+  const insets = useSafeAreaInsets()
+  const currentUser = useCurrentUser()
+  const userId = currentUser?.id
+
+  // View mode: 'grid' or 'swipe' - default to swipe mode
+  const [viewMode, setViewMode] = useState('swipe')
 
   // Filter tab state
   const [activeTab, setActiveTab] = useState('all')
+
+  // Swipe mode state
+  const position = useRef(new Animated.ValueXY()).current
+  const [isAnimating, setIsAnimating] = useState(false)
+  const isAnimatingRef = useRef(false)
+  // Track songs being swiped (for immediate UI feedback before async completes)
+  const [pendingSwipeIds, setPendingSwipeIds] = useState(new Set())
+
+  // Song swipes hook
+  const {
+    swipedSongIds,
+    loading: swipesLoading,
+    swipe,
+    undo,
+    hasSwipedOn,
+    canUndo,
+    lastSwipedSong,
+  } = useSongSwipes(userId)
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -64,6 +107,183 @@ export default function Discover(props) {
   const toggleDiscoverNew = useCallback(() => setIsDiscoverNewExpanded(prev => !prev), [])
   const toggleSongs = useCallback(() => setIsSongsExpanded(prev => !prev), [])
   const toggleTrending = useCallback(() => setIsTrendingExpanded(prev => !prev), [])
+
+  // Memoize random song selection for "Discover Something New" section
+  // Only re-shuffles when songs array changes (not on every render)
+  const discoverNewSongs = useMemo(() => {
+    if (!songs.length) return []
+    const shuffled = [...songs].sort(() => Math.random() - 0.5)
+    return shuffled.slice(0, 6)
+  }, [songs])
+
+  // Filter out already swiped songs for swipe mode
+  // Also filters out songs currently being swiped (pendingSwipeIds) for immediate UI feedback
+  const swipeSongs = useMemo(() => {
+    if (swipesLoading || !songs.length) return []
+    return songs.filter(song => {
+      const songId = song.id || song.songId
+      // Filter out: own songs, already swiped, currently being swiped
+      return song.authorID !== userId &&
+             !hasSwipedOn(songId) &&
+             !pendingSwipeIds.has(songId)
+    })
+  }, [songs, swipedSongIds, userId, hasSwipedOn, swipesLoading, pendingSwipeIds])
+
+  // Current swipe card (show 3 cards for smooth animation)
+  // Always read from index 0 - the filter removes swiped songs automatically
+  const currentSwipeCard = swipeSongs[0]
+  const nextSwipeCard = swipeSongs[1]
+  const thirdSwipeCard = swipeSongs[2]
+
+  // Calculate rotation for swipe card
+  const rotation = position.x.interpolate({
+    inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+    outputRange: ['-15deg', '0deg', '15deg'],
+  })
+
+  const likeOpacity = position.x.interpolate({
+    inputRange: [0, SWIPE_THRESHOLD],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  })
+
+  const passOpacity = position.x.interpolate({
+    inputRange: [-SWIPE_THRESHOLD, 0],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  })
+
+  // Next card scales up from 0.95 to 1.0 as top card swipes away
+  const nextCardScale = position.x.interpolate({
+    inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+    outputRange: [1, 0.95, 1],
+    extrapolate: 'clamp',
+  })
+
+  // Next card moves up from 8px offset to 0 as top card swipes away
+  const nextCardTranslateY = position.x.interpolate({
+    inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+    outputRange: [0, 8, 0],
+    extrapolate: 'clamp',
+  })
+
+  // Third card (furthest back) - slightly smaller and lower
+  const thirdCardScale = position.x.interpolate({
+    inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+    outputRange: [0.95, 0.90, 0.95],
+    extrapolate: 'clamp',
+  })
+
+  // Swipe handlers
+  const handleSwipeComplete = useCallback(async (direction) => {
+    if (!currentSwipeCard) return
+
+    const songId = currentSwipeCard.id || currentSwipeCard.songId
+    const action = direction === 'right' ? 'like' : 'pass'
+
+    // Immediately mark as pending for instant UI feedback (removes from swipeSongs)
+    setPendingSwipeIds(prev => new Set([...prev, songId]))
+
+    // Reset position and animation state
+    position.setValue({ x: 0, y: 0 })
+    setIsAnimating(false)
+    isAnimatingRef.current = false
+
+    // Save swipe in background
+    try {
+      await swipe(songId, action, currentSwipeCard)
+    } catch (error) {
+      console.error('[Discover] Swipe error:', error)
+    }
+  }, [currentSwipeCard, swipe, position])
+
+  const animateSwipe = useCallback((direction) => {
+    setIsAnimating(true)
+    isAnimatingRef.current = true
+    const x = direction === 'right' ? SCREEN_WIDTH * 1.5 : -SCREEN_WIDTH * 1.5
+
+    Animated.timing(position, {
+      toValue: { x, y: 0 },
+      duration: SWIPE_OUT_DURATION,
+      useNativeDriver: false,
+    }).start(() => {
+      handleSwipeComplete(direction)
+    })
+  }, [position, handleSwipeComplete])
+
+  const panResponder = useMemo(() =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !isAnimatingRef.current,
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        return !isAnimatingRef.current && Math.abs(gesture.dx) > 5
+      },
+      onPanResponderMove: (_, gesture) => {
+        if (!isAnimatingRef.current) {
+          position.setValue({ x: gesture.dx, y: gesture.dy * 0.2 })
+        }
+      },
+      onPanResponderRelease: (_, gesture) => {
+        if (isAnimatingRef.current) return
+
+        if (gesture.dx > SWIPE_THRESHOLD) {
+          animateSwipe('right')
+        } else if (gesture.dx < -SWIPE_THRESHOLD) {
+          animateSwipe('left')
+        } else {
+          Animated.spring(position, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: false,
+            friction: 5,
+          }).start()
+        }
+      },
+    })
+  , [position, animateSwipe])
+
+  // Swipe button handlers
+  const handleSwipeLike = () => {
+    if (!isAnimating && currentSwipeCard) {
+      animateSwipe('right')
+    }
+  }
+
+  const handleSwipePass = () => {
+    if (!isAnimating && currentSwipeCard) {
+      animateSwipe('left')
+    }
+  }
+
+  const handleSwipeUndo = async () => {
+    if (canUndo && lastSwipedSong) {
+      // Remove from pending swipes if it was just swiped
+      const lastSongId = lastSwipedSong.id || lastSwipedSong.songId
+      setPendingSwipeIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(lastSongId)
+        return newSet
+      })
+      await undo()
+    }
+  }
+
+  const handleSwipePlayPress = () => {
+    if (!currentSwipeCard) return
+    const isCurrentlyPlaying = currentSong?.id === currentSwipeCard.id && isPlaying
+    if (isCurrentlyPlaying) {
+      pauseSong()
+    } else {
+      const songForPlayer = prepareSongForPlayer(currentSwipeCard)
+      if (songForPlayer) playSong(songForPlayer)
+    }
+  }
+
+  // Reset state when switching to swipe mode
+  const toggleViewMode = () => {
+    if (viewMode === 'grid') {
+      position.setValue({ x: 0, y: 0 })
+    }
+    setViewMode(prev => prev === 'grid' ? 'swipe' : 'grid')
+  }
 
   // Track which songs are currently being liked (loading state)
   const [likingInProgress, setLikingInProgress] = useState({})
@@ -87,10 +307,7 @@ export default function Discover(props) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerStyle: {
-        backgroundColor: theme.colors[appearance].primaryBackground,
-      },
-      headerTintColor: theme.colors[appearance].primaryText,
+      headerShown: false,
     })
   }, [navigation])
 
@@ -132,6 +349,33 @@ export default function Discover(props) {
           <Text style={discoverStyles.viewAllText}>View All</Text>
         </TouchableOpacity>
       )}
+    </View>
+  )
+
+  // Render Explore header with icon and view mode toggle
+  const renderExploreHeader = () => (
+    <View style={exploreHeaderStyles.header}>
+      {/* View mode toggle */}
+      <TouchableOpacity
+        style={[exploreHeaderStyles.viewToggle, { backgroundColor: colorSet.grey3 }]}
+        onPress={toggleViewMode}
+        activeOpacity={0.7}
+      >
+        {viewMode === 'grid' ? (
+          <Layers size={20} color={BRAND_COLORS.vibrantTeal} />
+        ) : (
+          <LayoutGrid size={20} color={BRAND_COLORS.vibrantTeal} />
+        )}
+      </TouchableOpacity>
+      <View style={exploreHeaderStyles.titleContainer}>
+        <Compass size={22} color={BRAND_COLORS.vibrantTeal} strokeWidth={2.5} />
+        <Text style={exploreHeaderStyles.title}>Explore</Text>
+      </View>
+      <TouchableOpacity
+        style={exploreHeaderStyles.profileButton}
+        onPress={() => navigation.navigate('Profile')}>
+        <User size={22} color={colorSet.primaryText} />
+      </TouchableOpacity>
     </View>
   )
 
@@ -218,12 +462,8 @@ export default function Discover(props) {
 
   // Render "Discover Something New" section
   const renderDiscoverNewSection = () => {
-    // Get a random selection of songs for discovery
-    const discoverSongs = songs.length > 5
-      ? [...songs].sort(() => Math.random() - 0.5).slice(0, 6)
-      : songs.slice(0, 6)
-
-    if (discoverSongs.length === 0) return null
+    // Use memoized random selection to prevent re-shuffle on every render
+    if (discoverNewSongs.length === 0) return null
 
     return (
       <View style={discoverStyles.section}>
@@ -240,7 +480,7 @@ export default function Discover(props) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={discoverStyles.discoverScrollContainer}
           >
-            {discoverSongs.map((song) => {
+            {discoverNewSongs.map((song) => {
               const isLiked = song?.id ? isLikedFn(song.id) : false
               return (
                 <TouchableOpacity
@@ -527,6 +767,220 @@ export default function Discover(props) {
     )
   }
 
+  // Render swipe card for swipe mode
+  // cardPosition: 'top' | 'middle' | 'back'
+  const renderSwipeCard = (song, cardPosition = 'top') => {
+    if (!song) return null
+
+    const imageUrl = song.imageUrl || song.image_url || song.coverUrl
+    const title = song.title || 'Untitled Song'
+    const artist = song.author?.stageName || song.author?.firstName || song.artist || 'AI Generated'
+    const style = song.style || song.genre || ''
+    const isTop = cardPosition === 'top'
+    const isCurrentSongPlaying = currentSong?.id === song.id && isPlaying
+
+    // Build card style based on position in stack
+    let cardStyle
+    if (cardPosition === 'top') {
+      cardStyle = [
+        swipeStyles.card,
+        { backgroundColor: isDark ? '#1a1a1a' : '#fff' },
+        {
+          transform: [
+            { translateX: position.x },
+            { translateY: position.y },
+            { rotate: rotation },
+          ],
+          zIndex: 3,
+        },
+      ]
+    } else if (cardPosition === 'middle') {
+      cardStyle = [
+        swipeStyles.card,
+        { backgroundColor: isDark ? '#1a1a1a' : '#fff' },
+        {
+          transform: [
+            { scale: nextCardScale },
+            { translateY: nextCardTranslateY },
+          ],
+          zIndex: 2,
+        },
+      ]
+    } else {
+      // 'back' - third card
+      cardStyle = [
+        swipeStyles.card,
+        { backgroundColor: isDark ? '#1a1a1a' : '#fff' },
+        {
+          transform: [
+            { scale: thirdCardScale },
+            { translateY: 16 },
+          ],
+          zIndex: 1,
+          opacity: 0.7,
+        },
+      ]
+    }
+
+    return (
+      <Animated.View
+        key={song.id || song.songId}
+        style={cardStyle}
+        {...(isTop ? panResponder.panHandlers : {})}
+      >
+        {/* Card Image */}
+        <View style={swipeStyles.cardImageContainer}>
+          {imageUrl ? (
+            <ExpoImage
+              source={{ uri: imageUrl }}
+              style={swipeStyles.cardImage}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={[swipeStyles.cardImagePlaceholder, { backgroundColor: colorSet.grey3 }]}>
+              <Music size={80} color={colorSet.secondaryText} />
+            </View>
+          )}
+
+          {/* Like/Pass Overlays */}
+          {isTop && (
+            <>
+              <Animated.View style={[swipeStyles.likeOverlay, { opacity: likeOpacity }]}>
+                <View style={swipeStyles.overlayBadge}>
+                  <ThumbsUp size={48} color="#22c55e" strokeWidth={3} />
+                  <Text style={swipeStyles.overlayText}>LIKE</Text>
+                </View>
+              </Animated.View>
+              <Animated.View style={[swipeStyles.passOverlay, { opacity: passOpacity }]}>
+                <View style={swipeStyles.overlayBadge}>
+                  <ThumbsDown size={48} color="#ef4444" strokeWidth={3} />
+                  <Text style={[swipeStyles.overlayText, { color: '#ef4444' }]}>PASS</Text>
+                </View>
+              </Animated.View>
+            </>
+          )}
+
+          {/* Play button overlay */}
+          {isTop && (
+            <TouchableOpacity
+              style={swipeStyles.playButtonOverlay}
+              onPress={handleSwipePlayPress}
+              activeOpacity={0.8}
+            >
+              <View style={swipeStyles.playButton}>
+                {isCurrentSongPlaying ? (
+                  <Pause size={28} color="#fff" fill="#fff" />
+                ) : (
+                  <Play size={28} color="#fff" fill="#fff" />
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Song Info */}
+        <View style={swipeStyles.cardInfo}>
+          <Text style={[swipeStyles.songTitle, { color: colorSet.primaryText }]} numberOfLines={2}>
+            {title}
+          </Text>
+          <Text style={[swipeStyles.artistName, { color: colorSet.secondaryText }]} numberOfLines={1}>
+            {artist}
+          </Text>
+          {style && (
+            <View style={swipeStyles.styleTag}>
+              <Sparkles size={14} color="#8b5cf6" />
+              <Text style={swipeStyles.styleText}>{style}</Text>
+            </View>
+          )}
+        </View>
+      </Animated.View>
+    )
+  }
+
+  // Render swipe mode empty state
+  const renderSwipeEmptyState = () => (
+    <View style={swipeStyles.emptyState}>
+      <Sparkles size={64} color={colorSet.secondaryText} />
+      <Text style={[swipeStyles.emptyTitle, { color: colorSet.primaryText }]}>
+        You've discovered all songs!
+      </Text>
+      <Text style={[swipeStyles.emptySubtitle, { color: colorSet.secondaryText }]}>
+        Check back later for new music to explore
+      </Text>
+      <TouchableOpacity
+        style={[swipeStyles.refreshButton, { backgroundColor: colorSet.primaryForeground }]}
+        onPress={() => setSwipeIndex(0)}
+      >
+        <Text style={swipeStyles.refreshButtonText}>Start Over</Text>
+      </TouchableOpacity>
+    </View>
+  )
+
+  // Render swipe view
+  const renderSwipeView = () => (
+    <View style={swipeStyles.swipeContainer}>
+      {/* Counter */}
+      <View style={swipeStyles.counterContainer}>
+        <Text style={[swipeStyles.counter, { color: colorSet.secondaryText }]}>
+          {swipeSongs.length > 0 ? `${swipeSongs.length} songs to discover` : ''}
+        </Text>
+      </View>
+
+      {/* Card Stack - 3 cards for smooth animation */}
+      <View style={swipeStyles.cardContainer}>
+        {swipeSongs.length === 0 ? (
+          renderSwipeEmptyState()
+        ) : (
+          <>
+            {thirdSwipeCard && renderSwipeCard(thirdSwipeCard, 'back')}
+            {nextSwipeCard && renderSwipeCard(nextSwipeCard, 'middle')}
+            {currentSwipeCard && renderSwipeCard(currentSwipeCard, 'top')}
+          </>
+        )}
+      </View>
+
+      {/* Action Buttons */}
+      {currentSwipeCard && (
+        <View style={[swipeStyles.actionButtons, { paddingBottom: insets.bottom + 20 }]}>
+          <TouchableOpacity
+            style={[swipeStyles.actionButton, swipeStyles.undoButton, !canUndo && swipeStyles.buttonDisabled]}
+            onPress={handleSwipeUndo}
+            disabled={!canUndo}
+          >
+            <Undo2 size={24} color={canUndo ? '#888' : '#ccc'} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[swipeStyles.actionButton, swipeStyles.passActionButton]}
+            onPress={handleSwipePass}
+            disabled={isAnimating}
+          >
+            <ThumbsDown size={32} color="#ef4444" strokeWidth={2.5} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[swipeStyles.actionButton, swipeStyles.likeActionButton]}
+            onPress={handleSwipeLike}
+            disabled={isAnimating}
+          >
+            <ThumbsUp size={32} color="#22c55e" strokeWidth={2.5} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[swipeStyles.actionButton, swipeStyles.playActionButton]}
+            onPress={handleSwipePlayPress}
+          >
+            {currentSong?.id === currentSwipeCard?.id && isPlaying ? (
+              <Pause size={24} color={colorSet.secondaryText} />
+            ) : (
+              <Play size={24} color={colorSet.secondaryText} />
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  )
+
   const renderVideoCategory = (category, index) => (
     <View key={index.toString()} style={styles.categoryPrimary}>
       <View style={styles.categoryMain}>
@@ -571,15 +1025,20 @@ export default function Discover(props) {
   )
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        style={styles.scrollContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }>
-        {renderContent()}
-      </ScrollView>
-    </SafeAreaView>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {renderExploreHeader()}
+      {viewMode === 'swipe' ? (
+        renderSwipeView()
+      ) : (
+        <ScrollView
+          style={styles.scrollContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }>
+          {renderContent()}
+        </ScrollView>
+      )}
+    </View>
   )
 }
 
@@ -815,5 +1274,233 @@ const songStyles = {
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+  },
+}
+
+// Styles for the Explore header
+const exploreHeaderStyles = {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  viewToggle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: BRAND_COLORS.vibrantTeal,
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+}
+
+// Styles for the swipe mode
+const swipeStyles = {
+  swipeContainer: {
+    flex: 1,
+  },
+  counterContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  counter: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  cardContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  card: {
+    position: 'absolute',
+    width: CARD_WIDTH,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  cardBehind: {
+    top: 10,
+  },
+  cardImageContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    position: 'relative',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  likeOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  passOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  overlayBadge: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 20,
+    borderRadius: 16,
+  },
+  overlayText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#22c55e',
+    marginTop: 8,
+  },
+  playButtonOverlay: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+  },
+  playButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardInfo: {
+    padding: 20,
+  },
+  songTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  artistName: {
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  styleTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  styleText: {
+    fontSize: 13,
+    color: '#8b5cf6',
+    fontWeight: '500',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 20,
+    gap: 16,
+  },
+  actionButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 50,
+  },
+  undoButton: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#f5f5f5',
+  },
+  passActionButton: {
+    width: 64,
+    height: 64,
+    backgroundColor: '#fef2f2',
+    borderWidth: 2,
+    borderColor: '#ef4444',
+  },
+  likeActionButton: {
+    width: 64,
+    height: 64,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 2,
+    borderColor: '#22c55e',
+  },
+  playActionButton: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#f5f5f5',
+  },
+  buttonDisabled: {
+    opacity: 0.4,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 24,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 24,
+    marginTop: 24,
+    gap: 8,
+  },
+  refreshButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }

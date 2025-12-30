@@ -31,7 +31,7 @@ const HashtagFeedScreen = props => {
   const { localized } = useTranslations()
   const currentUser = useCurrentUser()
 
-  const { posts, refreshing, addReaction, pullToRefresh, loadMorePosts } = useHashtagPosts(hashtag, currentUser?.id)
+  const { posts, refreshing, addReaction, pullToRefresh, loadMorePosts, updatePost } = useHashtagPosts(hashtag, currentUser?.id)
   const { deletePost } = usePostMutations()
   const { markAbuse } = useUserReportingMutations()
 
@@ -139,6 +139,11 @@ const HashtagFeedScreen = props => {
     navigation.goBack()
   }, [navigation])
 
+  // Handler for when a post is edited - updates feed state with new caption
+  const onPostEdited = useCallback((postId, newText) => {
+    updatePost(postId, newText)
+  }, [updatePost])
+
   // Loading state
   if (posts === null) {
     return (
@@ -212,6 +217,7 @@ const HashtagFeedScreen = props => {
         onForYouFeedPress={null}
         isForYouFeed={false}
         isFollowingDisabled={true}
+        onPostEdited={onPostEdited}
       />
 
       <CommentsScreen

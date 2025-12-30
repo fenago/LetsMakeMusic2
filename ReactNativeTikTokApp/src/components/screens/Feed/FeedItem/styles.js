@@ -96,9 +96,14 @@ export const FEED_ITEM_FULL_HEIGHT = Math.round(
 )
 
 // Responsive calculations based on feed item height
-const BOTTOM_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.12) // 12% from bottom - increased for proper clearance
-const TOP_CONTROLS_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.12) // 12% from top
-const BOTTOM_CONTROLS_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.18) // 18% from bottom - increased to match
+// Key layout areas from bottom to top:
+// 1. Username + caption + hashtags (contentLeftBottom) - needs ~20% of height
+// 2. Song title/artist (songOverlay) - part of centered album art area
+// 3. Album art - centered in remaining space
+// 4. Progress bar + media badge - at top
+const BOTTOM_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.18) // 18% from bottom for username/hashtags
+const TOP_CONTROLS_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.08) // 8% from top for right controls
+const BOTTOM_CONTROLS_OFFSET = Math.round(FEED_ITEM_HEIGHT * 0.22) // 22% from bottom for right controls (above bottom content)
 
 // Brand identity colors from LetsMake.Music guidelines
 const BRAND_COLORS = {
@@ -258,6 +263,17 @@ export const dynamicStyles = (stageTheme = 'Dark', fullScreen = false, customHei
       color: colors.text,
       opacity: 0.7,
     },
+    hashtagsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: 6,
+      gap: 6,
+    },
+    hashTagChip: {
+      color: BRAND_COLORS.vibrantTeal,
+      fontSize: 13,
+      fontWeight: '500',
+    },
     contentLeftBottomMusicContainer: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -274,23 +290,26 @@ export const dynamicStyles = (stageTheme = 'Dark', fullScreen = false, customHei
       tintColor: colors.iconTint,
     },
     // Song post styles - Full screen display with centered album art
+    // Layout: media badge (10px) + progress bar (45px) = ~70px at top
+    // Bottom content (username/hashtags) takes BOTTOM_OFFSET + padding
     songPostContainer: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: colors.songPostBackground,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingTop: 90, // Space for media badge + progress bar at top
-      paddingBottom: BOTTOM_OFFSET + 40, // Extra space for bottom content
+      paddingTop: 70, // Compact: media badge + progress bar at top
+      paddingBottom: BOTTOM_OFFSET + 60, // Space for bottom content (username/hashtags)
     },
     songAlbumArt: {
-      width: SCREEN_WIDTH * 0.55, // Slightly smaller for better fit
-      height: SCREEN_WIDTH * 0.55,
+      width: SCREEN_WIDTH * 0.52, // Compact size for better vertical fit
+      height: SCREEN_WIDTH * 0.52,
       borderRadius: 16,
-      marginBottom: 20,
+      marginBottom: 12, // Reduced margin to song title
     },
     songOverlay: {
       alignItems: 'center',
-      paddingHorizontal: 40,
+      paddingHorizontal: 30, // Reduced padding for more text width
+      maxWidth: '80%', // Prevent overlap with right controls
     },
     songPlayOverlay: {
       position: 'absolute',
@@ -310,14 +329,14 @@ export const dynamicStyles = (stageTheme = 'Dark', fullScreen = false, customHei
       opacity: 0.9,
     },
     songTitle: {
-      fontSize: 20,
+      fontSize: 18, // Slightly smaller for compact fit
       fontWeight: 'bold',
       color: colors.text,
       textAlign: 'center',
-      marginBottom: 6,
+      marginBottom: 4,
     },
     songArtist: {
-      fontSize: 14,
+      fontSize: 13, // Slightly smaller
       color: colors.textSecondary,
       textAlign: 'center',
     },

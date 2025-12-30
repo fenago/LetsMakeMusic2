@@ -96,12 +96,37 @@ const ShareSongToFeedScreen = () => {
     }
   }, [searchResults])
 
-  // Extract hashtags from caption as user types
+  // Extract COMPLETED hashtags from caption (followed by space/punctuation, not still being typed)
   useEffect(() => {
-    const captionTags = caption.match(/#\w+/g) || []
-    const newTags = captionTags
-      .map((t) => t.toLowerCase())
-      .filter((t) => !hashtags.includes(t) && t.length > 1)
+    // Only match hashtags followed by whitespace, punctuation, or that aren't at the end
+    // This prevents extracting partial hashtags while user is still typing
+    const completedTagsRegex = /#(\w{3,})(?=[\s,.!?;:]|$(?!.))/g
+    const matches = []
+    let match
+
+    // Find all completed hashtags (not at the very end where user might still be typing)
+    const trimmedCaption = caption.trimEnd()
+    const isTypingAtEnd = caption.length > 0 && caption.endsWith(trimmedCaption.slice(-1)) && /\w$/.test(caption)
+
+    while ((match = completedTagsRegex.exec(caption)) !== null) {
+      const tag = `#${match[1].toLowerCase()}`
+      // Skip if this tag is at the very end and user might still be typing
+      const isAtEnd = match.index + match[0].length >= caption.length
+      if (!isAtEnd || !isTypingAtEnd) {
+        matches.push(tag)
+      }
+    }
+
+    // Also extract hashtags that are clearly complete (followed by space)
+    const spaceCompletedTags = caption.match(/#\w{3,}(?=\s)/g) || []
+    spaceCompletedTags.forEach(tag => {
+      const normalized = tag.toLowerCase()
+      if (!matches.includes(normalized)) {
+        matches.push(normalized)
+      }
+    })
+
+    const newTags = matches.filter((t) => !hashtags.includes(t))
 
     if (newTags.length > 0) {
       setHashtags((prev) => [...new Set([...prev, ...newTags])].slice(0, 10))

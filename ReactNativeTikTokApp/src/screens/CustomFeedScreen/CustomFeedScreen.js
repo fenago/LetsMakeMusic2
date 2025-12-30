@@ -24,7 +24,7 @@ const CustomFeedScreen = props => {
 
   const currentUser = useCurrentUser()
 
-  const { posts, addReaction } = useCustomPosts(originalPosts)
+  const { posts, addReaction, updatePost } = useCustomPosts(originalPosts)
   const { deletePost } = usePostMutations()
   const { markAbuse } = useUserReportingMutations()
 
@@ -116,6 +116,11 @@ const CustomFeedScreen = props => {
     setSelectedItem(null)
   }
 
+  // Handler for when a post is edited - updates feed state with new caption
+  const onPostEdited = useCallback((postId, newText) => {
+    updatePost(postId, newText)
+  }, [updatePost])
+
   return (
     <View style={styles.container}>
       <Feed
@@ -138,6 +143,7 @@ const CustomFeedScreen = props => {
         onForYouFeedPress={null}
         isForYouFeed={false}
         isFollowingDisabled={true}
+        onPostEdited={onPostEdited}
       />
       <CommentsScreen
         item={selectedItem}

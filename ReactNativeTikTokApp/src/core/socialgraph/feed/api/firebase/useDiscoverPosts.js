@@ -65,10 +65,14 @@ export const useDiscoverPosts = () => {
       pagination.current.page += 1
 
       setPosts(oldPosts => {
+        // Null safety: ensure arrays are never null
+        const safeOldPosts = Array.isArray(oldPosts) ? oldPosts : []
+        const safeNewPosts = Array.isArray(newPosts) ? newPosts : []
+
         // Shuffle on initial load (page 0) for variety
-        const isInitialLoad = !oldPosts || oldPosts.length === 0
-        const postsToAdd = isInitialLoad ? shuffleArray(newPosts) : newPosts
-        const combinedPosts = oldPosts ? [...oldPosts, ...postsToAdd] : postsToAdd
+        const isInitialLoad = safeOldPosts.length === 0
+        const postsToAdd = isInitialLoad ? shuffleArray(safeNewPosts) : safeNewPosts
+        const combinedPosts = [...safeOldPosts, ...postsToAdd]
         return hydratePostsWithMyReactions(
           removeDuplicates(combinedPosts),
           userID,
@@ -103,8 +107,9 @@ export const useDiscoverPosts = () => {
     }
     pagination.current.page += 1
     setRefreshing(false)
-    // Shuffle posts on refresh for variety
-    const shuffledPosts = shuffleArray(newPosts)
+    // Shuffle posts on refresh for variety (with null safety)
+    const safeNewPosts = Array.isArray(newPosts) ? newPosts : []
+    const shuffledPosts = shuffleArray(safeNewPosts)
     setPosts(
       hydratePostsWithMyReactions(
         shuffledPosts,

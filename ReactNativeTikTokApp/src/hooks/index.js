@@ -9,6 +9,7 @@ export * from './useMediaPlayer'
 export * from './useRecentlyPlayed'
 export * from './useRecommendations'
 export * from './usePlaylists'
+export * from './useSongSwipes'
 
 // Band & Song Hooks
 export * from './useBands'
@@ -42,3 +43,4 @@ export { default as useVideoClips } from './useVideoClips'
 export { default as useVideoGeneration } from './useVideoGeneration'
 export { default as useLyrics } from './useLyrics'
 export { default as useBeats } from './useBeats'
+export { default as useSongSwipes } from './useSongSwipes'
