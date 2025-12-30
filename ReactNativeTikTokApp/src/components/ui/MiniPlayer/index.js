@@ -1,4 +1,4 @@
-import React, { memo, useState, useCallback } from 'react'
+import React, { memo, useState, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { Play, Pause, X, Music, Heart } from 'lucide-react-native'
-import { useMediaPlayer, usePlaybackPosition } from '../../../contexts/MediaPlayerContext'
+import { useMediaPlayer, usePlaybackPosition, usePlaybackState } from '../../../contexts/MediaPlayerContext'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const MINI_PLAYER_HEIGHT = 72
@@ -30,16 +30,17 @@ const TAB_BAR_HEIGHT = 49 // Standard iOS tab bar height
 const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  // Use separate hooks: useMediaPlayer for stable data, usePlaybackPosition for position updates
+  // PERFORMANCE: Use separate hooks to isolate re-renders
+  // - usePlaybackPosition: position updates (100ms interval)
+  // - usePlaybackState: isPlaying/togglePlayPause (only on play/pause)
+  // - useMediaPlayer: stable data (track info, visibility, etc.)
   const { position, duration } = usePlaybackPosition()
+  const { isPlaying, isLoading, togglePlayPause } = usePlaybackState()
   const {
     mediaType,
-    isPlaying,
-    isLoading,
     currentMedia,
     isMiniPlayerVisible,
     isFullPlayerVisible,
-    togglePlayPause,
     showFullPlayer,
     dismissPlayer,
     // Shared like state from context
@@ -64,11 +65,15 @@ const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
       await toggleLike(currentMedia)
       // Note: isLiked will update automatically via Firebase subscription in context
     } catch (error) {
-      console.error('Error toggling like:', error)
+      if (__DEV__) console.error('Error toggling like:', error)
     } finally {
       setIsLikeLoading(false)
     }
   }, [currentMedia, isLikeLoading, toggleLike])
+
+  // CRITICAL: Memoize styles to prevent StyleSheet recreation every 100ms position update
+  // NOTE: This MUST be before any early returns to satisfy React hooks rules
+  const styles = useMemo(() => getStyles(isDark, tabBarHeight), [isDark, tabBarHeight])
 
   // Only show for audio playback AND when full player is NOT visible
   if (!isMiniPlayerVisible || isFullPlayerVisible || mediaType !== 'audio' || !currentMedia) {
@@ -78,8 +83,6 @@ const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
   const progress = duration > 0 ? (position / duration) * 100 : 0
   const thumbnailUrl = currentMedia.thumbnailUrl || currentMedia.imageUrl || currentMedia.coverUrl || currentMedia.profilePictureURL
 
-  const styles = getStyles(isDark, tabBarHeight)
-
   return (
     <View style={styles.container}>
       <View style={styles.card}>
@@ -87,10 +90,7 @@ const MiniPlayer = ({ tabBarHeight = TAB_BAR_HEIGHT }) => {
           {/* Thumbnail + Track info - touchable to show full player */}
           <TouchableOpacity
             style={styles.trackArea}
-            onPress={() => {
-              console.log('[TIMING] MiniPlayer tap START:', Date.now())
-              showFullPlayer()
-            }}
+            onPress={showFullPlayer}
             activeOpacity={0.7}
           >
             {/* Thumbnail */}

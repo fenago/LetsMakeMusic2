@@ -163,6 +163,8 @@ const FeedItem = props => {
   const durationRef = useRef(0)
   // Flag to ignore status updates during state changes (like button, etc.)
   const ignoreStatusUpdatesRef = useRef(false)
+  // PERFORMANCE: Throttle position state updates to reduce re-renders
+  const lastPositionStateUpdateRef = useRef(0)
 
   // Setup audio for song posts
   useEffect(() => {
@@ -211,12 +213,16 @@ const FeedItem = props => {
           if (status.isLoaded) {
             lastPositionRef.current = status.positionMillis || 0
             durationRef.current = status.durationMillis || 0
-            // Update state for UI timer (throttled via ref comparison to reduce re-renders)
-            if (status.positionMillis !== undefined) {
-              setPlaybackPosition(status.positionMillis)
-            }
-            if (status.durationMillis !== undefined && status.durationMillis > 0) {
-              setPlaybackDuration(status.durationMillis)
+            // PERFORMANCE: Throttle position state updates to 250ms to reduce re-renders
+            const now = Date.now()
+            if (now - lastPositionStateUpdateRef.current >= 250) {
+              lastPositionStateUpdateRef.current = now
+              if (status.positionMillis !== undefined) {
+                setPlaybackPosition(status.positionMillis)
+              }
+              if (status.durationMillis !== undefined && status.durationMillis > 0 && status.durationMillis !== durationRef.current) {
+                setPlaybackDuration(status.durationMillis)
+              }
             }
           }
 
@@ -883,14 +889,16 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
       </View>
     </TouchableOpacity>
 
-    {/* Lyrics View Modal */}
-    <LyricsViewModal
-      visible={lyricsModalVisible}
-      onClose={() => setLyricsModalVisible(false)}
-      title={songInfo?.title || video.songData?.title || 'Unknown Track'}
-      rawLyrics={songInfo?.rawLyrics || songInfo?.lyrics || video.songData?.rawLyrics || video.songData?.lyrics}
-      timestampedLyrics={songInfo?.timestampedLyrics || video.songData?.timestampedLyrics}
-    />
+    {/* Lyrics View Modal - PERFORMANCE FIX: Only mount when visible */}
+    {lyricsModalVisible && (
+      <LyricsViewModal
+        visible={lyricsModalVisible}
+        onClose={() => setLyricsModalVisible(false)}
+        title={songInfo?.title || video.songData?.title || 'Unknown Track'}
+        rawLyrics={songInfo?.rawLyrics || songInfo?.lyrics || video.songData?.rawLyrics || video.songData?.lyrics}
+        timestampedLyrics={songInfo?.timestampedLyrics || video.songData?.timestampedLyrics}
+      />
+    )}
     </>
   )
 }

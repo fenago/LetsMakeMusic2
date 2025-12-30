@@ -21,13 +21,23 @@ import {
  * Hook to manage user's playlists
  *
  * @param {string} userId - Current user's ID
+ * @param {Object} options - Optional configuration
+ * @param {boolean} options.enabled - Whether to enable the subscription (default: true)
+ *                                    PERFORMANCE: Set to false to defer loading until needed
  * @returns {Object} Playlists state and methods
  */
-export const usePlaylists = (userId) => {
+export const usePlaylists = (userId, options = {}) => {
+  const { enabled = true } = options
   const [playlists, setPlaylists] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // PERFORMANCE: Skip subscription if not enabled (lazy loading)
+    if (!enabled) {
+      setLoading(false)
+      return
+    }
+
     if (!userId) {
       setPlaylists([])
       setLoading(false)
@@ -44,7 +54,7 @@ export const usePlaylists = (userId) => {
     return () => {
       unsubscribe && unsubscribe()
     }
-  }, [userId])
+  }, [userId, enabled])
 
   /**
    * Create a new playlist

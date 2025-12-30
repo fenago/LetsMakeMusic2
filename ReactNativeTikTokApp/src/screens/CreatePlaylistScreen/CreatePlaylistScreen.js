@@ -19,7 +19,7 @@ import { useTheme } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { usePlaylists } from '../../hooks/usePlaylists'
 import { subscribeToUserSongs } from '../../services/songsService'
-import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
+import { useLikedSongs } from '../../contexts/MediaPlayerContext'
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore'
 import { db } from '../../core/firebase/config'
 import firebaseStorage from '../../core/media/api/firebase/storage'
@@ -33,7 +33,9 @@ const CreatePlaylistScreen = (props) => {
   const currentUser = useCurrentUser()
   const userId = currentUser?.id || currentUser?.userID
   const { createPlaylist, addSongToPlaylist } = usePlaylists(userId)
-  const { isLiked } = useMediaPlayer()
+  // PERFORMANCE FIX: Use useLikedSongs instead of useMediaPlayer
+  // Prevents re-renders on every play/pause toggle
+  const { isLiked } = useLikedSongs()
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')

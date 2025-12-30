@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
-  Modal,
   ScrollView,
   TouchableOpacity,
   useColorScheme,
@@ -15,6 +14,9 @@ import { usePlaybackPosition } from '../../../contexts/MediaPlayerContext'
 /**
  * KaraokeLyrics - Separate component that subscribes directly to position context
  * This ensures real-time updates regardless of parent Modal re-render issues
+ *
+ * PERFORMANCE OPTIMIZATION: Styles are memoized with useMemo to prevent
+ * StyleSheet recreation every 100ms position update
  */
 const KaraokeLyrics = ({ timestampedLyrics, isDark, scrollViewRef }) => {
   // Subscribe directly to position from context (isolated from main context)
@@ -22,7 +24,8 @@ const KaraokeLyrics = ({ timestampedLyrics, isDark, scrollViewRef }) => {
   const lastActiveIndexRef = useRef(-1)
   const linePositionsRef = useRef({})
 
-  const styles = getStyles(isDark)
+  // CRITICAL: Memoize styles to prevent StyleSheet recreation every 100ms
+  const styles = useMemo(() => createKaraokeStyles(isDark), [isDark])
 
   // Position is in milliseconds from expo-av
   // Timestamps from Suno are in seconds (startS, endS)
@@ -77,6 +80,29 @@ const KaraokeLyrics = ({ timestampedLyrics, isDark, scrollViewRef }) => {
   )
 }
 
+// Separate style creator for KaraokeLyrics to allow independent memoization
+const createKaraokeStyles = (isDark) => StyleSheet.create({
+  // Upcoming lyrics - dimmed, waiting to be sung
+  timestampedLine: {
+    fontSize: 16,
+    lineHeight: 28,
+    color: isDark ? '#666666' : '#aaaaaa',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  // Past lyrics - already sung, slightly more visible than upcoming
+  timestampedLinePast: {
+    color: isDark ? '#999999' : '#888888',
+  },
+  // Active/current line - highlighted, larger, bold (brand teal color)
+  timestampedLineActive: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F979E',
+    marginVertical: 8,
+  },
+})
+
 /**
  * Reusable Lyrics View Modal
  *
@@ -93,9 +119,13 @@ export default function LyricsViewModal({
   rawLyrics,
   timestampedLyrics,
 }) {
+  // Debug: Log when modal renders and visibility state
+
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const styles = getStyles(isDark)
+
+  // CRITICAL: Memoize styles to prevent recreation on every render
+  const styles = useMemo(() => getStyles(isDark), [isDark])
 
   const [lyricsTab, setLyricsTab] = useState('raw')
   const [copied, setCopied] = useState(false)
@@ -107,13 +137,6 @@ export default function LyricsViewModal({
 
   const lyricsText = rawLyrics || 'Lyrics not available for this track.'
 
-  // TIMING: Log when modal becomes visible
-  useEffect(() => {
-    if (visible) {
-      console.log('[TIMING] LyricsViewModal VISIBLE:', Date.now())
-    }
-  }, [visible])
-
   const handleCopyLyrics = async () => {
     if (rawLyrics) {
       await Clipboard.setStringAsync(rawLyrics)
@@ -122,13 +145,11 @@ export default function LyricsViewModal({
     }
   }
 
+  // Don't render if not visible
+  if (!visible) return null
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
+    <View style={styles.fullScreenOverlay}>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -208,15 +229,23 @@ export default function LyricsViewModal({
           )}
         </ScrollView>
       </View>
-    </Modal>
+    </View>
   )
 }
 
 const getStyles = (isDark) => StyleSheet.create({
+  fullScreenOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 99999,
+  },
   container: {
     flex: 1,
     backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
-    paddingTop: 20,
+    paddingTop: 50,
   },
   header: {
     flexDirection: 'row',
@@ -306,24 +335,5 @@ const getStyles = (isDark) => StyleSheet.create({
     lineHeight: 32,
     color: isDark ? '#ffffff' : '#151723',
     textAlign: 'center',
-  },
-  // Upcoming lyrics - dimmed, waiting to be sung
-  timestampedLine: {
-    fontSize: 16,
-    lineHeight: 28,
-    color: isDark ? '#666666' : '#aaaaaa',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  // Past lyrics - already sung, slightly more visible than upcoming
-  timestampedLinePast: {
-    color: isDark ? '#999999' : '#888888',
-  },
-  // Active/current line - highlighted, larger, bold (brand teal color)
-  timestampedLineActive: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1F979E',
-    marginVertical: 8,
   },
 })

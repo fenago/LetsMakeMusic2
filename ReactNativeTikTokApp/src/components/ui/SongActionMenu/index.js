@@ -14,7 +14,7 @@ import { useColorScheme } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { deleteSong } from '../../../services/songsService'
 import { canCreateVoiceFromSong } from '../../../services/artistVoiceService'
-import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
+import { useMediaPlayer, useLikedSongs } from '../../../contexts/MediaPlayerContext'
 import {
   DEFAULT_SONG_RIGHTS,
   RIGHTS_DESCRIPTIONS,
@@ -45,7 +45,9 @@ const SongActionMenu = ({
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const navigation = useNavigation()
-  const { addToQueue, queue, isLiked: isLikedFn, toggleLike, stopIfPlaying } = useMediaPlayer()
+  // PERFORMANCE FIX: Split contexts to prevent re-renders on play/pause
+  const { addToQueue, queue, stopIfPlaying } = useMediaPlayer()
+  const { isLiked: isLikedFn, toggleLike } = useLikedSongs()
 
   const [actionLoading, setActionLoading] = useState(null)
 

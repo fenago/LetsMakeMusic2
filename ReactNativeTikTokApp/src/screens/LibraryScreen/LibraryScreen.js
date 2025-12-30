@@ -13,12 +13,12 @@ import {
 } from 'react-native'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Animated, { FadeInDown } from 'react-native-reanimated'
+import Animated, { FadeIn } from 'react-native-reanimated'
 import { ChevronDown, ChevronUp, Heart, Pencil, Trash2, Plus, Music, ListMusic, Sparkles, Clock, Play, LayoutGrid, List, Film, Users, ImageIcon, Mic, FileText, Copy, CheckCircle, Disc3, User } from 'lucide-react-native'
 import { useTheme, useTranslations } from '../../core/dopebase'
 import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserSongs, deleteSong } from '../../services/songsService'
-import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
+import { useMediaPlayer, useLikedSongs } from '../../contexts/MediaPlayerContext'
 import { useBands } from '../../hooks/useBands'
 import { useRecentlyPlayed } from '../../hooks/useRecentlyPlayed'
 import { usePlaylists } from '../../hooks/usePlaylists'
@@ -58,7 +58,9 @@ const LibraryScreen = ({ navigation }) => {
   const { localized } = useTranslations()
   const insets = useSafeAreaInsets()
   const currentUser = useCurrentUser()
-  const { playSong, isLiked: isLikedFn, toggleLike, addToQueue } = useMediaPlayer()
+  // PERFORMANCE FIX: Split contexts to prevent re-renders on play/pause
+  const { playSong, addToQueue } = useMediaPlayer()
+  const { isLiked: isLikedFn, toggleLike } = useLikedSongs()
 
   const [activeTab, setActiveTab] = useState('all')
   const [sortOption, setSortOption] = useState('recent')
@@ -545,7 +547,7 @@ const LibraryScreen = ({ navigation }) => {
 
     return (
       <Animated.View
-        entering={FadeInDown.delay(index * 50).springify()}
+        entering={FadeIn.duration(200)}
         style={styles.gridItem}>
         {/* Image area - touchable for playing song */}
         <TouchableOpacity
@@ -685,7 +687,7 @@ const LibraryScreen = ({ navigation }) => {
     const displayImageUrl = song.thumbnailUrl || song.imageUrl
     return (
       <Animated.View
-        entering={FadeInDown.delay(index * 50).springify()}
+        entering={FadeIn.duration(200)}
         style={styles.gridItem}>
         <TouchableOpacity
           onPress={() => handleSongPress(song)}
@@ -781,7 +783,7 @@ const LibraryScreen = ({ navigation }) => {
     const displayImageUrl = song.thumbnailUrl || song.imageUrl
     return (
       <Animated.View
-        entering={FadeInDown.delay(index * 50).springify()}
+        entering={FadeIn.duration(200)}
         style={styles.gridItem}>
         <TouchableOpacity
           onPress={() => handleSongPress(song)}
@@ -1248,7 +1250,7 @@ const LibraryScreen = ({ navigation }) => {
 
     return (
       <Animated.View
-        entering={FadeInDown.delay(index * 50).springify()}
+        entering={FadeIn.duration(200)}
         style={styles.gridItem}>
         <TouchableOpacity
           onPress={() => handleArtworkPress(artworkItem)}
@@ -1370,7 +1372,7 @@ const LibraryScreen = ({ navigation }) => {
 
     return (
       <Animated.View
-        entering={FadeInDown.delay(index * 50).springify()}
+        entering={FadeIn.duration(200)}
         style={styles.gridItem}>
         <TouchableOpacity
           onPress={() => handleVideoClipPress(clip)}
@@ -1518,7 +1520,7 @@ const LibraryScreen = ({ navigation }) => {
 
     return (
       <Animated.View
-        entering={FadeInDown.delay(index * 50).springify()}
+        entering={FadeIn.duration(200)}
         style={styles.gridItem}>
         <TouchableOpacity
           onPress={() => {
@@ -1705,7 +1707,7 @@ const LibraryScreen = ({ navigation }) => {
 
     return (
       <Animated.View
-        entering={FadeInDown.delay(index * 50).springify()}
+        entering={FadeIn.duration(200)}
         style={styles.lyricsGridItem}>
         <TouchableOpacity
           onPress={() => handleLyricsPress(lyricsItem)}
@@ -1835,7 +1837,7 @@ const LibraryScreen = ({ navigation }) => {
 
     return (
       <Animated.View
-        entering={FadeInDown.delay(index * 50).springify()}
+        entering={FadeIn.duration(200)}
         style={styles.gridItem}>
         <TouchableOpacity
           onPress={() => handleBeatPress(beat)}

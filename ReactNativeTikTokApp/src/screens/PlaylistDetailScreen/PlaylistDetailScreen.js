@@ -30,7 +30,7 @@ import {
 import { useTheme, ActivityIndicator } from '../../core/dopebase'
 import { usePlaylist, usePlaylists } from '../../hooks/usePlaylists'
 import { useCurrentUser } from '../../core/onboarding'
-import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
+import { useMediaPlayer, usePlaybackState } from '../../contexts/MediaPlayerContext'
 
 const PlaylistDetailScreen = ({ navigation, route }) => {
   const { playlistId, playlistName } = route.params || {}
@@ -42,7 +42,8 @@ const PlaylistDetailScreen = ({ navigation, route }) => {
 
   const { playlist, playlistLoading, songs } = usePlaylist(userId, playlistId)
   const { removeSongFromPlaylist, deletePlaylist } = usePlaylists(userId)
-  const { playList, playNext, playPrevious, currentMedia, isPlaying, queue, queueIndex } = useMediaPlayer()
+  const { playList, playNext, playPrevious, currentMedia, queue, queueIndex } = useMediaPlayer()
+  const { isPlaying } = usePlaybackState()
 
   const handleGoBack = useCallback(() => {
     navigation.goBack()

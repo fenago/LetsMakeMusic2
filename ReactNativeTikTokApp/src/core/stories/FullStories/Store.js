@@ -1,4 +1,4 @@
-import { observable, action, computed, runInAction, makeAutoObservable } from 'mobx'
+import { observable, action, computed, runInAction } from 'mobx'
 import {
   LayoutAnimation,
   Animated,
@@ -22,23 +22,27 @@ class Store {
   @observable didAnimateDeck = false
   @observable backOpacity = 0
 
-  @observable indicatorAnim = new Animated.Value(0)
-  @observable horizontalSwipe = new Animated.Value(0)
-  @observable verticalSwipe = new Animated.Value(0)
+  // DO NOT make Animated.Value observable - they have too many internal properties
+  // and will cause "Property storage exceeds 196607 properties" error
+  indicatorAnim = new Animated.Value(0)
+  horizontalSwipe = new Animated.Value(0)
+  verticalSwipe = new Animated.Value(0)
 
   @observable swipedHorizontally = true
-  @observable panResponder = null
+  // DO NOT make panResponder observable - it's a complex object
+  panResponder = null
   @observable indicatorAnimDuration = 5000
 
   constructor() {
     this.initPanResponder()
-    makeAutoObservable(this);
+    // NOTE: Removed makeAutoObservable - using decorators instead
+    // Using both causes double-tracking and memory overflow
   }
 
   @action initPanResponder() {
     this.panResponder = PanResponder.create({
       onMoveShouldSetResponderCapture: () => true,
-      onMoveShouldSetPanResponderCapture: (evt, { dx, dy }) => {
+      onMoveShouldSetPanResponderCapture: (_evt, { dx, dy }) => {
         if (Math.abs(dx) > 5) {
           this.swipedHorizontally = true
           return true
@@ -62,7 +66,7 @@ class Store {
         this.setBackOpacity(0)
       },
 
-      onPanResponderMove: (e, { dx, dy }) => {
+      onPanResponderMove: (_e, { dx, dy }) => {
         if (this.swipedHorizontally) {
           this.horizontalSwipe.setValue(-dx)
         } else {
@@ -70,7 +74,7 @@ class Store {
         }
       },
 
-      onPanResponderRelease: (e, { dx, dy }) => {
+      onPanResponderRelease: (_e, { dx, dy }) => {
         if (!this.swipedHorizontally) {
           if (dy > VERTICAL_THRESHOLD) {
             this.resetVerticalSwipe()

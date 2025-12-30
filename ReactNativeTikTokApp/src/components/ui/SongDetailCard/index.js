@@ -8,7 +8,7 @@ import {
   useColorScheme,
 } from 'react-native'
 import { Heart, MoreHorizontal, Film } from 'lucide-react-native'
-import { useMediaPlayer } from '../../../contexts/MediaPlayerContext'
+import { useLikedSongs } from '../../../contexts/MediaPlayerContext'
 
 /**
  * SongDetailCard - Song list item for favorites/playlists
@@ -28,11 +28,12 @@ const SongDetailCard = ({
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  // Shared like state from context
+  // PERFORMANCE FIX: Use useLikedSongs instead of useMediaPlayer
+  // This prevents re-renders on every play/pause toggle (caused 30-45s freeze)
   const {
     isLiked: isLikedFn,
     toggleLike,
-  } = useMediaPlayer()
+  } = useLikedSongs()
 
   // Like loading state (local)
   const [isLikeLoading, setIsLikeLoading] = useState(false)

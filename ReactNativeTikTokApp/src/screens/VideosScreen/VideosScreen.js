@@ -19,7 +19,7 @@ import { Video, ResizeMode } from 'expo-av'
 import { Film, Trash2, X, Play, AlertCircle, Volume2, VolumeX } from 'lucide-react-native'
 import { useCurrentUser } from '../../core/onboarding'
 import { subscribeToUserVideos, deleteVideo } from '../../services/videosService'
-import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
+import { usePlaybackState } from '../../contexts/MediaPlayerContext'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -27,7 +27,7 @@ const VideosScreen = ({ navigation }) => {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const currentUser = useCurrentUser()
-  const { pause: pauseAudio } = useMediaPlayer()
+  const { pause: pauseAudio } = usePlaybackState()
 
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
