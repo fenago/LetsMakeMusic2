@@ -139,6 +139,14 @@ exports.onSongCreated = functions.firestore
         .doc(postID)
         .set(post)
 
+      // Add to author's OWN home feed (so they see their own posts)
+      await db
+        .collection('social_feeds')
+        .doc(userId)
+        .collection('home_feed_live')
+        .doc(postID)
+        .set(post)
+
       // Add to main_feed for discovery
       await db
         .collection('social_feeds')

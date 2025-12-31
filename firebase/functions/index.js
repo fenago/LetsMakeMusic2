@@ -111,6 +111,13 @@ exports.createSongPost = songs.createSongPost
 const autoPostSong = require('./songs/autoPostSong')
 exports.onSongCreated = autoPostSong.onSongCreated
 
+// migrations - admin/debug utilities
+const clearAllPosts = require('./migrations/clearAllPosts')
+exports.clearAllPosts = clearAllPosts.clearAllPosts
+
+const cleanOrphanedPosts = require('./migrations/cleanOrphanedPosts')
+exports.cleanOrphanedPosts = cleanOrphanedPosts.cleanOrphanedPosts
+
 // songs - swipe (like/pass) functionality for music discovery
 const songSwipes = require('./songs/songSwipes')
 exports.swipeSong = songSwipes.swipeSong
@@ -514,6 +521,139 @@ exports.syncStageNamesHTTP = functions.https.onRequest(async (req, res) => {
     })
   } catch (error) {
     res.status(500).json({ error: error.message, stack: error.stack })
+  }
+})
+
+// HTTP version of listDiscoverFeedPosts for testing
+exports.listDiscoverFeedPostsHTTP = functions.https.onRequest(async (req, res) => {
+  const db = admin.firestore()
+  const { limit = 50 } = req.query
+
+  try {
+    console.log('[listDiscoverFeedPostsHTTP] Fetching posts...')
+    const snapshot = await db.collection('posts')
+      .orderBy('createdAt', 'desc')
+      .limit(parseInt(limit))
+      .get()
+
+    const posts = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+
+    console.log(`[listDiscoverFeedPostsHTTP] Found ${posts.length} posts`)
+
+    // Return same format as httpsCallable version
+    res.json({
+      success: true,
+      posts,
+      totalPosts: posts.length,
+    })
+  } catch (error) {
+    console.error('[listDiscoverFeedPostsHTTP] Error:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Debug function to check posts in the posts collection
+exports.debugCheckPosts = functions.https.onRequest(async (req, res) => {
+  const db = admin.firestore()
+  const { limit = 10 } = req.query
+
+  try {
+    console.log('[debugCheckPosts] Checking posts collection...')
+    const snapshot = await db.collection('posts')
+      .orderBy('createdAt', 'desc')
+      .limit(parseInt(limit))
+      .get()
+
+    console.log(`[debugCheckPosts] Found ${snapshot.size} posts`)
+
+    const posts = snapshot.docs.map(doc => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        authorID: data.authorID,
+        postType: data.postType,
+        postText: (data.postText || '').substring(0, 50),
+        createdAt: data.createdAt,
+        hasPostMedia: !!data.postMedia,
+        postMediaCount: data.postMedia?.length || 0,
+        mediaUrl: data.postMedia?.[0]?.url ? 'yes' : 'no',
+        songTitle: data.songData?.title,
+      }
+    })
+
+    res.json({
+      success: true,
+      totalPosts: snapshot.size,
+      posts,
+      message: snapshot.size === 0 ? 'No posts found in collection!' : `Found ${snapshot.size} posts`,
+    })
+  } catch (error) {
+    console.error('[debugCheckPosts] Error:', error)
+    res.status(500).json({ error: error.message, stack: error.stack })
+  }
+})
+
+// Debug: Check user's home_feed_live collection
+exports.debugHomeFeedLive = functions.https.onRequest(async (req, res) => {
+  const db = admin.firestore()
+  const { userId, limit = 10 } = req.query
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userId query parameter is required' })
+  }
+
+  try {
+    console.log(`[debugHomeFeedLive] Checking home_feed_live for user: ${userId}`)
+    const snapshot = await db
+      .collection('social_feeds')
+      .doc(userId)
+      .collection('home_feed_live')
+      .orderBy('createdAt', 'desc')
+      .limit(parseInt(limit))
+      .get()
+
+    console.log(`[debugHomeFeedLive] Found ${snapshot.size} posts in home_feed_live`)
+
+    const posts = snapshot.docs.map(doc => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        authorID: data.authorID,
+        postType: data.postType,
+        postText: (data.postText || '').substring(0, 50),
+        createdAt: data.createdAt,
+        hasPostMedia: !!data.postMedia,
+        postMediaCount: data.postMedia?.length || 0,
+        mediaType: data.postMedia?.[0]?.type,
+        mediaUrl: data.postMedia?.[0]?.url ? data.postMedia[0].url.substring(0, 60) + '...' : null,
+        // Critical: Show full songData structure for debugging isValidPost filtering
+        hasSongData: !!data.songData,
+        songData: data.songData ? {
+          id: data.songData.id,
+          title: data.songData.title,
+          hasAudioUrl: !!data.songData.audioUrl,
+          audioUrlPrefix: data.songData.audioUrl ? data.songData.audioUrl.substring(0, 50) + '...' : null,
+          hasFirebaseAudioUrl: !!data.songData.firebaseAudioUrl,
+          hasVideoUrl: !!data.songData.videoUrl,
+        } : null,
+      }
+    })
+
+    res.json({
+      success: true,
+      userId,
+      totalPosts: snapshot.size,
+      posts,
+      message: snapshot.size === 0
+        ? 'No posts in home_feed_live! Posts may not have been fanned out to this user.'
+        : `Found ${snapshot.size} posts`,
+    })
+  } catch (error) {
+    console.error('[debugHomeFeedLive] Error:', error)
+    res.status(500).json({ error: error.message })
   }
 })
 

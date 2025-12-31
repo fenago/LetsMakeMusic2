@@ -1,26 +1,34 @@
 import { StyleSheet } from 'react-native'
 
+// Brand colors for consistent styling
+const BRAND_COLORS = {
+  vibrantTeal: '#1F979E',
+  deepMagenta: '#C12D79',
+}
+
 const styles = StyleSheet.create({
   url: {
-    color: 'blue',
+    color: BRAND_COLORS.vibrantTeal,
     textDecorationLine: 'underline',
   },
 
   email: {
+    color: BRAND_COLORS.vibrantTeal,
     textDecorationLine: 'underline',
   },
 
   phone: {
-    color: 'blue',
+    color: BRAND_COLORS.vibrantTeal,
     textDecorationLine: 'underline',
   },
   username: {
-    color: 'blue',
+    color: BRAND_COLORS.vibrantTeal,
+    fontWeight: '600',
   },
 
   hashTag: {
-    color: 'blue',
-    fontStyle: 'italic',
+    color: BRAND_COLORS.vibrantTeal,
+    fontWeight: '500',
   },
 })
 

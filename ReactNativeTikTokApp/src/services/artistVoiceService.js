@@ -203,17 +203,25 @@ export const getUserVoices = async (userId) => {
  * @returns {function} Unsubscribe function
  */
 export const subscribeToUserVoices = (userId, onUpdate, onError) => {
+  console.log('[artistVoiceService] subscribeToUserVoices called with userId:', userId)
+
   if (!userId) {
+    console.log('[artistVoiceService] No userId, calling onError')
     onError?.(new Error('User ID is required'))
     return () => {}
   }
+
+  const collectionPath = `users/${userId}/artistVoices`
+  console.log('[artistVoiceService] Setting up snapshot listener on:', collectionPath)
 
   return userVoicesRef(userId)
     .orderBy('createdAt', 'desc')
     .onSnapshot(
       (snapshot) => {
+        console.log('[artistVoiceService] Snapshot received, docs count:', snapshot.size)
         const voices = []
         snapshot.forEach((doc) => {
+          console.log('[artistVoiceService] Voice doc:', doc.id, doc.data())
           voices.push({
             id: doc.id,
             ...doc.data(),
@@ -222,6 +230,7 @@ export const subscribeToUserVoices = (userId, onUpdate, onError) => {
             lastUsedAt: doc.data().lastUsedAt?.toDate(),
           })
         })
+        console.log('[artistVoiceService] Calling onUpdate with', voices.length, 'voices')
         onUpdate(voices)
       },
       (error) => {

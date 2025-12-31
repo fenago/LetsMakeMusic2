@@ -311,13 +311,23 @@ export default function Feed(props) {
   // Handler for when edit is saved
   // Receives full update object: { postText, description, hashtags, isEdited }
   const handleEditPostSave = useCallback((updateData) => {
+    console.warn('[Feed] 💾 handleEditPostSave CALLED', {
+      postId: postToEdit?.id,
+      hasOnPostEdited: !!onPostEdited,
+      updateData,
+    })
     logInfo('[Feed] ✏️ Post edited successfully', {
       postId: postToEdit?.id,
       text: updateData?.description?.substring(0, 50),
       hashtags: updateData?.hashtags?.length,
     })
     // Notify parent to update feed data with full update object
-    onPostEdited?.(postToEdit?.id, updateData)
+    if (onPostEdited) {
+      console.warn('[Feed] 💾 Calling onPostEdited with:', postToEdit?.id, updateData)
+      onPostEdited(postToEdit?.id, updateData)
+    } else {
+      console.warn('[Feed] ⚠️ NO onPostEdited callback available!')
+    }
     setEditModalVisible(false)
     setPostToEdit(null)
   }, [postToEdit, onPostEdited])

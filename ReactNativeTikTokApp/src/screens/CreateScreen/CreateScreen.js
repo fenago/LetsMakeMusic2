@@ -76,6 +76,7 @@ const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 1
   )
 }
 import { useCurrentUser } from '../../core/onboarding'
+import { useTheme } from '../../core/dopebase'
 import { useMediaPlayer } from '../../contexts/MediaPlayerContext'
 import {
   generateSongSimple,
@@ -95,7 +96,41 @@ import functions from '@react-native-firebase/functions'
 import { logInfo, logSuccess, logError, logWarn } from '../../services/debugLogService'
 import { User, Music2 } from 'lucide-react-native'
 
-// Brand colors from design guidelines
+// Brand colors from design guidelines - themed
+const THEME_COLORS = {
+  light: {
+    primary: '#1F979E',        // Vibrant Teal
+    secondary: '#C12D79',      // Deep Magenta
+    accent: '#6366F1',         // Indigo accent
+    background: '#F8F9FA',     // Neutral 50
+    surface: '#FFFFFF',        // White
+    surfaceSecondary: '#F1F3F5', // Neutral 100
+    textPrimary: '#212529',    // Neutral 900
+    textSecondary: '#868E96',  // Neutral 600
+    textMuted: '#ADB5BD',      // Neutral 500
+    border: '#DEE2E6',         // Neutral 300
+    inputBg: '#FFFFFF',
+    buttonActive: '#1F979E',   // Teal
+    toggleActive: '#1F979E',
+  },
+  dark: {
+    primary: '#20B2AA',        // Teal 400
+    secondary: '#D81B60',      // Magenta 400
+    accent: '#6366F1',
+    background: '#0a0a0a',
+    surface: '#1a1a1a',
+    surfaceSecondary: '#252525',
+    textPrimary: '#F5F5F5',
+    textSecondary: '#A0A0A0',
+    textMuted: '#666666',
+    border: '#333333',
+    inputBg: '#1a1a1a',
+    buttonActive: '#2126A2',
+    toggleActive: '#2126A2',
+  },
+}
+
+// Keep legacy for backward compatibility
 const BRAND_COLORS = {
   vibrantTeal: '#1F979E',
   deepMagenta: '#C12D79',
@@ -147,6 +182,8 @@ const SONG_MODES = {
  */
 export default function CreateScreen({ navigation, route }) {
   const currentUser = useCurrentUser()
+  const { appearance } = useTheme()
+  const colors = THEME_COLORS[appearance] || THEME_COLORS.light
   const { loadMedia } = useMediaPlayer()
 
   // Band context - if coming from a band, we'll save the song to the band too
@@ -587,37 +624,38 @@ export default function CreateScreen({ navigation, route }) {
   const lyricsLimit = currentModelConfig.maxPrompt
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-            <Text style={styles.closeText}>Cancel</Text>
+            <Text style={[styles.closeText, { color: colors.textPrimary }]}>Cancel</Text>
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Music2 size={20} color={BRAND_COLORS.vibrantTeal} strokeWidth={2.5} />
-            <Text style={styles.headerTitle}>Studio</Text>
+            <Music2 size={20} color={colors.primary} strokeWidth={2.5} />
+            <Text style={[styles.headerTitle, { color: colors.primary }]}>Studio</Text>
           </View>
           <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.closeButton}>
-            <User size={20} color="#fff" />
+            <User size={20} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
 
         {/* Mode Toggle: Video / Song / Lyrics / Beats */}
-        <View style={styles.modeToggleContainer}>
+        <View style={[styles.modeToggleContainer, { backgroundColor: colors.surface }]}>
           <TouchableOpacity
             style={[
               styles.modeToggle,
-              createMode === CREATE_MODES.VIDEO && styles.modeToggleActive,
+              createMode === CREATE_MODES.VIDEO && [styles.modeToggleActive, { backgroundColor: colors.toggleActive }],
             ]}
             onPress={handleVideoMode}
           >
             <Text
               style={[
                 styles.modeToggleText,
+                { color: colors.textMuted },
                 createMode === CREATE_MODES.VIDEO && styles.modeToggleTextActive,
               ]}
             >
@@ -627,13 +665,14 @@ export default function CreateScreen({ navigation, route }) {
           <TouchableOpacity
             style={[
               styles.modeToggle,
-              createMode === CREATE_MODES.SONG && styles.modeToggleActive,
+              createMode === CREATE_MODES.SONG && [styles.modeToggleActive, { backgroundColor: colors.toggleActive }],
             ]}
             onPress={() => setCreateMode(CREATE_MODES.SONG)}
           >
             <Text
               style={[
                 styles.modeToggleText,
+                { color: colors.textMuted },
                 createMode === CREATE_MODES.SONG && styles.modeToggleTextActive,
               ]}
             >
@@ -643,13 +682,14 @@ export default function CreateScreen({ navigation, route }) {
           <TouchableOpacity
             style={[
               styles.modeToggle,
-              createMode === CREATE_MODES.LYRICS && styles.modeToggleActive,
+              createMode === CREATE_MODES.LYRICS && [styles.modeToggleActive, { backgroundColor: colors.toggleActive }],
             ]}
             onPress={() => navigation.navigate('CreateLyrics')}
           >
             <Text
               style={[
                 styles.modeToggleText,
+                { color: colors.textMuted },
                 createMode === CREATE_MODES.LYRICS && styles.modeToggleTextActive,
               ]}
             >
@@ -659,13 +699,14 @@ export default function CreateScreen({ navigation, route }) {
           <TouchableOpacity
             style={[
               styles.modeToggle,
-              createMode === CREATE_MODES.BEATS && styles.modeToggleActive,
+              createMode === CREATE_MODES.BEATS && [styles.modeToggleActive, { backgroundColor: colors.toggleActive }],
             ]}
             onPress={() => navigation.navigate('BuildBeats')}
           >
             <Text
               style={[
                 styles.modeToggleText,
+                { color: colors.textMuted },
                 createMode === CREATE_MODES.BEATS && styles.modeToggleTextActive,
               ]}
             >
@@ -696,19 +737,19 @@ export default function CreateScreen({ navigation, route }) {
               )}
 
               {/* Simple / Custom Toggle */}
-              <View style={styles.songModeToggleContainer}>
+              <View style={[styles.songModeToggleContainer, { backgroundColor: colors.surface }]}>
                 <TouchableOpacity
                   style={[
                     styles.songModeToggle,
-                    songMode === SONG_MODES.SIMPLE && styles.songModeToggleActive,
+                    songMode === SONG_MODES.SIMPLE && [styles.songModeToggleActive, { backgroundColor: colors.surfaceSecondary }],
                   ]}
                   onPress={() => setSongMode(SONG_MODES.SIMPLE)}
                 >
                   <Text
                     style={[
                       styles.songModeToggleText,
-                      songMode === SONG_MODES.SIMPLE &&
-                        styles.songModeToggleTextActive,
+                      { color: colors.textMuted },
+                      songMode === SONG_MODES.SIMPLE && { color: colors.textPrimary },
                     ]}
                   >
                     Simple
@@ -717,15 +758,15 @@ export default function CreateScreen({ navigation, route }) {
                 <TouchableOpacity
                   style={[
                     styles.songModeToggle,
-                    songMode === SONG_MODES.CUSTOM && styles.songModeToggleActive,
+                    songMode === SONG_MODES.CUSTOM && [styles.songModeToggleActive, { backgroundColor: colors.surfaceSecondary }],
                   ]}
                   onPress={() => setSongMode(SONG_MODES.CUSTOM)}
                 >
                   <Text
                     style={[
                       styles.songModeToggleText,
-                      songMode === SONG_MODES.CUSTOM &&
-                        styles.songModeToggleTextActive,
+                      { color: colors.textMuted },
+                      songMode === SONG_MODES.CUSTOM && { color: colors.textPrimary },
                     ]}
                   >
                     Custom
@@ -737,28 +778,28 @@ export default function CreateScreen({ navigation, route }) {
               {songMode === SONG_MODES.SIMPLE && (
                 <>
                   <View style={styles.formSection}>
-                    <Text style={styles.label}>Song Description</Text>
-                    <Text style={styles.sublabel}>
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>Song Description</Text>
+                    <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                       Describe the song you want to create
                     </Text>
                     <TextInput
-                      style={styles.textArea}
+                      style={[styles.textArea, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.textPrimary }]}
                       placeholder="e.g., An upbeat pop song about summer adventures with friends, featuring catchy hooks and energetic beats..."
-                      placeholderTextColor="#666"
+                      placeholderTextColor={colors.textMuted}
                       multiline
                       maxLength={descriptionLimit}
                       value={description}
                       onChangeText={setDescription}
                     />
-                    <Text style={styles.charCount}>
+                    <Text style={[styles.charCount, { color: colors.textMuted }]}>
                       {description.length}/{descriptionLimit}
                     </Text>
                   </View>
 
                   {/* Synthetic Singer Picker for Simple Mode */}
                   <View style={styles.formSection}>
-                    <Text style={styles.label}>Synthetic Singer (Optional)</Text>
-                    <Text style={styles.sublabel}>
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>Synthetic Singer (Optional)</Text>
+                    <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                       Apply a saved vocal style to this song
                     </Text>
                     <VoicePicker
@@ -775,11 +816,11 @@ export default function CreateScreen({ navigation, route }) {
                 <>
                   {/* Title */}
                   <View style={styles.formSection}>
-                    <Text style={styles.label}>Title</Text>
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>Title</Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.textPrimary }]}
                       placeholder="Enter song title"
-                      placeholderTextColor="#666"
+                      placeholderTextColor={colors.textMuted}
                       value={title}
                       onChangeText={setTitle}
                       maxLength={100}
@@ -788,40 +829,40 @@ export default function CreateScreen({ navigation, route }) {
 
                   {/* Style of Music */}
                   <View style={styles.formSection}>
-                    <Text style={styles.label}>Style of Music</Text>
-                    <Text style={styles.sublabel}>
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>Style of Music</Text>
+                    <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                       Describe the genre, mood, and instruments
                     </Text>
                     <TextInput
-                      style={[styles.textArea, styles.mediumTextArea]}
+                      style={[styles.textArea, styles.mediumTextArea, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.textPrimary }]}
                       placeholder="e.g., Upbeat pop with synthesizers, electronic drums, catchy melody, summer vibes..."
-                      placeholderTextColor="#666"
+                      placeholderTextColor={colors.textMuted}
                       multiline
                       maxLength={styleLimit}
                       value={style}
                       onChangeText={setStyle}
                     />
-                    <Text style={styles.charCount}>
+                    <Text style={[styles.charCount, { color: colors.textMuted }]}>
                       {style.length}/{styleLimit}
                     </Text>
                   </View>
 
                   {/* Lyrics */}
                   <View style={styles.formSection}>
-                    <Text style={styles.label}>Lyrics (Optional)</Text>
-                    <Text style={styles.sublabel}>
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>Lyrics (Optional)</Text>
+                    <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                       Enter your own lyrics or leave blank for AI generation
                     </Text>
                     <TextInput
-                      style={[styles.textArea, styles.largeTextArea]}
+                      style={[styles.textArea, styles.largeTextArea, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.textPrimary }]}
                       placeholder="[Verse 1]&#10;Your lyrics here...&#10;&#10;[Chorus]&#10;Catchy chorus lyrics..."
-                      placeholderTextColor="#666"
+                      placeholderTextColor={colors.textMuted}
                       multiline
                       maxLength={lyricsLimit}
                       value={lyrics}
                       onChangeText={setLyrics}
                     />
-                    <Text style={styles.charCount}>
+                    <Text style={[styles.charCount, { color: colors.textMuted }]}>
                       {lyrics.length}/{lyricsLimit}
                     </Text>
                   </View>
@@ -829,8 +870,8 @@ export default function CreateScreen({ navigation, route }) {
                   {/* Synthetic Singer Picker */}
                   {!instrumental && (
                     <View style={styles.formSection}>
-                      <Text style={styles.label}>Synthetic Singer (Optional)</Text>
-                      <Text style={styles.sublabel}>
+                      <Text style={[styles.label, { color: colors.textPrimary }]}>Synthetic Singer (Optional)</Text>
+                      <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                         Apply a saved vocal style to this song
                       </Text>
                       <VoicePicker
@@ -844,17 +885,18 @@ export default function CreateScreen({ navigation, route }) {
               )}
 
               {/* Instrumental Toggle */}
-              <View style={styles.instrumentalRow}>
+              <View style={[styles.instrumentalRow, { backgroundColor: colors.surface }]}>
                 <View style={styles.instrumentalLabel}>
-                  <Text style={styles.switchLabel}>Instrumental Only</Text>
-                  <Text style={styles.switchSublabel}>
+                  <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>Instrumental Only</Text>
+                  <Text style={[styles.switchSublabel, { color: colors.textSecondary }]}>
                     No vocals, just music
                   </Text>
                 </View>
                 <TouchableOpacity
                   style={[
                     styles.toggleButton,
-                    instrumental && styles.toggleButtonActive
+                    { backgroundColor: colors.surfaceSecondary },
+                    instrumental && [styles.toggleButtonActive, { backgroundColor: colors.primary }]
                   ]}
                   onPress={() => setInstrumental(!instrumental)}
                   activeOpacity={0.7}
@@ -867,8 +909,8 @@ export default function CreateScreen({ navigation, route }) {
 
               {/* Model Version Selector */}
               <View style={styles.formSection}>
-                <Text style={styles.label}>AI Model</Text>
-                <Text style={styles.sublabel}>
+                <Text style={[styles.label, { color: colors.textPrimary }]}>AI Model</Text>
+                <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                   Newer models produce higher quality (V5 = latest)
                 </Text>
                 <ScrollView
@@ -882,13 +924,15 @@ export default function CreateScreen({ navigation, route }) {
                       key={model.key}
                       style={[
                         styles.modelOption,
-                        selectedModel === model.key && styles.modelOptionActive,
+                        { backgroundColor: colors.surface, borderColor: colors.border },
+                        selectedModel === model.key && [styles.modelOptionActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
                       ]}
                       onPress={() => setSelectedModel(model.key)}
                     >
                       <Text
                         style={[
                           styles.modelOptionText,
+                          { color: colors.textSecondary },
                           selectedModel === model.key && styles.modelOptionTextActive,
                         ]}
                       >
@@ -909,19 +953,19 @@ export default function CreateScreen({ navigation, route }) {
                 style={styles.advancedToggle}
                 onPress={() => setShowAdvancedOptions(!showAdvancedOptions)}
               >
-                <Text style={styles.advancedToggleText}>
+                <Text style={[styles.advancedToggleText, { color: colors.primary }]}>
                   {showAdvancedOptions ? '▼ Hide' : '▶ Show'} Advanced Options
                 </Text>
               </TouchableOpacity>
 
               {/* Advanced Options Section */}
               {showAdvancedOptions && (
-                <View style={styles.advancedSection}>
+                <View style={[styles.advancedSection, { backgroundColor: colors.surface }]}>
                   {/* Vocal Gender */}
                   {!instrumental && (
                     <View style={styles.formSection}>
                       <View style={styles.labelRow}>
-                        <Text style={styles.label}>Vocal Gender</Text>
+                        <Text style={[styles.label, { color: colors.textPrimary }]}>Vocal Gender</Text>
                         <TouchableOpacity
                           onPress={() => Alert.alert(
                             '🎤 Vocal Gender',
@@ -933,23 +977,25 @@ export default function CreateScreen({ navigation, route }) {
                           )}
                           style={styles.infoButton}
                         >
-                          <Text style={styles.infoButtonText}>ⓘ</Text>
+                          <Text style={[styles.infoButtonText, { color: colors.primary }]}>ⓘ</Text>
                         </TouchableOpacity>
                       </View>
-                      <Text style={styles.sublabel}>
+                      <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                         Prefer male or female vocals
                       </Text>
                       <View style={styles.genderToggleContainer}>
                         <TouchableOpacity
                           style={[
                             styles.genderToggle,
-                            vocalGender === null && styles.genderToggleActive,
+                            { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                            vocalGender === null && [styles.genderToggleActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
                           ]}
                           onPress={() => setVocalGender(null)}
                         >
                           <Text
                             style={[
                               styles.genderToggleText,
+                              { color: colors.textSecondary },
                               vocalGender === null && styles.genderToggleTextActive,
                             ]}
                           >
@@ -959,13 +1005,15 @@ export default function CreateScreen({ navigation, route }) {
                         <TouchableOpacity
                           style={[
                             styles.genderToggle,
-                            vocalGender === 'm' && styles.genderToggleActive,
+                            { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                            vocalGender === 'm' && [styles.genderToggleActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
                           ]}
                           onPress={() => setVocalGender('m')}
                         >
                           <Text
                             style={[
                               styles.genderToggleText,
+                              { color: colors.textSecondary },
                               vocalGender === 'm' && styles.genderToggleTextActive,
                             ]}
                           >
@@ -975,13 +1023,15 @@ export default function CreateScreen({ navigation, route }) {
                         <TouchableOpacity
                           style={[
                             styles.genderToggle,
-                            vocalGender === 'f' && styles.genderToggleActive,
+                            { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                            vocalGender === 'f' && [styles.genderToggleActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
                           ]}
                           onPress={() => setVocalGender('f')}
                         >
                           <Text
                             style={[
                               styles.genderToggleText,
+                              { color: colors.textSecondary },
                               vocalGender === 'f' && styles.genderToggleTextActive,
                             ]}
                           >
@@ -995,7 +1045,7 @@ export default function CreateScreen({ navigation, route }) {
                   {/* Negative Tags */}
                   <View style={styles.formSection}>
                     <View style={styles.labelRow}>
-                      <Text style={styles.label}>Exclude Styles</Text>
+                      <Text style={[styles.label, { color: colors.textPrimary }]}>Exclude Styles</Text>
                       <TouchableOpacity
                         onPress={() => Alert.alert(
                           '🚫 Exclude Styles',
@@ -1008,16 +1058,16 @@ export default function CreateScreen({ navigation, route }) {
                         )}
                         style={styles.infoButton}
                       >
-                        <Text style={styles.infoButtonText}>ⓘ</Text>
+                        <Text style={[styles.infoButtonText, { color: colors.primary }]}>ⓘ</Text>
                       </TouchableOpacity>
                     </View>
-                    <Text style={styles.sublabel}>
+                    <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                       Styles to avoid (e.g., "Heavy Metal, Screaming, Autotune")
                     </Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.textPrimary }]}
                       placeholder="e.g., Heavy Metal, Screaming, Autotune"
-                      placeholderTextColor="#666"
+                      placeholderTextColor={colors.textMuted}
                       value={negativeTags}
                       onChangeText={setNegativeTags}
                       maxLength={200}
@@ -1028,7 +1078,7 @@ export default function CreateScreen({ navigation, route }) {
                   <View style={styles.formSection}>
                     <View style={styles.sliderHeader}>
                       <View style={styles.labelRow}>
-                        <Text style={styles.label}>Style Influence</Text>
+                        <Text style={[styles.label, { color: colors.textPrimary }]}>Style Influence</Text>
                         <TouchableOpacity
                           onPress={() => Alert.alert(
                             '🎨 Style Influence',
@@ -1040,12 +1090,12 @@ export default function CreateScreen({ navigation, route }) {
                           )}
                           style={styles.infoButton}
                         >
-                          <Text style={styles.infoButtonText}>ⓘ</Text>
+                          <Text style={[styles.infoButtonText, { color: colors.primary }]}>ⓘ</Text>
                         </TouchableOpacity>
                       </View>
-                      <Text style={styles.sliderValue}>{Math.round(styleWeight * 100)}%</Text>
+                      <Text style={[styles.sliderValue, { color: colors.primary }]}>{Math.round(styleWeight * 100)}%</Text>
                     </View>
-                    <Text style={styles.sublabel}>
+                    <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                       How strongly the style guides the output
                     </Text>
                     <CustomSlider
@@ -1056,8 +1106,8 @@ export default function CreateScreen({ navigation, route }) {
                       onValueChange={setStyleWeight}
                     />
                     <View style={styles.sliderLabels}>
-                      <Text style={styles.sliderLabelText}>Subtle</Text>
-                      <Text style={styles.sliderLabelText}>Strong</Text>
+                      <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>Subtle</Text>
+                      <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>Strong</Text>
                     </View>
                   </View>
 
@@ -1065,7 +1115,7 @@ export default function CreateScreen({ navigation, route }) {
                   <View style={styles.formSection}>
                     <View style={styles.sliderHeader}>
                       <View style={styles.labelRow}>
-                        <Text style={styles.label}>Creativity</Text>
+                        <Text style={[styles.label, { color: colors.textPrimary }]}>Creativity</Text>
                         <TouchableOpacity
                           onPress={() => Alert.alert(
                             '✨ Creativity',
@@ -1079,12 +1129,12 @@ export default function CreateScreen({ navigation, route }) {
                           )}
                           style={styles.infoButton}
                         >
-                          <Text style={styles.infoButtonText}>ⓘ</Text>
+                          <Text style={[styles.infoButtonText, { color: colors.primary }]}>ⓘ</Text>
                         </TouchableOpacity>
                       </View>
-                      <Text style={styles.sliderValue}>{Math.round(weirdnessConstraint * 100)}%</Text>
+                      <Text style={[styles.sliderValue, { color: colors.primary }]}>{Math.round(weirdnessConstraint * 100)}%</Text>
                     </View>
-                    <Text style={styles.sublabel}>
+                    <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                       Higher = more experimental, lower = more cohesive
                     </Text>
                     <CustomSlider
@@ -1095,8 +1145,8 @@ export default function CreateScreen({ navigation, route }) {
                       onValueChange={setWeirdnessConstraint}
                     />
                     <View style={styles.sliderLabels}>
-                      <Text style={styles.sliderLabelText}>Cohesive</Text>
-                      <Text style={styles.sliderLabelText}>Experimental</Text>
+                      <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>Cohesive</Text>
+                      <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>Experimental</Text>
                     </View>
                   </View>
                 </View>
@@ -1107,19 +1157,19 @@ export default function CreateScreen({ navigation, route }) {
                 style={styles.advancedToggle}
                 onPress={() => setShowSongRights(!showSongRights)}
               >
-                <Text style={[styles.advancedToggleText, { color: '#22c55e' }]}>
+                <Text style={[styles.advancedToggleText, { color: colors.secondary }]}>
                   {showSongRights ? '▼ Hide' : '▶ Show'} Song Rights
                 </Text>
               </TouchableOpacity>
 
               {/* Song Rights Section */}
               {showSongRights && (
-                <View style={styles.advancedSection}>
+                <View style={[styles.advancedSection, { backgroundColor: colors.surface }]}>
                   {/* Visibility Toggle */}
                   <View style={styles.rightsRow}>
                     <View style={styles.rightsLabel}>
-                      <Text style={styles.label}>Visibility</Text>
-                      <Text style={styles.sublabel}>
+                      <Text style={[styles.label, { color: colors.textPrimary }]}>Visibility</Text>
+                      <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                         {isPublic ? 'Anyone can see this song' : 'Only you can see this song'}
                       </Text>
                     </View>
@@ -1127,24 +1177,28 @@ export default function CreateScreen({ navigation, route }) {
                       <TouchableOpacity
                         style={[
                           styles.rightsToggle,
-                          isPublic && styles.rightsToggleActive,
+                          { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                          isPublic && [styles.rightsToggleActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
                         ]}
                         onPress={() => setIsPublic(true)}
                       >
                         <Text style={[
                           styles.rightsToggleText,
+                          { color: colors.textSecondary },
                           isPublic && styles.rightsToggleTextActive,
                         ]}>Public</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[
                           styles.rightsToggle,
-                          !isPublic && styles.rightsToggleActive,
+                          { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                          !isPublic && [styles.rightsToggleActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
                         ]}
                         onPress={() => setIsPublic(false)}
                       >
                         <Text style={[
                           styles.rightsToggleText,
+                          { color: colors.textSecondary },
                           !isPublic && styles.rightsToggleTextActive,
                         ]}>Private</Text>
                       </TouchableOpacity>
@@ -1152,21 +1206,22 @@ export default function CreateScreen({ navigation, route }) {
                   </View>
 
                   {/* Derivative Works Section */}
-                  <Text style={[styles.label, { marginTop: 16, marginBottom: 8 }]}>Derivative Works</Text>
-                  <Text style={[styles.sublabel, { marginBottom: 12 }]}>
+                  <Text style={[styles.label, { color: colors.textPrimary, marginTop: 16, marginBottom: 8 }]}>Derivative Works</Text>
+                  <Text style={[styles.sublabel, { color: colors.textSecondary, marginBottom: 12 }]}>
                     What can others do with your song?
                   </Text>
 
                   {/* Allow Extend */}
                   <View style={styles.rightsOptionRow}>
                     <View style={styles.rightsOptionLabel}>
-                      <Text style={styles.rightsOptionTitle}>Allow Extensions</Text>
-                      <Text style={styles.rightsOptionDesc}>Others can extend/continue this song</Text>
+                      <Text style={[styles.rightsOptionTitle, { color: colors.textPrimary }]}>Allow Extensions</Text>
+                      <Text style={[styles.rightsOptionDesc, { color: colors.textSecondary }]}>Others can extend/continue this song</Text>
                     </View>
                     <TouchableOpacity
                       style={[
                         styles.toggleButton,
-                        songRights.allowExtend && styles.toggleButtonActive,
+                        { backgroundColor: colors.surfaceSecondary },
+                        songRights.allowExtend && [styles.toggleButtonActive, { backgroundColor: colors.primary }],
                       ]}
                       onPress={() => setSongRights(prev => ({ ...prev, allowExtend: !prev.allowExtend }))}
                     >
@@ -1179,13 +1234,14 @@ export default function CreateScreen({ navigation, route }) {
                   {/* Allow Lyrics Use */}
                   <View style={styles.rightsOptionRow}>
                     <View style={styles.rightsOptionLabel}>
-                      <Text style={styles.rightsOptionTitle}>Allow Lyrics Use</Text>
-                      <Text style={styles.rightsOptionDesc}>Others can use your lyrics</Text>
+                      <Text style={[styles.rightsOptionTitle, { color: colors.textPrimary }]}>Allow Lyrics Use</Text>
+                      <Text style={[styles.rightsOptionDesc, { color: colors.textSecondary }]}>Others can use your lyrics</Text>
                     </View>
                     <TouchableOpacity
                       style={[
                         styles.toggleButton,
-                        songRights.allowLyricsUse && styles.toggleButtonActive,
+                        { backgroundColor: colors.surfaceSecondary },
+                        songRights.allowLyricsUse && [styles.toggleButtonActive, { backgroundColor: colors.primary }],
                       ]}
                       onPress={() => setSongRights(prev => ({ ...prev, allowLyricsUse: !prev.allowLyricsUse }))}
                     >
@@ -1198,13 +1254,14 @@ export default function CreateScreen({ navigation, route }) {
                   {/* Allow Video Creation */}
                   <View style={styles.rightsOptionRow}>
                     <View style={styles.rightsOptionLabel}>
-                      <Text style={styles.rightsOptionTitle}>Allow Video Creation</Text>
-                      <Text style={styles.rightsOptionDesc}>Others can pair this with their videos</Text>
+                      <Text style={[styles.rightsOptionTitle, { color: colors.textPrimary }]}>Allow Video Creation</Text>
+                      <Text style={[styles.rightsOptionDesc, { color: colors.textSecondary }]}>Others can pair this with their videos</Text>
                     </View>
                     <TouchableOpacity
                       style={[
                         styles.toggleButton,
-                        songRights.allowVideoCreation && styles.toggleButtonActive,
+                        { backgroundColor: colors.surfaceSecondary },
+                        songRights.allowVideoCreation && [styles.toggleButtonActive, { backgroundColor: colors.primary }],
                       ]}
                       onPress={() => setSongRights(prev => ({ ...prev, allowVideoCreation: !prev.allowVideoCreation }))}
                     >
@@ -1215,18 +1272,19 @@ export default function CreateScreen({ navigation, route }) {
                   </View>
 
                   {/* Attribution Section */}
-                  <Text style={[styles.label, { marginTop: 16, marginBottom: 8 }]}>Attribution</Text>
+                  <Text style={[styles.label, { color: colors.textPrimary, marginTop: 16, marginBottom: 8 }]}>Attribution</Text>
 
                   {/* Require Attribution */}
                   <View style={styles.rightsOptionRow}>
                     <View style={styles.rightsOptionLabel}>
-                      <Text style={styles.rightsOptionTitle}>Require Attribution</Text>
-                      <Text style={styles.rightsOptionDesc}>Derivatives must credit you</Text>
+                      <Text style={[styles.rightsOptionTitle, { color: colors.textPrimary }]}>Require Attribution</Text>
+                      <Text style={[styles.rightsOptionDesc, { color: colors.textSecondary }]}>Derivatives must credit you</Text>
                     </View>
                     <TouchableOpacity
                       style={[
                         styles.toggleButton,
-                        songRights.requireAttribution && styles.toggleButtonActive,
+                        { backgroundColor: colors.surfaceSecondary },
+                        songRights.requireAttribution && [styles.toggleButtonActive, { backgroundColor: colors.primary }],
                       ]}
                       onPress={() => setSongRights(prev => ({ ...prev, requireAttribution: !prev.requireAttribution }))}
                     >
@@ -1237,9 +1295,9 @@ export default function CreateScreen({ navigation, route }) {
                   </View>
 
                   {/* Coming Soon Features */}
-                  <View style={styles.comingSoonSection}>
-                    <Text style={styles.comingSoonTitle}>Coming Soon</Text>
-                    <Text style={styles.comingSoonText}>
+                  <View style={[styles.comingSoonSection, { backgroundColor: colors.surfaceSecondary }]}>
+                    <Text style={[styles.comingSoonTitle, { color: colors.textSecondary }]}>Coming Soon</Text>
+                    <Text style={[styles.comingSoonText, { color: colors.textMuted }]}>
                       Monetization, Stem Extraction, WAV Export, Reinterpretation, Sampling, Commercial Licensing
                     </Text>
                   </View>
@@ -1250,7 +1308,8 @@ export default function CreateScreen({ navigation, route }) {
               <TouchableOpacity
                 style={[
                   styles.generateButton,
-                  isGenerating && styles.generateButtonDisabled,
+                  { backgroundColor: colors.primary },
+                  isGenerating && [styles.generateButtonDisabled, { backgroundColor: colors.surfaceSecondary }],
                 ]}
                 onPress={handleGenerate}
                 disabled={isGenerating}
@@ -1269,41 +1328,41 @@ export default function CreateScreen({ navigation, route }) {
 
               {/* Generation Progress Info */}
               {isGenerating && (
-                <View style={styles.progressInfo}>
+                <View style={[styles.progressInfo, { backgroundColor: colors.surface }]}>
                   {/* Rotating tip with animation */}
                   <Animated.View style={[styles.tipContainer, { opacity: tipFadeAnim }]}>
                     <Text style={styles.tipIcon}>{GENERATION_TIPS[currentTipIndex].icon}</Text>
-                    <Text style={styles.tipText}>{GENERATION_TIPS[currentTipIndex].message}</Text>
+                    <Text style={[styles.tipText, { color: colors.textPrimary }]}>{GENERATION_TIPS[currentTipIndex].message}</Text>
                   </Animated.View>
 
                   {/* Time estimate */}
                   <View style={styles.timeEstimate}>
-                    <Text style={styles.timerText}>
+                    <Text style={[styles.timerText, { color: colors.primary }]}>
                       {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')} elapsed
                     </Text>
-                    <Text style={styles.estimateText}>
+                    <Text style={[styles.estimateText, { color: colors.textSecondary }]}>
                       ~{Math.max(0, Math.ceil((ESTIMATED_TIME_SECONDS - elapsedTime) / 60))} min remaining
                     </Text>
                   </View>
 
                   {/* Progress bar */}
-                  <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBarContainer, { backgroundColor: colors.surfaceSecondary }]}>
                     <View
                       style={[
                         styles.progressBarFill,
-                        { width: `${Math.min(100, (elapsedTime / ESTIMATED_TIME_SECONDS) * 100)}%` },
+                        { width: `${Math.min(100, (elapsedTime / ESTIMATED_TIME_SECONDS) * 100)}%`, backgroundColor: colors.primary },
                       ]}
                     />
                   </View>
 
-                  <Text style={styles.safeToNavigate}>
+                  <Text style={[styles.safeToNavigate, { color: colors.textSecondary }]}>
                     You can navigate away - your song will continue generating
                   </Text>
                 </View>
               )}
 
               {/* Powered by badge */}
-              <Text style={styles.poweredBy}>Powered by LetsMake.Music</Text>
+              <Text style={[styles.poweredBy, { color: colors.textMuted }]}>Powered by LetsMake.Music</Text>
             </>
           )}
         </ScrollView>

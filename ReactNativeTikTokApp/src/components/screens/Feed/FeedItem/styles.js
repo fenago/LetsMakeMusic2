@@ -256,12 +256,12 @@ export const dynamicStyles = (stageTheme = 'Dark', fullScreen = false, customHei
       color: colors.text,
     },
     username: {
-      color: colors.text,
-      opacity: 0.7,
+      color: BRAND_COLORS.vibrantTeal,
+      fontWeight: '600',
     },
     hashTag: {
-      color: colors.text,
-      opacity: 0.7,
+      color: BRAND_COLORS.vibrantTeal,
+      fontWeight: '500',
     },
     hashtagsContainer: {
       flexDirection: 'row',

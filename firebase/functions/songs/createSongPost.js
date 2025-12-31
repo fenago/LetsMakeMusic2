@@ -72,7 +72,8 @@ exports.createSongPost = functions.https.onCall(async (data, context) => {
 
     // 5. Create post
     const postID = uuidv4()
-    const timestamp = Math.floor(Date.now() / 1000)
+    const now = new Date()
+    const firestoreTimestamp = admin.firestore.Timestamp.fromDate(now)
 
     // Build media object for feed display
     const postMedia = []
@@ -112,7 +113,7 @@ exports.createSongPost = functions.https.onCall(async (data, context) => {
       hashtags: allTags,
       reactionsCount: 0,
       commentsCount: 0,
-      createdAt: timestamp,
+      createdAt: firestoreTimestamp,
 
       // Song-specific fields
       postType: 'song',
@@ -139,6 +140,14 @@ exports.createSongPost = functions.https.onCall(async (data, context) => {
       .collection('social_feeds')
       .doc(userId)
       .collection('profile_feed_live')
+      .doc(postID)
+      .set(post)
+
+    // 7.5 Add to author's OWN home feed (so they see their own posts)
+    await db
+      .collection('social_feeds')
+      .doc(userId)
+      .collection('home_feed_live')
       .doc(postID)
       .set(post)
 

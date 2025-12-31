@@ -909,9 +909,14 @@ export default function Discover(props) {
       </Text>
       <TouchableOpacity
         style={[swipeStyles.refreshButton, { backgroundColor: colorSet.primaryForeground }]}
-        onPress={() => setSwipeIndex(0)}
+        onPress={() => {
+          // Clear pending swipes to allow refresh
+          setPendingSwipeIds(new Set())
+          // Switch to browse mode to see all songs
+          setViewMode('browse')
+        }}
       >
-        <Text style={swipeStyles.refreshButtonText}>Start Over</Text>
+        <Text style={swipeStyles.refreshButtonText}>Browse All Songs</Text>
       </TouchableOpacity>
     </View>
   )

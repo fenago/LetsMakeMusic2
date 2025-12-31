@@ -307,11 +307,9 @@ const FullPlayerBottomSheet = () => {
   }, [currentMedia, userId, isFetchingKaraokeLyrics, updateCurrentMedia])
 
   const handleShareToFeed = useCallback(() => {
-    const isPublic = currentMedia.visibility === 'public' ||
-                     currentMedia.isPublic === true ||
-                     (currentMedia.visibility === undefined && currentMedia.isPublic === undefined)
-
-    if (!isPublic) {
+    // Only block if EXPLICITLY marked private via visibility field
+    // Ignore isPublic field - it has bad default data from songsService
+    if (currentMedia.visibility === 'private') {
       RNAlert.alert(
         'Private Song',
         'This song is private. Change visibility to public to share it.',

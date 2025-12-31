@@ -66,6 +66,8 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
       setShowMentions(false)
       setMentionUsers([])
       setMentionQuery('')
+      setMentionStartIndex(-1) // FIX: Also reset this
+      console.warn('[EditPostModal] 🔄 Modal opened, state reset for post:', post?.id)
     }
   }, [visible, post])
 
@@ -116,28 +118,44 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
   }
 
   // Debounced mention search - waits 300ms after typing stops
+  // When query is empty (just @), show friends list immediately
+  // When query has characters, search by keyword
   const debouncedSearchMentions = useCallback((query) => {
+    console.warn('[EditPostModal] 🔎 debouncedSearchMentions called with query:', query)
     if (searchTimeoutRef.current) {
+      console.warn('[EditPostModal] 🔎 Clearing previous timeout')
       clearTimeout(searchTimeoutRef.current)
     }
 
-    // Require at least 1 character to search (not just @)
-    if (!query || query.trim() === '') {
-      setShowMentions(false)
-      setMentionUsers([])
-      return
-    }
-
+    console.warn('[EditPostModal] 🔎 Setting showMentions=true, searching=true')
     setMentionSearching(true)
     setShowMentions(true)
 
+    // Use shorter delay for empty query (show friends fast), longer for search
+    const delay = (!query || query.trim() === '') ? 100 : 400
+
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        // Search by keyword
-        const users = await searchUsers(post?.authorID, query, 0, 8)
-        const flattenedUsers = flattenUserData(users)
+        let users = []
+        const userId = post?.authorID || post?.author?.id
+        console.log('[EditPostModal] 👤 Using userId:', userId)
+
+        if (!query || query.trim() === '') {
+          // Empty query = just typed @, show friends list
+          console.log('[EditPostModal] 👥 Fetching friends list for @')
+          users = await fetchFriends(userId, 0, 10)
+          console.log('[EditPostModal] 👥 fetchFriends returned:', users?.length, 'users')
+        } else {
+          // Has query = search by keyword
+          console.log('[EditPostModal] 🔍 Searching users for:', query)
+          users = await searchUsers(userId, query, 0, 8)
+          console.log('[EditPostModal] 🔍 searchUsers returned:', users?.length, 'users')
+        }
+        const flattenedUsers = flattenUserData(users || [])
+        console.log('[EditPostModal] 📋 Found users:', flattenedUsers.length, flattenedUsers.map(u => u.username || u.firstName || 'unknown'))
         setMentionUsers(flattenedUsers)
-        setShowMentions(flattenedUsers.length > 0)
+        // Keep showing dropdown even with 0 results to show "no results" message
+        setShowMentions(true)
       } catch (error) {
         console.log('[EditPostModal] Mention search error:', error)
         setMentionUsers([])
@@ -145,7 +163,7 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
       } finally {
         setMentionSearching(false)
       }
-    }, 400) // 400ms debounce for better performance
+    }, delay)
   }, [post?.authorID])
 
   // Check if there are unsaved changes
@@ -157,10 +175,12 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
 
   // Handle caption text changes - detect @ mentions
   const handleCaptionChange = useCallback((text) => {
+    console.warn('[EditPostModal] 📝 handleCaptionChange - text length:', text.length, 'last 20 chars:', text.slice(-20))
     setCaption(text)
 
     // Find the last @ symbol to detect mention typing
     const lastAtIndex = text.lastIndexOf('@')
+    console.warn('[EditPostModal] 📍 @ detection:', { lastAtIndex, textLength: text.length })
 
     if (lastAtIndex >= 0) {
       // Check if there's text after @ (potential mention query)
@@ -174,8 +194,10 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
       // Check if there's a space after the mention (user finished typing mention)
       const hasSpaceAfter = afterAt.includes(' ')
 
+      console.warn('[EditPostModal] 🔍 Mention check:', { mentionText, isRecentAt, hasSpaceAfter })
       if (isRecentAt && !hasSpaceAfter) {
         // Trigger search for any change (including empty string after @)
+        console.warn('[EditPostModal] ✅ TRIGGERING SEARCH for:', mentionText || '(friends list)')
         setMentionStartIndex(lastAtIndex)
         setMentionQuery(mentionText)
         debouncedSearchMentions(mentionText)
@@ -236,6 +258,12 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
     // Support both prop names for compatibility
     // ManageFeedScreen uses onSaveSuccess, Feed.js uses onSave
     // BOTH now receive the full updatedData object for proper UI updates
+    console.warn('[EditPostModal] 💾 SAVE - Calling callback with:', {
+      postId: post.id,
+      hasOnSave: !!onSave,
+      hasOnSaveSuccess: !!onSaveSuccess,
+      updatedData,
+    })
     if (onSaveSuccess) {
       onSaveSuccess(updatedData)
     } else if (onSave) {
@@ -260,7 +288,6 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
       })
       .catch(error => {
         console.error('[EditPostModal] ❌ Background save error:', error)
-        // Show error alert so user knows to retry
         Alert.alert(
           'Save Failed',
           'Your changes may not have been saved. Please try editing again.',
@@ -331,8 +358,8 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Caption Input */}
-            <View style={styles.section}>
+            {/* Caption Input - higher zIndex so mentions dropdown appears above hashtags */}
+            <View style={[styles.section, { zIndex: 9999 }]}>
               <Text style={styles.sectionLabel}>Caption</Text>
               <Text style={styles.captionHint}>Tip: Use @ to mention users, # for hashtags</Text>
               <View style={styles.captionInputContainer}>
@@ -355,6 +382,10 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
                       <View style={styles.mentionLoading}>
                         <ActivityIndicator size="small" color="#2126A2" />
                         <Text style={styles.mentionLoadingText}>Searching...</Text>
+                      </View>
+                    ) : mentionUsers.length === 0 ? (
+                      <View style={styles.mentionLoading}>
+                        <Text style={styles.mentionLoadingText}>No users found</Text>
                       </View>
                     ) : (
                       <FlatList
@@ -389,8 +420,8 @@ const EditPostModal = ({ visible, onClose, post, onSaveSuccess, onSave }) => {
               <Text style={styles.charCount}>{caption.length}/500</Text>
             </View>
 
-            {/* Hashtags Section */}
-            <View style={styles.section}>
+            {/* Hashtags Section - lower zIndex so mentions dropdown appears above */}
+            <View style={[styles.section, { zIndex: 1 }]}>
               <Text style={styles.sectionLabel}>Hashtags</Text>
               <HashtagChips
                 tags={hashtags}
@@ -458,12 +489,15 @@ const getStyles = (isDark) =>
     },
     scrollView: {
       flex: 1,
+      overflow: 'visible',
     },
     scrollContent: {
       padding: 16,
     },
     section: {
       marginBottom: 24,
+      zIndex: 100,
+      overflow: 'visible',
     },
     sectionLabel: {
       fontSize: 16,
@@ -478,6 +512,8 @@ const getStyles = (isDark) =>
     },
     captionInputContainer: {
       position: 'relative',
+      zIndex: 1000, // Ensure it's above other elements
+      overflow: 'visible', // Allow dropdown to overflow
     },
     captionInput: {
       backgroundColor: isDark ? '#1c1c1e' : '#f5f5f5',
@@ -499,7 +535,7 @@ const getStyles = (isDark) =>
     // Mentions dropdown styles
     mentionsDropdown: {
       position: 'absolute',
-      top: '100%',
+      top: 130,
       left: 0,
       right: 0,
       backgroundColor: isDark ? '#1c1c1e' : '#fff',
@@ -507,13 +543,12 @@ const getStyles = (isDark) =>
       borderWidth: 1,
       borderColor: isDark ? '#333' : '#ddd',
       maxHeight: 200,
-      zIndex: 1000,
-      elevation: 5,
+      zIndex: 99999,
+      elevation: 999,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      marginTop: 4,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
     },
     mentionLoading: {
       flexDirection: 'row',

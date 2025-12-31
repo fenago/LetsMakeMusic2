@@ -53,9 +53,30 @@ export const useHomeFeedPosts = () => {
   }
 
   const subscribeToHomeFeedPosts = userID => {
+    console.log('[useHomeFeedPosts] ====== SETTING UP SUBSCRIPTION ======')
+    console.log('[useHomeFeedPosts] userID:', userID)
     return subscribeToHomeFeedPostsAPI(userID, newPosts => {
+      console.log('[useHomeFeedPosts] ====== CALLBACK RECEIVED ======')
+      console.log('[useHomeFeedPosts] home_feed_live: ' + (newPosts?.length || 0) + ' posts')
+
+      // DEBUG: Log detailed info about received posts
+      console.log('[useHomeFeedPosts] ====== POST DETAILS ======')
+      if (newPosts?.length > 0) {
+        newPosts.slice(0, 3).forEach((post, i) => {
+          console.log(`[useHomeFeedPosts] Post ${i + 1}:`, {
+            id: post?.id?.substring?.(0, 8) || 'no-id',
+            postType: post?.postType,
+            mediaCount: post?.postMedia?.length || 0,
+            mediaType: post?.postMedia?.[0]?.type,
+            hasSongData: !!post?.songData,
+          })
+        })
+      } else {
+        console.log('[useHomeFeedPosts] ⚠️ No posts received or all posts filtered out!')
+      }
+
       setPosts(oldPosts => {
-        const posts = hydratePostsWithMyReactions(
+        const processedPosts = hydratePostsWithMyReactions(
           deduplicatedPosts(
             oldPosts,
             removeLocallyDeletedPosts(newPosts),
@@ -63,7 +84,8 @@ export const useHomeFeedPosts = () => {
           ),
           userID,
         )
-        return posts
+        console.log('[useHomeFeedPosts] Setting posts state, count:', processedPosts?.length || 0)
+        return processedPosts
       })
     })
   }

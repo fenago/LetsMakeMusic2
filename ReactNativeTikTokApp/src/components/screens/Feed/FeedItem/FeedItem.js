@@ -112,14 +112,17 @@ const FeedItem = props => {
   const reactionCount = localReactionsCount
 
   // Debug: Log post structure with full audio URL info
-  console.log('[FeedItem] 📋 Post:', {
-    id: video.id?.substring(0, 8),
-    postType: video.postType,
-    mediaType: video.postMedia?.[0]?.type,
-    hasSongData: !!video.songData,
-    songDataAudioUrl: video.songData?.audioUrl?.substring(0, 60),
-    songDataFirebaseUrl: video.songData?.firebaseAudioUrl?.substring(0, 60),
-  })
+  console.log('[FeedItem] 📋 Post: id=' + (video.id?.substring(0, 8) || 'none') +
+    ' postType=' + (video.postType || 'none') +
+    ' mediaType=' + (video.postMedia?.[0]?.type || 'none') +
+    ' hasSongData=' + !!video.songData)
+
+  // DEBUG: Log caption/hashtag data that FeedItem is receiving
+  console.log('[FeedItem] 📝 CONTENT: id=' + (video.id?.substring(0, 8) || 'none') +
+    ' postText=' + (video.postText?.substring(0, 50) || '(empty)') +
+    ' description=' + (video.description?.substring(0, 50) || '(empty)') +
+    ' hashtags=' + JSON.stringify(video.hashtags || []) +
+    ' isEdited=' + (video.isEdited || false))
 
   // Determine post type for audio handling
   // NOTE: postMedia[0].type contains mime types like 'video/mp4' or 'audio/mpeg'
@@ -653,7 +656,6 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
         } else if (selectedOption === localized('Report')) {
           onUserReport(video, 'Report Track')
         } else if (selectedOption === localized('Edit')) {
-          // Trigger edit mode for this post
           onEditPost?.(video)
         } else if (selectedOption === localized('Delete')) {
           Alert.alert(
@@ -943,9 +945,19 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           onUserPress={onTextFieldUser}
           onHashTagPress={onTextFieldHashTag}>
           {/* Caption display - prioritize user's caption, fallback to song title for song posts */}
-          {(video.postText && video.postText.trim()) ||
-           (video.description && video.description.trim()) ||
-           (isSongPost && songInfo?.title ? `🎵 ${songInfo.title}` : ' ')}
+          {(() => {
+            const displayText = (video.postText && video.postText.trim()) ||
+              (video.description && video.description.trim()) ||
+              (isSongPost && songInfo?.title ? `🎵 ${songInfo.title}` : ' ')
+            // DEBUG: Log what's actually being displayed
+            const sourceField = video.postText?.trim() ? 'postText' :
+                              video.description?.trim() ? 'description' :
+                              songInfo?.title ? 'songTitle' : 'fallback'
+            console.log('[FeedItem] 🎯 DISPLAY: id=' + (video.id?.substring(0, 8) || 'none') +
+              ' text=' + (displayText?.substring(0, 50) || '(empty)') +
+              ' source=' + sourceField)
+            return displayText
+          })()}
         </IMRichTextView>
         {/* Display hashtags from array if present */}
         {video.hashtags?.length > 0 && (

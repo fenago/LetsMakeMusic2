@@ -16,8 +16,6 @@ import {
 } from '../../core/socialgraph/feed'
 import { setLocallyDeletedPost } from '../../core/socialgraph/feed/redux'
 import { useCurrentUser } from '../../core/onboarding'
-import { subscribeToUserSongs } from '../../services/songsService'
-import { getPlayableUrl, getPlayableImageUrl } from '../../utils/audioUtils'
 
 const FeedScreen = props => {
   const { navigation } = props
@@ -66,8 +64,6 @@ const FeedScreen = props => {
   })
   // NEW: Media type filter state (all/music/video)
   const [mediaFilter, setMediaFilter] = useState('all')
-  // User's own songs (from songs collection, not posts)
-  const [userSongs, setUserSongs] = useState([])
 
   useEffect(() => {
     if (isFocused) {
@@ -87,144 +83,90 @@ const FeedScreen = props => {
 
   
   useEffect(() => {
+    console.log('[HomeScreen] ====== MOUNTING HOME FEED ======')
+    console.log('[HomeScreen] currentUser?.id:', currentUser?.id)
     if (!currentUser?.id) {
+      console.log('[HomeScreen] No user ID yet, waiting...')
       return
     }
+    console.log('[HomeScreen] Setting up subscriptions for user:', currentUser?.id)
     const postsUnsubscribe = subscribeToHomeFeedPosts(currentUser?.id)
     loadMoreDiscoverPosts(currentUser?.id)
 
     return () => {
+      console.log('[HomeScreen] Cleaning up subscriptions')
       postsUnsubscribe && postsUnsubscribe()
     }
   }, [currentUser?.id])
 
-  // Subscribe to user's own songs from songs collection
-  // These are songs that may not have been shared as posts yet
+
   useEffect(() => {
-    if (!currentUser?.id) {
-      console.log('[HomeScreen] No userId, skipping user songs subscription')
+    console.log('[FEED] posts effect triggered, posts:', posts === null ? 'null' : (posts?.length || 0) + ' posts')
+
+    // Only update feed if posts has actually been loaded (not null)
+    // null = not yet loaded, [] = loaded but empty, [...] = loaded with data
+    if (posts === null) {
+      console.log('[FEED] Posts not yet loaded, keeping current following state')
       return
     }
 
-    console.log('[HomeScreen] Subscribing to user songs for:', currentUser.id)
-    const unsubscribe = subscribeToUserSongs(currentUser.id, (songs) => {
-      console.log('[HomeScreen] Received user songs:', songs.length)
-      setUserSongs(songs)
-    })
-
-    return () => {
-      console.log('[HomeScreen] Unsubscribing from user songs')
-      if (unsubscribe) unsubscribe()
-    }
-  }, [currentUser?.id])
-
-  /**
-   * Transform a song from songs collection to post format for the Stage feed
-   * This allows user's songs to appear alongside posts in the vertical feed
-   */
-  const songToPostFormat = useCallback((song) => {
-    const imageUrl = getPlayableImageUrl(song)
-    const audioUrl = getPlayableUrl(song)
-    const timestamp = song.createdAt?.seconds || Math.floor(Date.now() / 1000)
-
-    return {
-      id: `song_${song.id}`, // Prefix to avoid ID collision with posts
-      authorID: currentUser?.id,
-      author: {
-        id: currentUser?.id,
-        firstName: currentUser?.firstName || '',
-        lastName: currentUser?.lastName || '',
-        username: currentUser?.username || '',
-        profilePictureURL: currentUser?.profilePictureURL || '',
-        stageName: currentUser?.stageName || song.author?.stageName,
-      },
-      postMedia: [{
-        url: song.firebaseVideoUrl || song.videoUrl || audioUrl,
-        thumbnailURL: imageUrl,
-        type: song.firebaseVideoUrl || song.videoUrl ? 'video/mp4' : 'audio/mpeg',
-      }],
-      description: `🎵 ${song.title}`,
-      hashtags: song.style?.split(/[\s,]+/).filter(s => s.length > 2).slice(0, 5) || [],
-      reactionsCount: song.likesCount || 0,
-      commentsCount: 0,
-      createdAt: timestamp,
-      postType: 'song',
-      linkedSongId: song.id,
-      songData: {
-        id: song.id,
-        title: song.title,
-        imageUrl,
-        audioUrl,
-        videoUrl: song.firebaseVideoUrl || song.videoUrl,
-        style: song.style,
-        duration: song.duration,
-        artist: song.author?.stageName || currentUser?.stageName || currentUser?.username,
-        lyrics: song.rawLyrics || song.lyrics || '',
-        prompt: song.prompt || '',
-      },
-    }
-  }, [currentUser])
-
-  useEffect(() => {
-    console.log('[HomeScreen] Raw posts from useHomeFeedPosts:', posts?.length || 0)
-    if (posts?.length > 0) {
-      // Log first 3 posts for debugging
-      posts.slice(0, 3).forEach((p, i) => {
-        console.log(`[HomeScreen] Post ${i}:`, {
-          id: p.id,
-          postType: p.postType,
-          mediaType: p.postMedia?.[0]?.type,
-          description: p.description?.substring(0, 30),
-        })
-      })
+    if (posts.length > 0) {
       const filteredFeed = filterNonVideoFeed(posts)
-      console.log('[HomeScreen] Filtered posts (songs + videos):', filteredFeed.length)
+      console.log('[FEED] Following: ' + filteredFeed.length + ' posts after filter')
       setFeed(prevFeed => ({
         ...prevFeed,
         following: filteredFeed,
       }))
     } else {
-      console.log('[HomeScreen] No posts received from useHomeFeedPosts')
-      setFeed({ following: [] })
+      console.log('[FEED] Posts loaded but empty, setting following to empty')
+      setFeed(prevFeed => ({ ...prevFeed, following: [] }))
     }
   }, [posts])
 
   useEffect(() => {
-    console.log('[HomeScreen] Raw discoverPosts (For You):', discoverPosts?.length || 0)
-    console.log('[HomeScreen] User songs available:', userSongs?.length || 0)
-
-    // Transform user songs to post format
-    const userSongPosts = (userSongs || [])
-      .filter(song => !song.sharedToFeed) // Only include songs not already shared as posts
-      .map(songToPostFormat)
-
-    if (discoverPosts || userSongPosts.length > 0) {
-      // Filter for valid media posts first
+    if (discoverPosts) {
       const validMediaPosts = filterNonVideoFeed(discoverPosts || [])
-
-      // Combine discover posts with user's unshared songs
-      const combinedPosts = [...validMediaPosts, ...userSongPosts]
-
-      // Mix user's posts into the feed with balanced ratio
-      const mixedFeed = mixUserPostsIntoFeed(combinedPosts)
-      console.log('[HomeScreen] Mixed For You posts (including user songs):', mixedFeed.length)
+      const mixedFeed = mixUserPostsIntoFeed(validMediaPosts)
+      console.log('[FEED] For You: ' + mixedFeed.length + ' posts')
       setFeed(prevFeed => ({
         ...prevFeed,
         forYou: mixedFeed,
       }))
     } else {
-      console.log('[HomeScreen] No discoverPosts or user songs received')
       setFeed(prevFeed => ({ ...prevFeed, forYou: [] }))
     }
-  }, [discoverPosts, userSongs, songToPostFormat])
+  }, [discoverPosts])
 
+  // Auto-switch feedType based on data availability
+  // - Switch to 'forYou' only if 'following' is explicitly empty (loaded but no data)
+  // - Switch BACK to 'following' when following data becomes available
   useEffect(() => {
-    const followingFeedLength = feed?.following?.length
+    // Don't auto-switch until data has loaded (not null)
+    const followingLoaded = feed?.following !== null
+    const forYouLoaded = feed?.forYou !== null
 
-    if (followingFeedLength === 0) {
+    const followingLength = feed?.following?.length ?? 0
+    const forYouLength = feed?.forYou?.length ?? 0
+
+    console.log('[HomeScreen] Feed state check:', {
+      followingLoaded,
+      forYouLoaded,
+      followingLength,
+      forYouLength,
+      currentFeedType: feedType,
+    })
+
+    // If following has data, ensure we're showing it (switch back if needed)
+    if (followingLength > 0 && feedType !== 'following') {
+      console.log('[HomeScreen] Following feed has data, switching to following mode')
+      setFeedType('following')
+    }
+    // Only switch to forYou if following has been LOADED as empty (not just null) and forYou has data
+    else if (followingLoaded && followingLength === 0 && forYouLength > 0 && feedType === 'following') {
+      console.log('[HomeScreen] Following feed loaded but empty, switching to forYou mode')
       setFeedType('forYou')
     }
-  }, [feed])
+  }, [feed, feedType])
 
   useEffect(() => {
     if (selectedItem) {
@@ -410,11 +352,9 @@ const FeedScreen = props => {
   }
 
   // Handler for when a post is edited - updates feed state with new caption and hashtags
-  // Receives full update object: { postText, description, hashtags, isEdited }
   const onPostEdited = useCallback((postId, updateData) => {
-    console.log('[HomeScreen] 📝 onPostEdited called:', { postId, updateData })
+    if (!postId) return
     setFeed(prevFeed => {
-      // Update the post in both following and forYou feeds
       const updatePost = (posts) =>
         posts?.map(post =>
           post.id === postId
@@ -427,12 +367,10 @@ const FeedScreen = props => {
               }
             : post
         ) || []
-      const newFeed = {
+      return {
         following: updatePost(prevFeed.following),
         forYou: updatePost(prevFeed.forYou),
       }
-      console.log('[HomeScreen] 📝 Feed updated, new following count:', newFeed.following?.length)
-      return newFeed
     })
   }, [])
 

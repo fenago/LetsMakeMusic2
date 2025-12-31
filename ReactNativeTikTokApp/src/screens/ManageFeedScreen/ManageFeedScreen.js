@@ -61,6 +61,8 @@ const ManageFeedScreen = () => {
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editingPost, setEditingPost] = useState(null)
   const [deletingPostId, setDeletingPostId] = useState(null)
+  const [clearingAll, setClearingAll] = useState(false)
+  const [cleaningOrphans, setCleaningOrphans] = useState(false)
 
   const handleEdit = useCallback((post) => {
     setEditingPost(post)
@@ -100,6 +102,52 @@ const ManageFeedScreen = () => {
       ]
     )
   }, [removePostLocally])
+
+  const handleClearAll = useCallback(() => {
+    if (posts.length === 0) return
+    Alert.alert(
+      'Clear All Posts',
+      `Delete all ${posts.length} posts? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            setClearingAll(true)
+            try {
+              const clearAllPosts = functions().httpsCallable('clearAllPosts')
+              const result = await clearAllPosts()
+              console.log('[ManageFeedScreen] Clear result:', result.data)
+              Alert.alert('Success', result.data.message)
+              refresh()
+            } catch (error) {
+              console.error('[ManageFeedScreen] Clear all error:', error)
+              Alert.alert('Error', 'Failed to clear posts')
+            } finally {
+              setClearingAll(false)
+            }
+          },
+        },
+      ]
+    )
+  }, [posts.length, refresh])
+
+  const handleCleanOrphans = useCallback(async () => {
+    setCleaningOrphans(true)
+    try {
+      const cleanOrphanedPosts = functions().httpsCallable('cleanOrphanedPosts')
+      const result = await cleanOrphanedPosts()
+      console.log('[ManageFeedScreen] Clean orphans result:', result.data)
+      Alert.alert('Success', result.data.message)
+      refresh()
+    } catch (error) {
+      console.error('[ManageFeedScreen] Clean orphans error:', error)
+      Alert.alert('Error', 'Failed to clean orphaned posts')
+    } finally {
+      setCleaningOrphans(false)
+    }
+  }, [refresh])
 
   const getPostTypeIcon = (post) => {
     if (post.postType === 'song' || post.songData) {
@@ -247,6 +295,32 @@ const ManageFeedScreen = () => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Manage Feed</Text>
         <View style={styles.headerRight}>
+          {posts.length > 0 && (
+            <>
+              <TouchableOpacity
+                onPress={handleCleanOrphans}
+                disabled={cleaningOrphans}
+                style={styles.clearButton}
+              >
+                {cleaningOrphans ? (
+                  <ActivityIndicator size="small" color="#ff9500" />
+                ) : (
+                  <Text style={styles.fixButtonText}>Fix</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleClearAll}
+                disabled={clearingAll}
+                style={styles.clearButton}
+              >
+                {clearingAll ? (
+                  <ActivityIndicator size="small" color="#ff3b30" />
+                ) : (
+                  <Text style={styles.clearButtonText}>Clear All</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
           <Text style={styles.postCount}>{posts.length} posts</Text>
         </View>
       </View>
@@ -312,7 +386,24 @@ const getStyles = (isDark) =>
       color: isDark ? '#fff' : '#000',
     },
     headerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
       paddingRight: 16,
+    },
+    clearButton: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    clearButtonText: {
+      fontSize: 14,
+      color: '#ff3b30',
+      fontWeight: '500',
+    },
+    fixButtonText: {
+      fontSize: 14,
+      color: '#ff9500',
+      fontWeight: '500',
     },
     postCount: {
       fontSize: 14,

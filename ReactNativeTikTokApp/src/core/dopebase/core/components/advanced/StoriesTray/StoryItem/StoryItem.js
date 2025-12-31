@@ -33,7 +33,7 @@ export const StoryItem = memo(props => {
       key={index}
       ref={refs}
       activeOpacity={activeOpacity}
-      onPress={() => onPress(item, index, refs)}
+      onPress={onPress ? () => onPress(item, index, refs) : undefined}
       style={[styles.container, containerStyle]}>
       <View style={[styles.imageContainer, imageContainerStyle]}>
         <Image

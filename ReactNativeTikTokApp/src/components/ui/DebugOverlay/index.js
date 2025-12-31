@@ -52,10 +52,10 @@ const logStore = {
   }
 }
 
-// DISABLED: Console interception was causing performance issues
-// To manually log to the debug overlay, use: logStore.addLog('log', 'message')
-// Uncomment below to re-enable console capture (may cause lag)
-/*
+// ENABLED: Console interception with FILTER for edit data flow debugging
+// Only captures logs containing these tags to avoid performance issues
+const CAPTURE_TAGS = ['[firebaseFeedClient]', '[useHomeFeedPosts]', '[HomeScreen]', '[FeedItem]', '[HomeFeed]', '[FEED]']
+
 if (__DEV__) {
   const originalConsole = {
     log: console.log,
@@ -64,38 +64,42 @@ if (__DEV__) {
     info: console.info,
   }
 
-  let lastLogTime = 0
-  const LOG_THROTTLE_MS = 100
-
-  const throttledAddLog = (type, message) => {
-    const now = Date.now()
-    if (now - lastLogTime >= LOG_THROTTLE_MS) {
-      lastLogTime = now
-      logStore.addLog(type, message)
-    }
+  const shouldCapture = (message) => {
+    return CAPTURE_TAGS.some(tag => message.includes(tag))
   }
 
   console.log = (...args) => {
     originalConsole.log(...args)
-    throttledAddLog('log', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '))
+    const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+    if (shouldCapture(message)) {
+      logStore.addLog('log', message)
+    }
   }
 
   console.warn = (...args) => {
     originalConsole.warn(...args)
-    throttledAddLog('warn', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '))
+    const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+    if (shouldCapture(message)) {
+      logStore.addLog('warn', message)
+    }
   }
 
   console.error = (...args) => {
     originalConsole.error(...args)
-    throttledAddLog('error', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '))
+    const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+    if (shouldCapture(message)) {
+      logStore.addLog('error', message)
+    }
   }
 
   console.info = (...args) => {
     originalConsole.info(...args)
-    throttledAddLog('info', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '))
+    const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+    if (shouldCapture(message)) {
+      logStore.addLog('info', message)
+    }
   }
 }
-*/
 
 /**
  * DebugOverlay - Shows memory usage, JS heap, and console logs

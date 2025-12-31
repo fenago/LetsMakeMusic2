@@ -44,12 +44,6 @@ const shuffleArray = (array) => {
 const songToPickFormat = (song) => {
   // CRITICAL: Use centralized image URL resolution for consistent behavior
   const resolvedImageUrl = getPlayableImageUrl(song)
-  console.log('[HomeFeed] songToPickFormat:', {
-    id: song.id,
-    title: song.title,
-    originalImageUrl: song.imageUrl?.substring(0, 40),
-    resolvedImageUrl: resolvedImageUrl?.substring(0, 40),
-  })
 
   return {
     ...song, // Spread FIRST to preserve original data including sunoId
@@ -158,24 +152,15 @@ const HomeFeed = observer(({
 
   // Subscribe to stories feed
   useEffect(() => {
-    if (!userId) {
-      console.log('[HomeFeed] No userId, skipping stories subscription')
-      return
-    }
+    if (!userId) return
 
-    console.log('[HomeFeed] Subscribing to stories for user:', userId)
     const unsubscribe = subscribeToStories(userId)
-
-    return () => {
-      console.log('[HomeFeed] Unsubscribing from stories')
-      if (unsubscribe) unsubscribe()
-    }
+    return () => { if (unsubscribe) unsubscribe() }
   }, [userId, subscribeToStories])
 
   // Sync stories to MobX store for FullStoriesModal
   useEffect(() => {
     if (groupedStories?.length > 0) {
-      console.log('[HomeFeed] Syncing stories to store:', groupedStories.length)
       storyStore.setSories(groupedStories)
     }
     if (myStories) {
@@ -192,84 +177,48 @@ const HomeFeed = observer(({
 
   // Subscribe to all songs from Firebase (for Today's Picks)
   useEffect(() => {
-    console.log('[HomeFeed] Subscribing to all songs...')
     setIsLoading(true)
 
     const unsubscribe = subscribeToAllSongs((fetchedSongs) => {
-      console.log('[HomeFeed] Received songs from Firebase:', fetchedSongs.length)
-      if (fetchedSongs.length > 0) {
-        const first = fetchedSongs[0]
-        console.log('[HomeFeed] First song URL fields:', {
-          id: first.id,
-          title: first.title,
-          audioUrl: first.audioUrl,
-          resolvedUrl: getPlayableUrl(first),
-        })
-      }
       // Shuffle songs for variety - users won't see same order every time
       const shuffledSongs = shuffleArray(fetchedSongs)
       setSongs(shuffledSongs)
       setIsLoading(false)
     }, 50)
 
-    return () => {
-      console.log('[HomeFeed] Unsubscribing from songs')
-      if (unsubscribe) unsubscribe()
-    }
+    return () => { if (unsubscribe) unsubscribe() }
   }, [])
 
   // Subscribe to user's LIKED songs for Favorites section
   useEffect(() => {
-    if (!userId) {
-      console.log('[HomeFeed] No userId, skipping liked songs subscription')
-      return
-    }
+    if (!userId) return
 
-    console.log('[HomeFeed] Subscribing to liked songs for user:', userId)
     const unsubscribe = subscribeToLikedSongs(userId, (fetchedLikedSongs) => {
-      console.log('[HomeFeed] Received liked songs:', fetchedLikedSongs.length)
       setLikedSongs(fetchedLikedSongs)
     })
 
-    return () => {
-      console.log('[HomeFeed] Unsubscribing from liked songs')
-      if (unsubscribe) unsubscribe()
-    }
+    return () => { if (unsubscribe) unsubscribe() }
   }, [userId])
 
   // Subscribe to user's OWN songs for mixing into the feed
   useEffect(() => {
-    if (!userId) {
-      console.log('[HomeFeed] No userId, skipping user own songs subscription')
-      return
-    }
+    if (!userId) return
 
-    console.log('[HomeFeed] Subscribing to user own songs for user:', userId)
     const unsubscribe = subscribeToUserSongs(userId, (fetchedUserSongs) => {
-      console.log('[HomeFeed] Received user own songs:', fetchedUserSongs.length)
       setUserOwnSongs(fetchedUserSongs)
     })
 
-    return () => {
-      console.log('[HomeFeed] Unsubscribing from user own songs')
-      if (unsubscribe) unsubscribe()
-    }
+    return () => { if (unsubscribe) unsubscribe() }
   }, [userId])
 
   // Subscribe to home_feed_live for songs from FOLLOWED users (Following mode)
   // This extracts song posts from the social feed which contains posts from followed users
   useEffect(() => {
-    if (!userId) {
-      console.log('[HomeFeed] No userId, skipping following songs subscription')
-      return
-    }
+    if (!userId) return
 
-    console.log('[HomeFeed] Subscribing to home_feed_live for following songs:', userId)
     const unsubscribe = subscribeToHomeFeedPosts(userId, (posts) => {
-      console.log('[HomeFeed] Received home_feed_live posts:', posts?.length || 0)
       // Extract songs from posts with postType === 'song'
       const songPosts = (posts || []).filter(post => post.postType === 'song')
-      console.log('[HomeFeed] Extracted song posts from followed users:', songPosts.length)
 
       // Transform post data to song format
       // NOTE: Cloud function uses `songData` field, old posts may use `song`
@@ -288,10 +237,7 @@ const HomeFeed = observer(({
       setFollowingSongs(songsFromPosts)
     })
 
-    return () => {
-      console.log('[HomeFeed] Unsubscribing from following songs')
-      if (unsubscribe) unsubscribe()
-    }
+    return () => { if (unsubscribe) unsubscribe() }
   }, [userId])
 
   /**
@@ -371,8 +317,6 @@ const HomeFeed = observer(({
 
   // Story interaction handlers
   const handleStoryItemPress = useCallback((item, index) => {
-    console.log('[HomeFeed] Story item pressed:', item?.firstName, 'index:', index)
-
     // Open the FullStoriesModal at the tapped story index
     if (groupedStories?.length > 0) {
       // Calculate offset for animation (center of screen)
@@ -382,14 +326,11 @@ const HomeFeed = observer(({
   }, [groupedStories])
 
   const handleAddStoryPress = useCallback((shouldOpenCamera) => {
-    console.log('[HomeFeed] Add story pressed, openCamera:', shouldOpenCamera)
-    // Navigate to CreateStoryScreen
     navigation.navigate('CreateStory', { openCamera: shouldOpenCamera })
   }, [navigation])
 
   // Handle closing the stories modal
   const handleStoriesModalClose = useCallback(() => {
-    console.log('[HomeFeed] Closing stories modal')
     storyStore.dismissCarousel()
   }, [])
 

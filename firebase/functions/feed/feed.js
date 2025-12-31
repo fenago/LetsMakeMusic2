@@ -26,12 +26,14 @@ const {
  * Returns posts from users they follow
  */
 exports.listHomeFeedPosts = functions.https.onCall(async (data, context) => {
-  const userId = context.auth?.uid || data.userId
+  const userId = context.auth?.uid || data.userId || data.userID
   if (!userId) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated')
   }
 
-  const { limit = 50, lastPostId } = data
+  // Support both old param names (size) and new (limit)
+  const limit = data.limit || data.size || 50
+  const lastPostId = data.lastPostId
 
   try {
     let query = db
@@ -72,17 +74,27 @@ exports.listHomeFeedPosts = functions.https.onCall(async (data, context) => {
  * Returns posts from all users' main_feed collections
  */
 exports.listDiscoverFeedPosts = functions.https.onCall(async (data, context) => {
-  const userId = context.auth?.uid || data.userId
-  const { limit = 50, lastPostId } = data
+  console.log('[listDiscoverFeedPosts] ========== INCOMING REQUEST ==========')
+  console.log('[listDiscoverFeedPosts] data:', JSON.stringify(data))
+  console.log('[listDiscoverFeedPosts] context.auth?.uid:', context.auth?.uid)
+
+  const userId = context.auth?.uid || data.userId || data.userID
+  // Support both old param names (size) and new (limit)
+  const limit = data.limit || data.size || 50
+  const lastPostId = data.lastPostId
+
+  console.log('[listDiscoverFeedPosts] Resolved - userId:', userId, 'limit:', limit)
 
   try {
     // Query the global posts collection for discover feed
+    console.log('[listDiscoverFeedPosts] Querying posts collection...')
     let query = db
       .collection('posts')
       .orderBy('createdAt', 'desc')
       .limit(limit)
 
     if (lastPostId) {
+      console.log('[listDiscoverFeedPosts] Using pagination with lastPostId:', lastPostId)
       const lastDoc = await db.collection('posts').doc(lastPostId).get()
       if (lastDoc.exists) {
         query = query.startAfter(lastDoc)
@@ -95,10 +107,20 @@ exports.listDiscoverFeedPosts = functions.https.onCall(async (data, context) => 
       ...doc.data(),
     }))
 
-    console.log(`[listDiscoverFeedPosts] Returning ${posts.length} posts`)
+    console.log(`[listDiscoverFeedPosts] ✅ Returning ${posts.length} posts`)
+    if (posts.length > 0) {
+      console.log('[listDiscoverFeedPosts] First post sample:', {
+        id: posts[0].id,
+        authorID: posts[0].authorID,
+        postType: posts[0].postType,
+        hasPostMedia: !!posts[0].postMedia,
+        postMediaCount: posts[0].postMedia?.length,
+      })
+    }
     return { posts, success: true }
   } catch (error) {
-    console.error('[listDiscoverFeedPosts] Error:', error)
+    console.error('[listDiscoverFeedPosts] ❌ Error:', error.message)
+    console.error('[listDiscoverFeedPosts] ❌ Stack:', error.stack)
     throw new functions.https.HttpsError('internal', error.message)
   }
 })
@@ -162,6 +184,14 @@ exports.addPost = functions.https.onCall(async (data, context) => {
       .collection('social_feeds')
       .doc(userId)
       .collection('profile_feed_live')
+      .doc(postId)
+      .set(postData)
+
+    // Fan out to author's OWN home feed (so they see their own posts)
+    await db
+      .collection('social_feeds')
+      .doc(userId)
+      .collection('home_feed_live')
       .doc(postId)
       .set(postData)
 
@@ -263,6 +293,7 @@ exports.deletePost = functions.https.onCall(async (data, context) => {
     // Delete from author's feeds
     await db.collection('social_feeds').doc(userId).collection('profile_feed_live').doc(postId).delete()
     await db.collection('social_feeds').doc(userId).collection('main_feed').doc(postId).delete()
+    await db.collection('social_feeds').doc(userId).collection('home_feed_live').doc(postId).delete()
 
     // Delete from followers' home feeds
     const followersSnapshot = await db

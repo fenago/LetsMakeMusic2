@@ -5,7 +5,7 @@
  * Synthetic Singers (Suno Personas) only work with customMode: true.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   Text,
@@ -85,26 +85,48 @@ export default function VoicePicker({ selectedVoice, onSelect, disabled = false,
 
   // Subscribe to user's Synthetic Singers
   useEffect(() => {
+    console.log('[VoicePicker] useEffect running, currentUser?.id:', currentUser?.id)
+
     if (!currentUser?.id) {
+      console.log('[VoicePicker] No currentUser.id, setting loading to false')
       setIsLoading(false)
       return
     }
 
     setIsLoading(true)
+    let receivedData = false
+    console.log('[VoicePicker] Setting up subscription for user:', currentUser.id)
+
+    // Timeout fallback - if no response in 5 seconds, stop loading
+    const timeoutId = setTimeout(() => {
+      if (!receivedData) {
+        console.warn('[VoicePicker] Subscription timeout - no response after 5s')
+        setIsLoading(false)
+      }
+    }, 5000)
 
     const unsubscribe = subscribeToUserVoices(
       currentUser.id,
       (updatedVoices) => {
+        receivedData = true
+        clearTimeout(timeoutId)
+        console.log('[VoicePicker] Subscription success, voices count:', updatedVoices.length, updatedVoices)
         setVoices(updatedVoices)
         setIsLoading(false)
       },
       (error) => {
+        receivedData = true
+        clearTimeout(timeoutId)
         console.error('[VoicePicker] Error fetching voices:', error)
         setIsLoading(false)
       }
     )
 
-    return () => unsubscribe()
+    return () => {
+      console.log('[VoicePicker] Cleaning up subscription')
+      clearTimeout(timeoutId)
+      unsubscribe()
+    }
   }, [currentUser?.id])
 
   const handleOpenModal = useCallback(() => {
@@ -232,34 +254,34 @@ export default function VoicePicker({ selectedVoice, onSelect, disabled = false,
               </Text>
             </View>
 
-            {/* No selection option */}
-            <TouchableOpacity
-              style={[
-                styles.voiceItem,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-                !selectedVoice && [styles.voiceItemSelected, { borderColor: colors.success, backgroundColor: colors.successBg }],
-              ]}
-              onPress={() => handleSelectVoice(null)}
-            >
-              <View style={[styles.voiceImage, styles.voiceImagePlaceholder, { backgroundColor: colors.surfaceSecondary }]}>
-                <Music size={18} color={colors.textSecondary} />
-              </View>
-              <View style={styles.voiceItemInfo}>
-                <Text style={[styles.voiceItemName, { color: colors.textPrimary }]}>No Voice (Default)</Text>
-                <Text style={[styles.voiceItemDesc, { color: colors.textSecondary }]}>AI generates a new voice</Text>
-              </View>
-              {!selectedVoice && (
-                <Check size={20} color={colors.success} />
-              )}
-            </TouchableOpacity>
-
-            {/* Voices list */}
+            {/* Voices list with No Voice option as header */}
             <FlatList
               data={voices}
               keyExtractor={(item) => item.id}
               style={styles.voicesList}
               contentContainerStyle={styles.voicesListContent}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
+              ListHeaderComponent={
+                <TouchableOpacity
+                  style={[
+                    styles.voiceItem,
+                    { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 10 },
+                    !selectedVoice && [styles.voiceItemSelected, { borderColor: colors.success, backgroundColor: colors.successBg }],
+                  ]}
+                  onPress={() => handleSelectVoice(null)}
+                >
+                  <View style={[styles.voiceImage, styles.voiceImagePlaceholder, { backgroundColor: colors.surfaceSecondary }]}>
+                    <Music size={18} color={colors.textSecondary} />
+                  </View>
+                  <View style={styles.voiceItemInfo}>
+                    <Text style={[styles.voiceItemName, { color: colors.textPrimary }]}>No Voice (Default)</Text>
+                    <Text style={[styles.voiceItemDesc, { color: colors.textSecondary }]}>AI generates a new voice</Text>
+                  </View>
+                  {!selectedVoice && (
+                    <Check size={20} color={colors.success} />
+                  )}
+                </TouchableOpacity>
+              }
               renderItem={({ item }) => (
                 <View style={styles.voiceItemContainer}>
                   <TouchableOpacity
@@ -410,8 +432,8 @@ const styles = StyleSheet.create({
   modalContent: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '80%',
-    paddingBottom: 34, // Safe area
+    maxHeight: '70%',
+    minHeight: 300,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -447,6 +469,7 @@ const styles = StyleSheet.create({
   voicesListContent: {
     padding: 16,
     paddingTop: 8,
+    paddingBottom: 40, // Safe area padding
   },
   voiceItemContainer: {
     flexDirection: 'row',

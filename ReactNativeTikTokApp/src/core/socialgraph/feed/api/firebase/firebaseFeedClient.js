@@ -6,50 +6,28 @@ import { DocRef, FeedFunctions, postsRef } from './feedRef'
  */
 const isValidPost = (post) => {
   // Must have an ID
-  if (!post?.id) {
-    console.log('[feedClient] Filtering out post: missing id')
-    return false
-  }
+  if (!post?.id) return false
 
   // Must have an author
-  if (!post.authorID && !post.author?.id) {
-    console.log('[feedClient] Filtering out post:', post.id, '- missing author')
-    return false
-  }
+  if (!post.authorID && !post.author?.id) return false
 
   // Must have some media
-  if (!post.postMedia || post.postMedia.length === 0) {
-    console.log('[feedClient] Filtering out post:', post.id, '- no media')
-    return false
-  }
+  if (!post.postMedia || post.postMedia.length === 0) return false
 
   const media = post.postMedia[0]
 
   // Media must have a URL
-  if (!media.url) {
-    console.log('[feedClient] Filtering out post:', post.id, '- media has no URL')
-    return false
-  }
+  if (!media.url) return false
 
   // For song posts, validate songData
   if (post.postType === 'song') {
-    // Song posts MUST have songData with an audioUrl
-    if (!post.songData) {
-      console.log('[feedClient] Filtering out song post:', post.id, '- missing songData')
-      return false
-    }
-    if (!post.songData.audioUrl && !post.songData.firebaseAudioUrl) {
-      console.log('[feedClient] Filtering out song post:', post.id, '- songData has no audio URL')
-      return false
-    }
+    if (!post.songData) return false
+    if (!post.songData.audioUrl && !post.songData.firebaseAudioUrl) return false
   }
 
   // For video posts, validate the video URL looks valid
   if (media.type?.includes('video')) {
-    if (!media.url.startsWith('http')) {
-      console.log('[feedClient] Filtering out video post:', post.id, '- invalid video URL')
-      return false
-    }
+    if (!media.url.startsWith('http')) return false
   }
 
   return true
@@ -59,12 +37,7 @@ const isValidPost = (post) => {
  * Filter posts to remove bad/incomplete data
  */
 const filterValidPosts = (posts) => {
-  const validPosts = posts.filter(isValidPost)
-  const filtered = posts.length - validPosts.length
-  if (filtered > 0) {
-    console.log(`[feedClient] Filtered out ${filtered} invalid posts from ${posts.length} total`)
-  }
-  return validPosts
+  return posts.filter(isValidPost)
 }
 
 export const addPost = async (postData, author) => {
@@ -215,12 +188,20 @@ export const subscribeToStories = (userID, callback) => {
 }
 
 export const subscribeToHomeFeedPosts = (userID, callback) => {
-  console.log('[firebaseFeedClient] Subscribing to home_feed_live for user:', userID)
-  return DocRef(userID)
-    .homeFeedLive.orderBy('createdAt', 'desc')
+  console.log('[firebaseFeedClient] ====== SUBSCRIBING TO home_feed_live ======')
+  console.log('[firebaseFeedClient] userID:', userID)
+
+  // Debug: Verify the collection path
+  const collectionRef = DocRef(userID).homeFeedLive
+  console.log('[firebaseFeedClient] Collection path:', collectionRef?.path || 'UNKNOWN')
+
+  return collectionRef
+    .orderBy('createdAt', 'desc')
+    .limit(50) // Limit live subscription to prevent memory overflow
     .onSnapshot(
       { includeMetadataChanges: true },
       querySnapshot => {
+        console.log('[firebaseFeedClient] ====== SNAPSHOT RECEIVED ======')
         const isFromCache = querySnapshot?.metadata?.fromCache === true
         const postCount = querySnapshot?.docs?.length || 0
         console.log(`[firebaseFeedClient] home_feed_live snapshot: ${postCount} posts, fromCache: ${isFromCache}`)
@@ -228,17 +209,43 @@ export const subscribeToHomeFeedPosts = (userID, callback) => {
         // Still call callback even for cached data (removed early return)
         // This ensures we show data even if offline or waiting for server
         const allPosts = querySnapshot?.docs?.map(doc => doc.data()) || []
+        console.log(`[firebaseFeedClient] home_feed_live raw posts count: ${allPosts.length}`)
+
+        // Debug: log first post structure
+        if (allPosts.length > 0) {
+          const first = allPosts[0]
+          console.log('[firebaseFeedClient] First post:', {
+            id: first?.id,
+            postType: first?.postType,
+            hasMedia: !!first?.postMedia?.length,
+            mediaType: first?.postMedia?.[0]?.type,
+            hasSongData: !!first?.songData,
+          })
+        }
 
         // CRITICAL: Filter out invalid/broken posts before returning
         const posts = filterValidPosts(allPosts)
+        console.log(`[firebaseFeedClient] home_feed_live after filter: ${posts.length} valid posts (${allPosts.length - posts.length} filtered out)`)
 
-        if (posts.length > 0) {
-          console.log('[firebaseFeedClient] First valid post:', {
-            id: posts[0].id,
-            postType: posts[0].postType,
-            mediaType: posts[0].postMedia?.[0]?.type,
+        // Debug: Log which posts were filtered and why
+        if (allPosts.length > posts.length) {
+          allPosts.forEach(p => {
+            const valid = isValidPost(p)
+            if (!valid) {
+              console.log('[firebaseFeedClient] FILTERED OUT post:', {
+                id: p?.id?.substring?.(0, 8),
+                postType: p?.postType,
+                hasId: !!p?.id,
+                hasAuthor: !!(p?.authorID || p?.author?.id),
+                hasMedia: !!(p?.postMedia?.length > 0),
+                mediaUrl: p?.postMedia?.[0]?.url ? 'yes' : 'no',
+                hasSongData: !!p?.songData,
+                songDataAudioUrl: !!(p?.songData?.audioUrl || p?.songData?.firebaseAudioUrl),
+              })
+            }
           })
         }
+
         callback && callback(posts)
       },
       error => {
@@ -248,7 +255,7 @@ export const subscribeToHomeFeedPosts = (userID, callback) => {
     )
 }
 
-export const listHomeFeedPosts = async (userID, page = 0, size = 1000) => {
+export const listHomeFeedPosts = async (userID, page = 0, size = 50) => {
   const instance = FeedFunctions().listHomeFeedPosts
   try {
     const res = await instance({
@@ -438,7 +445,7 @@ export const subscribeToSinglePost = (postID, callback) => {
   )
 }
 
-export const listDiscoverFeedPosts = async (userID, page = 0, size = 1000) => {
+export const listDiscoverFeedPosts = async (userID, page = 0, size = 50) => {
   console.log('[firebaseFeedClient] Calling listDiscoverFeedPosts for user:', userID)
   const instance = FeedFunctions().listDiscoverFeedPosts
   try {
@@ -462,8 +469,35 @@ export const listDiscoverFeedPosts = async (userID, page = 0, size = 1000) => {
     }
     return posts
   } catch (error) {
-    console.log('[firebaseFeedClient] Error in listDiscoverFeedPosts:', error)
-    return null
+    // Better error logging - Firebase errors don't stringify well
+    console.log('[firebaseFeedClient] Error in listDiscoverFeedPosts (httpsCallable):')
+    console.log('  - message:', error?.message)
+    console.log('  - code:', error?.code)
+    console.log('  - details:', error?.details)
+    console.log('  - name:', error?.name)
+
+    // FALLBACK: Use HTTP endpoint if httpsCallable fails
+    console.log('[firebaseFeedClient] Trying HTTP fallback for listDiscoverFeedPosts...')
+    try {
+      const baseUrl = 'https://us-central1-letsmakemusic-4e0fe.cloudfunctions.net/listDiscoverFeedPostsHTTP'
+      const params = new URLSearchParams({ limit: size.toString() })
+      const url = `${baseUrl}?${params.toString()}`
+
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      const allPosts = result.posts || []
+      const posts = filterValidPosts(allPosts)
+
+      console.log(`[firebaseFeedClient] HTTP fallback returned ${posts.length} valid posts (${allPosts.length} total)`)
+      return posts
+    } catch (fallbackError) {
+      console.log('[firebaseFeedClient] HTTP fallback also failed:', fallbackError?.message)
+      return null
+    }
   }
 }
 
