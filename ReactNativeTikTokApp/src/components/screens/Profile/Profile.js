@@ -404,6 +404,9 @@ export default function Profile(props) {
         renderItem={renderItem}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        removeClippedSubviews={true}
+        initialNumToRender={12}
+        maxToRenderPerBatch={9}
       />
 
       {/* Avatar Picker Modal */}

@@ -83,42 +83,32 @@ const FeedScreen = props => {
 
   
   useEffect(() => {
-    console.log('[HomeScreen] ====== MOUNTING HOME FEED ======')
-    console.log('[HomeScreen] currentUser?.id:', currentUser?.id)
     if (!currentUser?.id) {
-      console.log('[HomeScreen] No user ID yet, waiting...')
       return
     }
-    console.log('[HomeScreen] Setting up subscriptions for user:', currentUser?.id)
     const postsUnsubscribe = subscribeToHomeFeedPosts(currentUser?.id)
     loadMoreDiscoverPosts(currentUser?.id)
 
     return () => {
-      console.log('[HomeScreen] Cleaning up subscriptions')
       postsUnsubscribe && postsUnsubscribe()
     }
   }, [currentUser?.id])
 
 
   useEffect(() => {
-    console.log('[FEED] posts effect triggered, posts:', posts === null ? 'null' : (posts?.length || 0) + ' posts')
-
     // Only update feed if posts has actually been loaded (not null)
     // null = not yet loaded, [] = loaded but empty, [...] = loaded with data
     if (posts === null) {
-      console.log('[FEED] Posts not yet loaded, keeping current following state')
       return
     }
 
     if (posts.length > 0) {
       const filteredFeed = filterNonVideoFeed(posts)
-      console.log('[FEED] Following: ' + filteredFeed.length + ' posts after filter')
       setFeed(prevFeed => ({
         ...prevFeed,
         following: filteredFeed,
       }))
     } else {
-      console.log('[FEED] Posts loaded but empty, setting following to empty')
       setFeed(prevFeed => ({ ...prevFeed, following: [] }))
     }
   }, [posts])
@@ -127,7 +117,6 @@ const FeedScreen = props => {
     if (discoverPosts) {
       const validMediaPosts = filterNonVideoFeed(discoverPosts || [])
       const mixedFeed = mixUserPostsIntoFeed(validMediaPosts)
-      console.log('[FEED] For You: ' + mixedFeed.length + ' posts')
       setFeed(prevFeed => ({
         ...prevFeed,
         forYou: mixedFeed,
@@ -143,27 +132,15 @@ const FeedScreen = props => {
   useEffect(() => {
     // Don't auto-switch until data has loaded (not null)
     const followingLoaded = feed?.following !== null
-    const forYouLoaded = feed?.forYou !== null
-
     const followingLength = feed?.following?.length ?? 0
     const forYouLength = feed?.forYou?.length ?? 0
 
-    console.log('[HomeScreen] Feed state check:', {
-      followingLoaded,
-      forYouLoaded,
-      followingLength,
-      forYouLength,
-      currentFeedType: feedType,
-    })
-
     // If following has data, ensure we're showing it (switch back if needed)
     if (followingLength > 0 && feedType !== 'following') {
-      console.log('[HomeScreen] Following feed has data, switching to following mode')
       setFeedType('following')
     }
     // Only switch to forYou if following has been LOADED as empty (not just null) and forYou has data
     else if (followingLoaded && followingLength === 0 && forYouLength > 0 && feedType === 'following') {
-      console.log('[HomeScreen] Following feed loaded but empty, switching to forYou mode')
       setFeedType('forYou')
     }
   }, [feed, feedType])
@@ -261,37 +238,36 @@ const FeedScreen = props => {
     })
   }, [])
 
-  // NEW: Handle media filter change from MusicFeed tabs
+  // Handle media filter change from MusicFeed tabs
   const handleMediaFilterChange = useCallback((filterId) => {
-    console.log('[HomeScreen] Media filter changed to:', filterId)
     setMediaFilter(filterId)
   }, [])
 
-  const onCommentPress = item => {
+  const onCommentPress = useCallback((item) => {
     setSelectedItem(item)
-  }
+  }, [])
 
-  const handleUserPress = userInfo => {
-    if (userInfo.id === currentUser.id) {
+  const handleUserPress = useCallback((userInfo) => {
+    if (userInfo.id === currentUser?.id) {
       navigation.push('Profile')
     } else {
       navigation.push('Profile', {
         user: userInfo,
       })
     }
-  }
+  }, [currentUser?.id, navigation])
 
-  const onFeedUserItemPress = async item => {
+  const onFeedUserItemPress = useCallback((item) => {
     handleUserPress(item)
-  }
+  }, [handleUserPress])
 
-  const onTextFieldUserPress = userInfo => {
+  const onTextFieldUserPress = useCallback((userInfo) => {
     handleUserPress(userInfo)
-  }
+  }, [handleUserPress])
 
-  const onTextFieldHashTagPress = hashtag => {
+  const onTextFieldHashTagPress = useCallback((hashtag) => {
     navigation.push('FeedSearch', { hashtag })
-  }
+  }, [navigation])
 
   const onReaction = useCallback(
     async (reaction, post) => {
@@ -304,13 +280,13 @@ const FeedScreen = props => {
     [addReactionHomeFeed, addReactionDiscoverFeed, feedType, currentUser],
   )
 
-  const onSharePost = async item => {
+  const onSharePost = useCallback(async (item) => {
     let url = ''
     if (item.postMedia?.length > 0) {
       url = item.postMedia[0].url
     }
     try {
-      const result = await Share.share(
+      await Share.share(
         {
           title: localized('Share Instamobile post.'),
           url,
@@ -322,15 +298,15 @@ const FeedScreen = props => {
     } catch (error) {
       alert(error.message)
     }
-  }
+  }, [localized])
 
-  const onDeletePost = async item => {
+  const onDeletePost = useCallback(async (item) => {
     dispatch(setLocallyDeletedPost(item.id))
     const res = await deletePost(item.id, currentUser?.id)
     if (res.error) {
       alert(res.error)
     }
-  }
+  }, [dispatch, deletePost, currentUser?.id])
 
   const onUserReport = useCallback(
     async (item, type) => {
@@ -339,17 +315,17 @@ const FeedScreen = props => {
     [currentUser.id, markAbuse],
   )
 
-  const onDismissCommentsSheet = () => {
+  const onDismissCommentsSheet = useCallback(() => {
     setSelectedItem(null)
-  }
+  }, [])
 
-  const onForYouFeedPress = () => {
+  const onForYouFeedPress = useCallback(() => {
     setFeedType('forYou')
-  }
+  }, [])
 
-  const onFollowingFeedPress = () => {
+  const onFollowingFeedPress = useCallback(() => {
     setFeedType('following')
-  }
+  }, [])
 
   // Handler for when a post is edited - updates feed state with new caption and hashtags
   const onPostEdited = useCallback((postId, updateData) => {
@@ -419,6 +395,15 @@ const FeedScreen = props => {
   // Get user's display name for greeting (prefer stage name)
   const userName = currentUser?.stageName || currentUser?.firstName || currentUser?.username || 'there'
 
+  // Extracted handlers for HomeFeed to avoid inline arrow functions
+  const onArtistPress = useCallback((artist) => {
+    navigation.push('Profile', { user: artist })
+  }, [navigation])
+
+  const onPlaylistPress = useCallback((playlist) => {
+    // Future: Navigate to playlist detail
+  }, [])
+
   return (
     <View style={styles.container}>
       <HomeFeed
@@ -428,13 +413,8 @@ const FeedScreen = props => {
         refreshing={refreshing}
         onRefresh={onRefresh}
         onFilterChange={handleMediaFilterChange}
-        onArtistPress={(artist) => {
-          navigation.push('Profile', { user: artist })
-        }}
-        onPlaylistPress={(playlist) => {
-          // Future: Navigate to playlist detail
-          console.log('Playlist pressed:', playlist)
-        }}
+        onArtistPress={onArtistPress}
+        onPlaylistPress={onPlaylistPress}
       />
       <CommentsScreen
         item={selectedItem}

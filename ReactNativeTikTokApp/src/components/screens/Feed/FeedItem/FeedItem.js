@@ -111,18 +111,7 @@ const FeedItem = props => {
 
   const reactionCount = localReactionsCount
 
-  // Debug: Log post structure with full audio URL info
-  console.log('[FeedItem] 📋 Post: id=' + (video.id?.substring(0, 8) || 'none') +
-    ' postType=' + (video.postType || 'none') +
-    ' mediaType=' + (video.postMedia?.[0]?.type || 'none') +
-    ' hasSongData=' + !!video.songData)
-
-  // DEBUG: Log caption/hashtag data that FeedItem is receiving
-  console.log('[FeedItem] 📝 CONTENT: id=' + (video.id?.substring(0, 8) || 'none') +
-    ' postText=' + (video.postText?.substring(0, 50) || '(empty)') +
-    ' description=' + (video.description?.substring(0, 50) || '(empty)') +
-    ' hashtags=' + JSON.stringify(video.hashtags || []) +
-    ' isEdited=' + (video.isEdited || false))
+  // Debug logs wrapped in __DEV__ to prevent production logging
 
   // Determine post type for audio handling
   // NOTE: postMedia[0].type contains mime types like 'video/mp4' or 'audio/mpeg'
@@ -150,17 +139,6 @@ const FeedItem = props => {
     return null
   })()
 
-  // DEBUG: Log audio resolution result
-  if (isSongPost) {
-    console.log('[FeedItem] 🎵 Song post audio resolution:', {
-      id: video.id?.substring(0, 8),
-      isSongPost,
-      hasSongInfo: !!songInfo,
-      usedFallback: !songInfo && mediaType.includes('audio'),
-      postMediaUrl: video.postMedia?.[0]?.url?.substring(0, 60),
-      resolvedAudioUrl: audioUrl?.substring(0, 80) || 'NULL',
-    })
-  }
 
 
   // Track if audio is ready to play
@@ -184,14 +162,8 @@ const FeedItem = props => {
 
     async function setupAudio() {
       if (!isSongPost || !audioUrl) {
-        console.log('[FeedItem] Skipping audio setup:', { isSongPost, hasAudioUrl: !!audioUrl })
         return
       }
-
-      console.log('[FeedItem] 🎵 Setting up audio for song post:', {
-        id: video.id?.substring(0, 8),
-        audioUrl: audioUrl,  // Full URL for debugging
-      })
 
       try {
         await Audio.setAudioModeAsync({
@@ -202,8 +174,6 @@ const FeedItem = props => {
 
         // Use new Audio.Sound() instead of createAsync for better reliability
         const sound = new Audio.Sound()
-
-        console.log('[FeedItem] 📥 Loading audio from:', audioUrl?.substring(0, 60))
 
         await sound.loadAsync(
           { uri: audioUrl },
@@ -242,26 +212,10 @@ const FeedItem = props => {
             const duration = status.durationMillis || 0
             const nearEnd = duration > 0 && (duration - position) < 2000 // Within 2 seconds of end
 
-            console.log('[FeedItem] 🎵 Playback status:', {
-              didJustFinish: status.didJustFinish,
-              position,
-              duration,
-              nearEnd,
-            })
-
             if (nearEnd || duration === 0) {
-              console.log('[FeedItem] ✅ Audio finished, triggering auto-advance')
               onMediaComplete?.(index)
-            } else {
-              console.log('[FeedItem] ⚠️ Ignoring false didJustFinish (position not near end)')
             }
           }
-        })
-
-        console.log('[FeedItem] ✅ Audio loaded, sound object:', {
-          hasPlayAsync: typeof sound.playAsync,
-          hasPauseAsync: typeof sound.pauseAsync,
-          hasUnloadAsync: typeof sound.unloadAsync,
         })
 
         if (!isMountedRef.current) {
@@ -272,14 +226,9 @@ const FeedItem = props => {
 
         audioRef.current = sound
         audioReadyRef.current = true
-        console.log('[FeedItem] ✅ Audio ready for:', video.id?.substring(0, 8))
-
-        // DISABLED: Auto-play when audio loads - users now tap to play
-        // Audio is loaded and ready, but won't auto-start
-        // User must tap to play via handlePress() which toggles paused state
-        console.log('[FeedItem] 🎵 Audio loaded, ready to play on tap:', video.id?.substring(0, 8))
       } catch (error) {
-        console.log('[FeedItem] ❌ Error loading audio:', error.message || error)
+        // Audio loading failed silently in production
+        if (__DEV__) console.log('[FeedItem] Audio load error:', error.message)
       }
     }
 
@@ -289,7 +238,6 @@ const FeedItem = props => {
       isMountedRef.current = false
       ignoreStatusUpdatesRef.current = true // Prevent any status updates during cleanup
       if (audioRef.current) {
-        console.log('[FeedItem] 🔇 Unloading audio for:', video.id?.substring(0, 8))
         audioRef.current.unloadAsync()
         audioRef.current = null
         audioReadyRef.current = false
@@ -306,18 +254,7 @@ const FeedItem = props => {
     const isMounted = selected === index
     const shouldPlay = isMounted && !paused && isFocused
 
-    console.log('[FeedItem] 🎮 Audio control check:', {
-      id: video.id?.substring(0, 8),
-      shouldPlay,
-      isMounted,
-      paused,
-      isFocused,
-      audioReady: audioReadyRef.current,
-      hasAudioRef: !!audioRef.current,
-    })
-
     if (!audioRef.current || !audioReadyRef.current) {
-      console.log('[FeedItem] ⏳ Audio not ready yet, skipping control')
       return
     }
 
@@ -325,11 +262,9 @@ const FeedItem = props => {
     // Use optional chaining to prevent race conditions where audioRef.current
     // becomes null during cleanup between the check above and these calls
     if (shouldPlay) {
-      console.log('[FeedItem] ▶️ Playing audio')
-      audioRef.current?.setStatusAsync?.({ shouldPlay: true })?.catch(e => console.log('[FeedItem] Play error:', e))
+      audioRef.current?.setStatusAsync?.({ shouldPlay: true })?.catch(() => {})
     } else {
-      console.log('[FeedItem] ⏸️ Pausing audio')
-      audioRef.current?.setStatusAsync?.({ shouldPlay: false })?.catch(e => console.log('[FeedItem] Pause error:', e))
+      audioRef.current?.setStatusAsync?.({ shouldPlay: false })?.catch(() => {})
     }
   }, [selected, index, paused, isFocused, isSongPost])
 
@@ -385,7 +320,7 @@ const FeedItem = props => {
     [onSharePost, onDeletePost, onUserReport, moreArray, video],
   )
 
-  const onReactionPress = () => {
+  const onReactionPress = useCallback(() => {
     // Temporarily ignore audio status updates to prevent false auto-advance triggers
     ignoreStatusUpdatesRef.current = true
 
@@ -413,9 +348,7 @@ const FeedItem = props => {
             imageUrl: songInfo?.imageUrl || getPlayableImageUrl(songInfo),
             audioUrl: audioUrl,
           }
-          swipeSong(songId, 'like', songDataToSave)
-            .then(() => console.log('[FeedItem] ✅ Song also saved to library'))
-            .catch(err => console.log('[FeedItem] ❌ Song save failed:', err))
+          swipeSong(songId, 'like', songDataToSave).catch(() => {})
         }
       }
     }
@@ -423,62 +356,59 @@ const FeedItem = props => {
     // SYNC DIRECTLY TO FIREBASE - bypasses parent state entirely!
     // This is the key fix: no parent state update = no FlatList re-render = no scroll reset
     const reactionToSend = newReaction || (wasLiked ? 'like' : null) // Send current state for toggle
-    addReactionAPI(video.id, user.id, reactionToSend)
-      .then(() => console.log('[FeedItem] ✅ Reaction synced to Firebase'))
-      .catch(err => console.log('[FeedItem] ❌ Reaction sync failed:', err))
+    addReactionAPI(video.id, user.id, reactionToSend).catch(() => {})
 
     // Re-enable status updates after a short delay
     setTimeout(() => {
       ignoreStatusUpdatesRef.current = false
     }, 500)
-  }
+  }, [localMyReaction, isSongPost, songSwipeAction, songInfo, video, audioUrl, user.id])
 
-  const onUserItemPress = author => {
+  const onUserItemPress = useCallback((author) => {
     setPaused(true)
     onFeedUserItemPress(author)
-  }
+  }, [setPaused, onFeedUserItemPress])
 
-  const onComment = video => {
+  const onComment = useCallback((videoItem) => {
     // Don't pause audio when opening comments - let music keep playing
-    onCommentPress(video)
-  }
+    onCommentPress(videoItem)
+  }, [onCommentPress])
 
-  const onTextFieldUser = textFieldUser => {
+  const onTextFieldUser = useCallback((textFieldUser) => {
     setPaused(true)
     onTextFieldUserPress(textFieldUser)
-  }
+  }, [setPaused, onTextFieldUserPress])
 
-  const onTextFieldHashTag = hashTag => {
+  const onTextFieldHashTag = useCallback((hashTag) => {
     setPaused(true)
     onTextFieldHashTagPress(hashTag)
-  }
+  }, [setPaused, onTextFieldHashTagPress])
 
   // Seek to a position in the song when user taps or drags the progress bar
-  const handleSeek = async (percentage) => {
+  const handleSeek = useCallback(async (percentage) => {
     if (!audioRef.current || !audioReadyRef.current || playbackDuration <= 0) return
 
     const newPosition = Math.max(0, Math.min(percentage, 1)) * playbackDuration
-    console.log('[FeedItem] 🎯 Seeking to:', formatTime(newPosition), `(${Math.round(percentage * 100)}%)`)
 
     try {
       await audioRef.current.setStatusAsync({ positionMillis: newPosition })
       setPlaybackPosition(newPosition)
     } catch (error) {
-      console.log('[FeedItem] Seek error:', error.message)
+      // Seek failed silently
     }
-  }
+  }, [playbackDuration])
 
   // Handle tap on progress bar - seek to tapped position
-  const handleProgressBarPress = (event) => {
+  const handleProgressBarPress = useCallback((event) => {
     if (progressBarWidth.current <= 0 || playbackDuration <= 0) return
 
     const { locationX } = event.nativeEvent
     const percentage = locationX / progressBarWidth.current
     handleSeek(percentage)
-  }
+  }, [playbackDuration, handleSeek])
 
   // Toggle follow/unfollow the post author
-  const onFollowPress = async () => {
+  const onFollowPress = useCallback(async () => {
     if (followLoading) return // Loading, ignore press
 
     setFollowLoading(true)
@@ -487,20 +417,17 @@ const FeedItem = props => {
         // Unfollow
         await unfollowUserAPI(user.id, video.author.id)
         setIsFollowing(false)
-        console.log('[FeedItem] ✅ Successfully unfollowed:', video.author.username || video.author.firstName)
       } else {
         // Follow
         await followUserAPI(user.id, video.author.id)
         setIsFollowing(true)
-        console.log('[FeedItem] ✅ Successfully followed:', video.author.username || video.author.firstName)
       }
     } catch (error) {
-      console.log('[FeedItem] ❌ Follow/unfollow failed:', error)
       Alert.alert('Error', `Failed to ${isFollowing ? 'unfollow' : 'follow'} user. Please try again.`)
     } finally {
       setFollowLoading(false)
     }
-  }
+  }, [followLoading, isFollowing, user.id, video.author?.id])
 
   // Share functionality
   const onSharePress = () => {
@@ -528,7 +455,7 @@ const FeedItem = props => {
               title: songTitle,
             })
           } catch (error) {
-            console.log('[FeedItem] Share error:', error)
+            // Share cancelled or failed silently
           }
         } else if (buttonIndex === 1) {
           // Tag a user - coming soon
@@ -694,9 +621,7 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
         audioUrl: audioUrl,
       }
       await swipeSong(songId, 'pass', songData)
-      console.log('[FeedItem] ✅ Song marked as not interested:', songId)
     } catch (error) {
-      console.log('[FeedItem] ❌ Pass error:', error)
       setSongSwipeAction(null)
     } finally {
       setIsSwipeLoading(false)
@@ -945,19 +870,9 @@ License Fee: ${rights.commercialLicenseFee ? `$${(rights.commercialLicenseFee / 
           onUserPress={onTextFieldUser}
           onHashTagPress={onTextFieldHashTag}>
           {/* Caption display - prioritize user's caption, fallback to song title for song posts */}
-          {(() => {
-            const displayText = (video.postText && video.postText.trim()) ||
-              (video.description && video.description.trim()) ||
-              (isSongPost && songInfo?.title ? `🎵 ${songInfo.title}` : ' ')
-            // DEBUG: Log what's actually being displayed
-            const sourceField = video.postText?.trim() ? 'postText' :
-                              video.description?.trim() ? 'description' :
-                              songInfo?.title ? 'songTitle' : 'fallback'
-            console.log('[FeedItem] 🎯 DISPLAY: id=' + (video.id?.substring(0, 8) || 'none') +
-              ' text=' + (displayText?.substring(0, 50) || '(empty)') +
-              ' source=' + sourceField)
-            return displayText
-          })()}
+          {(video.postText && video.postText.trim()) ||
+            (video.description && video.description.trim()) ||
+            (isSongPost && songInfo?.title ? `🎵 ${songInfo.title}` : ' ')}
         </IMRichTextView>
         {/* Display hashtags from array if present */}
         {video.hashtags?.length > 0 && (
