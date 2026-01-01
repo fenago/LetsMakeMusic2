@@ -3,7 +3,7 @@ import { SafeAreaView, ScrollView, Image, View, Text, TouchableOpacity, TextInpu
 import { useNavigation } from '@react-navigation/native'
 import { Video } from 'expo-av'
 import { RefreshControl } from 'react-native'
-import { Heart, Film, ChevronDown, ChevronUp, Search, Clock, Sparkles, Music, Hash, Compass, User, LayoutGrid, Layers, ThumbsUp, ThumbsDown, Play, Pause, Undo2 } from 'lucide-react-native'
+import { Heart, Film, ChevronDown, ChevronUp, Search, Clock, Sparkles, Music, Hash, Compass, User, LayoutGrid, Layers, ThumbsUp, ThumbsDown, Play, Pause, Undo2, ChevronLeft } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image as ExpoImage } from 'expo-image'
 
@@ -353,20 +353,32 @@ export default function Discover(props) {
   )
 
   // Render Explore header with icon and view mode toggle
+  const canGoBack = navigation.canGoBack()
+
   const renderExploreHeader = () => (
     <View style={exploreHeaderStyles.header}>
-      {/* View mode toggle */}
-      <TouchableOpacity
-        style={[exploreHeaderStyles.viewToggle, { backgroundColor: colorSet.grey3 }]}
-        onPress={toggleViewMode}
-        activeOpacity={0.7}
-      >
-        {viewMode === 'grid' ? (
-          <Layers size={20} color={BRAND_COLORS.vibrantTeal} />
-        ) : (
-          <LayoutGrid size={20} color={BRAND_COLORS.vibrantTeal} />
-        )}
-      </TouchableOpacity>
+      {/* Back button if navigated here, otherwise view mode toggle */}
+      {canGoBack ? (
+        <TouchableOpacity
+          style={exploreHeaderStyles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <ChevronLeft size={28} color={colorSet.primaryText} />
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[exploreHeaderStyles.viewToggle, { backgroundColor: colorSet.grey3 }]}
+          onPress={toggleViewMode}
+          activeOpacity={0.7}
+        >
+          {viewMode === 'grid' ? (
+            <Layers size={20} color={BRAND_COLORS.vibrantTeal} />
+          ) : (
+            <LayoutGrid size={20} color={BRAND_COLORS.vibrantTeal} />
+          )}
+        </TouchableOpacity>
+      )}
       <View style={exploreHeaderStyles.titleContainer}>
         <Compass size={22} color={BRAND_COLORS.vibrantTeal} strokeWidth={2.5} />
         <Text style={exploreHeaderStyles.title}>Explore</Text>
@@ -1294,6 +1306,13 @@ const exploreHeaderStyles = {
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   viewToggle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
